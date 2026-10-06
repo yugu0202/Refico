@@ -4,6 +4,15 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-06",
   "preview_urls": true,
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "refico",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations",
+    },
+  ],
   "observability": {
     "enabled": true,
     "logs": {
@@ -19,7 +28,14 @@
     },
   },
   "previews": {
-    // D1などを追加する際は、本番とは別のリソースをここに指定する。
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "refico-preview",
+        "database_id": "00000000-0000-0000-0000-000000000002",
+        "migrations_dir": "migrations",
+      },
+    ],
     "observability": {
       "enabled": true,
       "logs": {

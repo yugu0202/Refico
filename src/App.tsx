@@ -1,3 +1,5 @@
+import type { Command } from "./domain/commands";
+import { ApiError, bootstrap, sendCommand, authClient } from "./api";
 import { History } from "./components/History";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
@@ -7,21 +9,16 @@ import Dialog from "@mui/material/Dialog";
 import DialogContent from "@mui/material/DialogContent";
 import SvgIcon from "@mui/material/SvgIcon";
 import TextField from "@mui/material/TextField";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   dailyCosts,
   emptyState,
   mealCost,
   preparedRemaining,
-  updateProductUnits,
-  updateProduct,
-  updatePreparedName,
   type Meal,
   type State,
   type Product,
 } from "./domain/inventory";
-import { loadState, saveState } from "./domain/storage";
-import { sampleState } from "./domain/sample";
 import { ProductForm } from "./components/ProductForm";
 import { PurchaseForm } from "./components/PurchaseForm";
 import { MealForm } from "./components/MealForm";
@@ -61,6 +58,77 @@ export default function App() {
   const [today, setToday] = useState(localDate);
   const [state, setState] = useState<State>(emptyState);
   const [ready, setReady] = useState(false);
+  const [user, setUser] = useState<{ name: string; email: string } | null>(
+    null,
+  );
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const revisionRef = useRef(0);
+  const identityRef = useRef("");
+  const loadGeneration = useRef(0);
+  async function reload(force = false) {
+    if (busyRef.current && !force) return;
+    const generation = ++loadGeneration.current;
+    try {
+      const data = await bootstrap();
+      if (generation !== loadGeneration.current) return;
+      if (
+        identityRef.current !== data.householdId ||
+        data.revision >= revisionRef.current
+      ) {
+        identityRef.current = data.householdId;
+        revisionRef.current = data.revision;
+        setState(data.state);
+        setUser(data.user);
+        setReady(true);
+        setStorageError("");
+      }
+    } catch (e) {
+      if (generation !== loadGeneration.current) return;
+      if (e instanceof ApiError && e.status === 401) {
+        identityRef.current = "";
+        revisionRef.current = 0;
+        setUser(null);
+        setState(emptyState());
+        setReady(false);
+        setStorageError("");
+      } else
+        setStorageError(
+          e instanceof Error ? e.message : "読み込めませんでした",
+        );
+    }
+  }
+  async function login() {
+    try {
+      const response = await authClient.signIn.social({
+        provider: "google",
+        callbackURL: "/",
+      });
+      if (response.error) throw new Error(response.error.message);
+    } catch (e) {
+      setStorageError(
+        e instanceof Error ? e.message : "ログインできませんでした",
+      );
+    }
+  }
+  async function logout() {
+    if (busyRef.current) return;
+    try {
+      const response = await authClient.signOut();
+      if (response.error) throw new Error(response.error.message);
+      ++loadGeneration.current;
+      identityRef.current = "";
+      revisionRef.current = 0;
+      setUser(null);
+      setReady(false);
+      setState(emptyState());
+      navigate("home");
+    } catch (e) {
+      setStorageError(
+        e instanceof Error ? e.message : "ログアウトできませんでした",
+      );
+    }
+  }
   const [storageError, setStorageError] = useState("");
   const [notice, setNotice] = useState("");
   const [adjustingPrepared, setAdjustingPrepared] = useState<Meal | null>(null);
@@ -77,29 +145,37 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [page]);
   useEffect(() => {
-    try {
-      setState(loadState());
-      setReady(true);
-    } catch (e) {
-      setStorageError(
-        e instanceof Error ? e.message : "保存データを読み込めません",
-      );
-    }
-    const refresh = () => setToday(localDate());
+    void reload();
+    const refresh = () => {
+      setToday(localDate());
+      if (!busyRef.current) void reload();
+    };
     window.addEventListener("focus", refresh);
-    return () => window.removeEventListener("focus", refresh);
+    return () => {
+      ++loadGeneration.current;
+      window.removeEventListener("focus", refresh);
+    };
   }, []);
-  function persist(next: State, message: string) {
-    // Save first so a failed/quota-blocked write cannot appear successful.
+  async function persist(command: Command, message: string) {
+    if (busyRef.current)
+      throw new Error("保存中です。完了してから操作してください");
+    busyRef.current = true;
+    setBusy(true);
+    ++loadGeneration.current;
     try {
-      saveState(next);
-    } catch {
-      throw new Error(
-        "保存できませんでした。ブラウザの保存設定と空き容量を確認してください",
-      );
+      const next = await sendCommand(command, revisionRef.current);
+      revisionRef.current = next.revision;
+      setState(next.state);
+      setNotice(message);
+      setStorageError("");
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 409 || e.status === 401))
+        await reload(true);
+      throw e;
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
     }
-    setState(next);
-    setNotice(message);
   }
   function navigate(next: Page) {
     setPage(next);
@@ -109,11 +185,9 @@ export default function App() {
     setAdjustingProduct(null);
     setNotice("");
   }
-  function saveProduct(product: Product) {
-    if (state.products.some((p) => p.name === product.name))
-      throw new Error("同じ名前の食材が登録されています");
-    persist(
-      { ...state, products: [...state.products, product] },
+  async function saveProduct(product: Product) {
+    await persist(
+      { type: "product.create", product },
       `${product.name}を追加しました`,
     );
   }
@@ -142,6 +216,7 @@ export default function App() {
               <strong>{m.batch!.name}</strong>
               <IconButton
                 type="button"
+                disabled={busy}
                 aria-label={`${m.batch!.name}を編集`}
                 title="作り置きを編集"
                 onClick={() => {
@@ -165,6 +240,7 @@ export default function App() {
             <Button
               type="button"
               variant="text"
+              disabled={busy}
               aria-label={`${m.batch!.name}の在庫を調整`}
               onClick={() => {
                 setAdjustingPrepared(m);
@@ -217,12 +293,24 @@ export default function App() {
         >
           Refico
         </a>
-        <span className="header-date">{dateLabel(today)}</span>
+        <Stack direction="row" sx={{ alignItems: "center", gap: 1 }}>
+          {user ? (
+            <>
+              <span className="hint">{user.name}</span>
+              <Button disabled={busy} onClick={() => void logout()}>
+                ログアウト
+              </Button>
+            </>
+          ) : (
+            <Button onClick={() => void login()}>Googleでログイン</Button>
+          )}
+        </Stack>
       </header>
       <nav className="navigation" aria-label="メインメニュー">
         {navigation.map((n) => (
           <Button
             type="button"
+            disabled={busy}
             key={n.id}
             aria-current={page === n.id ? "page" : undefined}
             onClick={() => navigate(n.id)}
@@ -248,6 +336,14 @@ export default function App() {
             {storageError}
           </p>
         )}
+        {busy && (
+          <p className="hint" role="status">
+            保存中…
+          </p>
+        )}
+        {ready && storageError && (
+          <Button onClick={() => void reload()}>再読み込み</Button>
+        )}
         {notice && (
           <p className="notice" role="status">
             {notice}
@@ -255,7 +351,11 @@ export default function App() {
         )}
         {!ready ? (
           <p className="hint">
-            {storageError ? "保存データは変更していません。" : "読み込み中…"}
+            {storageError ? (
+              <Button onClick={() => void reload()}>再読み込み</Button>
+            ) : (
+              "Googleでログインしてください。"
+            )}
           </p>
         ) : (
           <>
@@ -266,8 +366,8 @@ export default function App() {
                 prepared={adjustingPrepared}
                 today={today}
                 onCancel={() => setAdjustingPrepared(null)}
-                onSave={(next) => {
-                  persist(next, "在庫を調整しました");
+                onSave={async (next) => {
+                  await persist(next, "在庫を調整しました");
                   setAdjustingPrepared(null);
                 }}
               />
@@ -279,8 +379,8 @@ export default function App() {
                 product={adjustingProduct}
                 today={today}
                 onCancel={() => setAdjustingProduct(null)}
-                onSave={(next) => {
-                  persist(next, "在庫を調整しました");
+                onSave={async (next) => {
+                  await persist(next, "在庫を調整しました");
                   setAdjustingProduct(null);
                 }}
               />
@@ -288,7 +388,9 @@ export default function App() {
             {editingPrepared && (
               <Dialog
                 open
-                onClose={() => setEditingPrepared(null)}
+                onClose={() => {
+                  if (!busyRef.current) setEditingPrepared(null);
+                }}
                 fullWidth
                 maxWidth="sm"
                 aria-labelledby="prepared-title"
@@ -309,9 +411,13 @@ export default function App() {
                     key={editingPrepared.id}
                     name={editingPrepared.batch!.name}
                     onCancel={() => setEditingPrepared(null)}
-                    onSave={(name) => {
-                      persist(
-                        updatePreparedName(state, editingPrepared.id, name),
+                    onSave={async (name) => {
+                      await persist(
+                        {
+                          type: "prepared.rename",
+                          id: editingPrepared.id,
+                          name,
+                        },
                         `${name.trim()}を更新しました`,
                       );
                       setEditingPrepared(null);
@@ -323,7 +429,9 @@ export default function App() {
             {editingProduct && (
               <Dialog
                 open
-                onClose={() => setEditingProduct(null)}
+                onClose={() => {
+                  if (!busyRef.current) setEditingProduct(null);
+                }}
                 fullWidth
                 maxWidth="sm"
                 aria-labelledby="product-title"
@@ -345,9 +453,14 @@ export default function App() {
                     key={editingProduct.id}
                     product={editingProduct}
                     onSave={saveProduct}
-                    onSaveChanges={(name, units) => {
-                      persist(
-                        updateProduct(state, editingProduct.id, name, units),
+                    onSaveChanges={async (name, units) => {
+                      await persist(
+                        {
+                          type: "product.update",
+                          id: editingProduct.id,
+                          name,
+                          units,
+                        },
                         `${name.trim()}を更新しました`,
                       );
                       setEditingProduct(null);
@@ -466,9 +579,12 @@ export default function App() {
                   <div className="sample">
                     <p>記録の流れを試す</p>
                     <Button
-                      onClick={() => {
+                      onClick={async () => {
                         try {
-                          persist(sampleState(today), "サンプルを追加しました");
+                          await persist(
+                            { type: "sample.create", date: today },
+                            "サンプルを追加しました",
+                          );
                         } catch (e) {
                           setStorageError(
                             e instanceof Error
@@ -578,17 +694,19 @@ export default function App() {
                   state={state}
                   today={today}
                   onCreateProduct={saveProduct}
-                  onAddUnit={(product, unit) => {
-                    persist(
-                      updateProductUnits(state, product.id, [
-                        ...product.units,
-                        unit,
-                      ]),
+                  onAddUnit={async (product, unit) => {
+                    await persist(
+                      {
+                        type: "product.update",
+                        id: product.id,
+                        name: product.name,
+                        units: [...product.units, unit],
+                      },
                       `${product.name}の単位を追加しました`,
                     );
                   }}
-                  onSave={(next) => {
-                    persist(next, "購入を記録しました");
+                  onSave={async (command) => {
+                    await persist(command, "購入を記録しました");
                     setFormVersion((v) => v + 1);
                   }}
                 />
@@ -597,6 +715,7 @@ export default function App() {
                   state={state}
                   today={today}
                   onSave={persist}
+                  saving={busy}
                 />
               </>
             )}
@@ -607,13 +726,8 @@ export default function App() {
                   state={state}
                   today={today}
                   money={money}
-                  onSave={(next) => {
-                    persist(
-                      next,
-                      next.meals.at(-1)?.batch?.eatenServings === 0
-                        ? "作り置きを保存しました"
-                        : "食事を記録しました",
-                    );
+                  onSave={async (command) => {
+                    await persist(command, "食事を記録しました");
                     setFormVersion((v) => v + 1);
                   }}
                 />
@@ -622,6 +736,7 @@ export default function App() {
                   state={state}
                   today={today}
                   onSave={persist}
+                  saving={busy}
                 />
               </>
             )}

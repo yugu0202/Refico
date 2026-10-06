@@ -14,9 +14,11 @@ Cloudflare Workers上で動作する、食材の在庫管理と1日の食費計�
 - 食事別・日別の食費表示
 - 空の状態からサンプルデータを追加
 
-React + MUI + TypeScript + Vite。Cloudflare Workers が静的アセットを配信します。
-データは localStorage に保存します。ブラウザ・端末間の共有はまだできません。
-D1、認証、記録の編集・削除、廃棄、バーコードは未実装です。
+React + MUI + TypeScript + Vite。Cloudflare Workersが静的アセットとAPIを配信します。
+GoogleログインとD1保存に対応し、ユーザー専用の家庭単位でデータを管理します。
+購入・食事履歴の編集、在庫調整、作り置き・廃棄をサーバーで計算・保存します。
+家庭への招待・共有画面、記録削除、バーコードは未実装です。
+旧localStorageデータの移行は行いません。
 
 ## 開発
 
@@ -40,24 +42,47 @@ pnpm preview
 DESIGN.md に画面のルール、AGENTS.md に実装のルールをまとめています。
 MUI のテーマは src/theme.ts で管理します。
 
-## Cloudflare Workers
+## Cloudflare Workers / Googleログイン
+
+1. 本番用とプレビュー用にD1を別々に作ります。
 
 ```bash
-pnpm dev:worker
+pnpm exec wrangler d1 create refico
+pnpm exec wrangler d1 create refico-preview
+```
+
+2. `wrangler.jsonc`のトップレベルと`previews.d1_databases`の仮IDをそれぞれのIDに置き換えます。DBバインディング名は両方`DB`です。仮IDは本番リソースを指していません。
+3. 公開URLを`BETTER_AUTH_URL`に設定します。トップレベルの`vars`と`previews.vars`に、それぞれの実際の公開URLを設定してください。Google OAuthのコールバックURLと一致させます。
+4. Google Cloud ConsoleでOAuthクライアント（ウェブアプリケーション）を作ります。Authorized redirect URIsに`<公開URL>/api/auth/callback/google`を登録します。ローカルは`http://localhost:8787/api/auth/callback/google`。本番とプレビューは別のOAuthクライアント・Secretsを使用します。プレビューのURLは固定して登録し、任意のOriginやワイルドカードを認証許可しません。
+5. `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`BETTER_AUTH_SECRET`をWorkerのSecretsに登録します。認証secretは`openssl rand -hex 32`などで生成します。OAuthの秘密値はコミットしません。
+6. 接続先DBごとにマイグレーションを適用してからデプロイします。
+
+```bash
+pnpm exec wrangler d1 migrations apply refico --remote
+pnpm exec wrangler d1 migrations apply refico-preview --remote
+pnpm exec wrangler secret put GOOGLE_CLIENT_ID
+pnpm exec wrangler secret put GOOGLE_CLIENT_SECRET
+pnpm exec wrangler secret put BETTER_AUTH_SECRET
 pnpm deploy
 ```
 
-deploy は自分のCloudflareアカウントへデプロイします。事前に `pnpm exec wrangler login` またはCIのCloudflare API Token設定が必要です。
-Worker名は wrangler.jsonc の name を変更してください。
-現在の構成ではD1などのresource IDは必要ありません。
-/api/health は疎通確認、その他の /api/* は404を返します。
+プレビュー用Secretsも別途設定してください。本番とプレビューでDB・公開URL・Secretsを分離します。Worker Previewsは同じプレビューDBを指定したブランチ間でデータを共有します。
 
-静的アセット設定: https://developers.cloudflare.com/workers/static-assets/
+### ローカル
 
-### Workers Buildsとプレビュー
+`.dev.vars.example`を`.dev.vars`にコピーし、Google OAuthの開発用クライアントと認証secretを設定します。
 
-GitHub連携では本番ブランチを `main`、ルートディレクトリを `/` に設定します。
-Branch control の Enable Preview Builds を有効にします。
+```bash
+pnpm install
+pnpm db:migrate:local
+pnpm dev:worker
+```
+
+`http://localhost:8787`でGoogleログインとアプリを確認できます。Viteのホットリロードを使う場合は、別ターミナルで`pnpm dev`を実行し、`.dev.vars`の`BETTER_AUTH_URL`とGoogleの開発用リダイレクトURIを`http://localhost:5173`へ揃えてWorkerを再起動します。Viteは`/api`をローカルWorkerへ転送します。
+
+### Workers Builds
+
+本番ブランチは`main`、ルートディレクトリは`/`。Enable Preview Buildsを有効にします。
 
 | 設定         | コマンド               |
 | ------------ | ---------------------- |
@@ -65,43 +90,27 @@ Branch control の Enable Preview Builds を有効にします。
 | 本番デプロイ | `npx wrangler deploy`  |
 | プレビュー   | `npx wrangler preview` |
 
-Worker Previewsに対応したWranglerを使用します。プレビュー設定は
-`wrangler.jsonc` の `previews` に定義し、ログ・呼び出しログ・トレースも有効にしています。
-静的アセットとcompatibility設定はトップレベルの設定を使用します。
-
-D1を導入する際は、本番用とプレビュー用に別のデータベースを作成します。
-トップレベルの `d1_databases` に本番用、`previews.d1_databases` にプレビュー用を指定し、
-アプリから使うバインディング名（例: `DB`）は揃えます。
-D1はプレビューごとに自動作成されません。同じプレビュー用DBを指定したブランチ同士はデータを共有します。
-ブランチ単位で分ける場合は、各ブランチの `previews.d1_databases` に別のDBを指定します。
-マイグレーションも接続先に合わせて適用します。Secretsは本番とプレビューで別途設定します。
-
-Worker Previews設定: https://developers.cloudflare.com/workers/previews/configuration/
+マイグレーションは上記コマンドとは別に、接続先を確認して適用します。Google OAuthの設定が完了するまで認証APIは利用できません。`/api/health`は設定前でも疎通確認できます。
 
 ## データと計算
 
-src/domain/inventory.ts に換算・在庫・原価計算をまとめています。
-保存先をD1に変更する際にも、この層のロジックを共有する想定です。
+[サーバーデータモデル](docs/DATA_MODEL.md)に所有範囲、テーブル、更新API、同時更新と再送の扱いをまとめています。
 
-食材の基準単位は g / ml / 個。kg↔g、L↔mlは標準換算し、合・枚・パックなどは食材ごとに登録します。
-登録した単位は購入・食事の両方で選べます。係数を含む入力情報と正規化後の数量を記録します。
-基準単位の0.001刻みまで入力でき、内部は1/1000単位の整数です。
+食材の基準単位はg / ml / 個。kg↔g、L↔mlは標準換算し、合・枚・パックなどは食材ごとに登録します。元の数量・単位・換算係数を履歴に保存します。内部数量は基準単位の1/1000整数、原価は円整数です。
 
-購入は価格の異なるロットとして保持します。食事の保存時に、購入日順（同日なら登録順）に消費量を配分します。
-過去の食事を後から登録しても既存の配分は変更せず、未消費で食事日以前に購入したロットから使います。
-在庫不足なら全体の保存を中止します。
+購入ロットは購入日順FIFO。同日なら登録順。後から過去の記録を追加しても既存の配分を変えず、食事日以前の未消費ロットを使用します。累積丸めの差額を原価として配分し、3個100円を1個ずつ使うと33円・34円・33円になります。
 
-円単位の原価は購入ロットの累積消費原価を四捨五入し、その差額を各使用に配分します。
-例: 3個100円を1個ずつ使うと33円・34円・33円。合計は購入価格と一致します。
-日別食費は食事の使用原価の合計で、購入日の支払額とは別です。
-日付は利用者のローカル日付として扱います。
+作り置きでは調理時に食材を消費し、食べた日に食費を計上します。日付は利用者が指定したローカル日付として保存します。
 
-## 次の段階
+## 検証
 
-- D1: 商品、換算単位、購入、食事、使用、ロット配分を永続化
-- 利用者・家庭の境界と認証
-- 使用記録とロット配分を同一トランザクションで保存し、同時更新・重複送信を防止
-- 記録訂正・廃棄とデータのエクスポート
+`pnpm check`、`pnpm test`、`pnpm build`、`pnpm exec wrangler deploy --dry-run`。
+テストは原価計算、サーバーモデルの投影、認証済みAPI、再送、リビジョン競合、家庭間の分離、D1と同じSQLによるロールバックを検証します。
+認証テーブルはBetter Authのマイグレーション機能で生成済みです。ライブラリ更新時は`pnpm auth:schema`で生成内容を比較し、稼働DBには既存マイグレーションの上書きではなく新規マイグレーションを追加します。
 
-D1接続時に価格・残量を商品マスタへまとめず、購入ロットと使用配分を保持します。
-秘密値はCloudflare Secrets、ローカルは .dev.vars に置いてコミットしないでください。
+公式資料:
+
+- https://better-auth.com/docs/authentication/google
+- https://better-auth.com/docs/concepts/database
+- https://developers.cloudflare.com/d1/worker-api/d1-database/
+- https://developers.cloudflare.com/workers/previews/configuration/

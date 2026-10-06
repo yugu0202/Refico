@@ -1,4 +1,4 @@
-import { parseState } from "./storage.ts";
+import { parseState } from "./validation.ts";
 import {
   recordPurchase,
   recordMeal,
