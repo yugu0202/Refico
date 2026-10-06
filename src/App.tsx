@@ -68,6 +68,7 @@ export default function App() {
       : "",
   );
   const [authMode, setAuthMode] = useState<"google" | "test" | null>(null);
+  const [sampleDataEnabled, setSampleDataEnabled] = useState(false);
   const [user, setUser] = useState<{ name: string; email: string } | null>(
     null,
   );
@@ -84,6 +85,7 @@ export default function App() {
       const data = await bootstrap();
       if (generation === loadGeneration.current) setAuthMode(data.authMode);
       if (generation !== loadGeneration.current) return;
+      setSampleDataEnabled(data.sampleDataEnabled === true);
       if (
         identityRef.current !== data.householdId ||
         data.revision >= revisionRef.current
@@ -98,6 +100,7 @@ export default function App() {
       }
     } catch (e) {
       if (generation !== loadGeneration.current) return;
+      setSampleDataEnabled(false);
       if (e instanceof ApiError && e.authMode) setAuthMode(e.authMode);
       if (e instanceof ApiError && e.status === 401) {
         identityRef.current = "";
@@ -608,7 +611,7 @@ export default function App() {
                     ))
                   )}
                 </section>
-                {state.products.length === 0 && (
+                {sampleDataEnabled && state.products.length === 0 && (
                   <div className="sample">
                     <p>記録の流れを試す</p>
                     <Button
