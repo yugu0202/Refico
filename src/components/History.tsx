@@ -74,7 +74,7 @@ export function History({
                   {p.unit}
                 </p>
               </div>
-              <div className="numeric">
+              <div className="numeric purchase-history-actions">
                 <strong>{money(p.price)}</strong>
                 <Button
                   onClick={() => setEditingId(p.id)}

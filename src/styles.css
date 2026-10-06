@@ -547,6 +547,11 @@ label .amount-input select {
 .history-section {
   margin-top: 32px;
 }
+.purchase-history-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
 .history-pagination {
   display: flex;
   align-items: center;
