@@ -1,5 +1,6 @@
 import type { Command } from "./domain/commands";
 import { ApiError, bootstrap, sendCommand, authClient } from "./api";
+import { LoginScreen } from "./components/LoginScreen";
 import { History } from "./components/History";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
@@ -58,6 +59,10 @@ export default function App() {
   const [today, setToday] = useState(localDate);
   const [state, setState] = useState<State>(emptyState);
   const [ready, setReady] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [requiresLogin, setRequiresLogin] = useState(false);
+  const [loggingIn, setLoggingIn] = useState(false);
+  const loginRef = useRef(false);
   const [authMode, setAuthMode] = useState<"google" | "test" | null>(null);
   const [user, setUser] = useState<{ name: string; email: string } | null>(
     null,
@@ -70,6 +75,7 @@ export default function App() {
   async function reload(force = false) {
     if (busyRef.current && !force) return;
     const generation = ++loadGeneration.current;
+    setAuthLoading(true);
     try {
       const data = await bootstrap();
       if (generation === loadGeneration.current) setAuthMode(data.authMode);
@@ -83,6 +89,7 @@ export default function App() {
         setState(data.state);
         setUser(data.user);
         setReady(true);
+        setRequiresLogin(false);
         setStorageError("");
       }
     } catch (e) {
@@ -94,21 +101,31 @@ export default function App() {
         setUser(null);
         setState(emptyState());
         setReady(false);
+        setRequiresLogin(true);
         setStorageError("");
       } else
         setStorageError(
           e instanceof Error ? e.message : "読み込めませんでした",
         );
+    } finally {
+      if (generation === loadGeneration.current) setAuthLoading(false);
     }
   }
   async function login() {
+    if (loginRef.current) return;
+    loginRef.current = true;
+    setLoggingIn(true);
+    setStorageError("");
     try {
       const response = await authClient.signIn.social({
         provider: "google",
         callbackURL: "/",
       });
-      if (response.error) throw new Error(response.error.message);
+      if (response.error)
+        throw new Error(response.error.message || "ログインできませんでした");
     } catch (e) {
+      loginRef.current = false;
+      setLoggingIn(false);
       setStorageError(
         e instanceof Error ? e.message : "ログインできませんでした",
       );
@@ -124,6 +141,8 @@ export default function App() {
       revisionRef.current = 0;
       setUser(null);
       setReady(false);
+      setRequiresLogin(true);
+      setAuthLoading(false);
       setState(emptyState());
       navigate("home");
     } catch (e) {
@@ -283,6 +302,17 @@ export default function App() {
         }
       />
     ));
+  if (!ready)
+    return (
+      <LoginScreen
+        loading={authLoading}
+        canLogin={requiresLogin && authMode === "google"}
+        loggingIn={loggingIn}
+        error={storageError}
+        onLogin={() => void login()}
+        onRetry={() => void reload()}
+      />
+    );
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -306,8 +336,6 @@ export default function App() {
                 </Button>
               )}
             </>
-          ) : authMode === "google" ? (
-            <Button onClick={() => void login()}>Googleでログイン</Button>
           ) : null}
         </Stack>
       </header>
@@ -354,17 +382,7 @@ export default function App() {
             {notice}
           </p>
         )}
-        {!ready ? (
-          <p className="hint">
-            {storageError ? (
-              <Button onClick={() => void reload()}>再読み込み</Button>
-            ) : authMode === "google" ? (
-              "Googleでログインしてください。"
-            ) : (
-              "読み込み中…"
-            )}
-          </p>
-        ) : (
+        {ready && (
           <>
             {adjustingPrepared && (
               <StockAdjustmentForm
