@@ -32,7 +32,13 @@ export function ThemeControl({ inline = false }: { inline?: boolean }) {
           <ToggleButton
             key={option.value}
             value={option.value}
-            sx={{ flex: 1, minHeight: 44, px: 1, textTransform: "none" }}
+            sx={{
+              flex: 1,
+              minHeight: 44,
+              px: 1,
+              textTransform: "none",
+              "&.Mui-selected": { fontWeight: 700 },
+            }}
           >
             {option.label}
           </ToggleButton>
