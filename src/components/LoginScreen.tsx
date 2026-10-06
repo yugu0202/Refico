@@ -1,4 +1,3 @@
-import { ThemeControl } from "./ThemeControl";
 import { BrandLogo } from "./BrandLogo";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -22,9 +21,6 @@ export function LoginScreen({
 }: Props) {
   return (
     <main className="login-screen">
-      <div className="login-theme">
-        <ThemeControl />
-      </div>
       <div className="login-content">
         <h1 className="brand">
           <BrandLogo size={40} />
