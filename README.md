@@ -55,11 +55,9 @@ pnpm exec wrangler d1 create refico-preview
 3. 本番公開URLをトップレベルの`vars.BETTER_AUTH_URL`に設定します。Google OAuthのコールバックURLと一致させます。プレビューは共通テストアカウントを使用するので`BETTER_AUTH_URL`とGoogle設定は不要です。
 4. Google Cloud ConsoleでOAuthクライアント（ウェブアプリケーション）を作ります。Authorized redirect URIsに`<公開URL>/api/auth/callback/google`を登録します。ローカルは`http://localhost:8787/api/auth/callback/google`。プレビューではGoogle OAuthを使用しません。
 5. `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`BETTER_AUTH_SECRET`をWorkerのSecretsに登録します。認証secretは`openssl rand -hex 32`などで生成します。OAuthの秘密値はコミットしません。
-6. 接続先DBごとにマイグレーションを適用してからデプロイします。
+6. デプロイスクリプトが対象DBへマイグレーションを自動適用します。
 
 ```bash
-pnpm exec wrangler d1 migrations apply refico --remote
-pnpm exec wrangler d1 migrations apply refico-preview --remote
 pnpm exec wrangler secret put GOOGLE_CLIENT_ID
 pnpm exec wrangler secret put GOOGLE_CLIENT_SECRET
 pnpm exec wrangler secret put BETTER_AUTH_SECRET
@@ -88,17 +86,23 @@ pnpm dev:worker
 
 `http://localhost:8787`でGoogleログインとアプリを確認できます。Viteのホットリロードを使う場合は、別ターミナルで`pnpm dev`を実行し、`.dev.vars`の`BETTER_AUTH_URL`とGoogleの開発用リダイレクトURIを`http://localhost:5173`へ揃えてWorkerを再起動します。Viteは`/api`をローカルWorkerへ転送します。
 
+### 自動マイグレーション
+
+デプロイ用スクリプトは`wrangler.jsonc`を唯一の設定元として、本番はトップレベル、プレビューは`previews.d1_databases`を選択します。CLI用の一時設定を生成し、未適用マイグレーションをすべて適用してから配信します。失敗時は配信を中止し、一時設定は削除します。プレビューDBが本番DBと同じIDの場合も拒否します。
+
+`pnpm deploy`はビルド・本番マイグレーション・本番配信を行います。Cloudflare Buildsではビルドコマンドを`pnpm build`、本番デプロイコマンドを`pnpm deploy:worker`、プレビューデプロイコマンドを`pnpm deploy:preview`にします。ビルド用APIトークンには対象DBのD1編集権限が必要です。DashboardでSQLを手動適用せず、Wranglerの`d1_migrations`で適用履歴を管理してください。
+
 ### Workers Builds
 
 本番ブランチは`main`、ルートディレクトリは`/`。Enable Preview Buildsを有効にします。
 
-| 設定         | コマンド               |
-| ------------ | ---------------------- |
-| ビルド       | `pnpm build`           |
-| 本番デプロイ | `npx wrangler deploy`  |
-| プレビュー   | `npx wrangler preview` |
+| 設定         | コマンド              |
+| ------------ | --------------------- |
+| ビルド       | `pnpm build`          |
+| 本番デプロイ | `pnpm deploy:worker`  |
+| プレビュー   | `pnpm deploy:preview` |
 
-マイグレーションは上記コマンドとは別に、接続先を確認して適用します。Google OAuthの設定が完了するまで認証APIは利用できません。`/api/health`は設定前でも疎通確認できます。
+マイグレーションは上記デプロイスクリプト内で、配信前に自動適用します。Google OAuthの設定が完了するまで認証APIは利用できません。`/api/health`は設定前でも疎通確認できます。
 
 ## データと計算
 

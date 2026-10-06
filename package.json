@@ -11,13 +11,15 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",
     "check": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/domain/*.test.ts src/*.test.ts worker/*.test.ts",
+    "test": "node --experimental-strip-types --test src/domain/*.test.ts src/*.test.ts worker/*.test.ts scripts/*.test.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "dev:worker": "pnpm build && wrangler dev",
-    "deploy": "pnpm build && wrangler deploy",
+    "deploy": "pnpm build && pnpm deploy:worker",
     "format": "prettier --write .",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
-    "auth:schema": "node scripts/generate-auth-schema.mjs"
+    "auth:schema": "node scripts/generate-auth-schema.mjs",
+    "deploy:worker": "node scripts/deploy.mjs production",
+    "deploy:preview": "node scripts/deploy.mjs preview"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -33,6 +35,7 @@
     "@types/node": "^26.6.4",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "jsonc-parser": "^3.3.1",
     "prettier": "^3.9.9",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
