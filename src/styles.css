@@ -27,11 +27,6 @@ body {
 a {
   color: inherit;
 }
-.login-theme {
-  position: absolute;
-  top: max(16px, env(safe-area-inset-top));
-  right: max(16px, env(safe-area-inset-right));
-}
 .brand-logo {
   display: inline-flex;
   flex-shrink: 0;
