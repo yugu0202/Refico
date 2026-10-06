@@ -21,13 +21,15 @@ CREATE TABLE mutation_receipts (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY(household_id, request_id)
 );
+-- Avoid CASE ... END inside triggers: the remote D1 query parser can split
+-- the trigger body at the CASE terminator. WHERE preserves the same guards.
 CREATE TRIGGER mutation_revision_guard BEFORE INSERT ON mutation_receipts BEGIN
-  SELECT CASE WHEN NOT EXISTS (
+  SELECT RAISE(ABORT, 'revision_conflict') WHERE NOT EXISTS (
     SELECT 1 FROM households WHERE id = NEW.household_id AND revision = NEW.expected_revision
-  ) THEN RAISE(ABORT, 'revision_conflict') END;
-  SELECT CASE WHEN NOT EXISTS (
+  );
+  SELECT RAISE(ABORT, 'membership_required') WHERE NOT EXISTS (
     SELECT 1 FROM household_members WHERE household_id = NEW.household_id AND user_id = NEW.user_id
-  ) THEN RAISE(ABORT, 'membership_required') END;
+  );
 END;
 CREATE TRIGGER mutation_revision_advance AFTER INSERT ON mutation_receipts BEGIN
   UPDATE households SET revision = revision + 1 WHERE id = NEW.household_id;
