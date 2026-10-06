@@ -13,4 +13,5 @@
 - 保存失敗を成功として表示しない。壊れた保存データを自動で上書きしない。
 - バーコードは入力補助。現在は実装対象外。
 - 本番resource IDや認証情報をひな形に追加しない。秘密値はCloudflare Secretsを使う。
+- Worker Previewsの設定は wrangler.jsonc の previews に置く。D1などは本番と別リソースへ接続し、同じバインディング名を使う。プレビューから本番のデータを更新しない。
 - 変更後に pnpm check、pnpm test、pnpm build を実行する。

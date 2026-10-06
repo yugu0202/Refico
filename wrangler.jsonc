@@ -3,19 +3,37 @@
   "name": "refico",
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-06",
+  "preview_urls": true,
   "observability": {
     "enabled": true,
     "logs": {
       "enabled": true,
       "invocation_logs": true,
       "head_sampling_rate": 1,
-      "persist": true
+      "persist": true,
     },
     "traces": {
       "enabled": true,
       "head_sampling_rate": 1,
-      "persist": true
-    }
+      "persist": true,
+    },
+  },
+  "previews": {
+    // D1などを追加する際は、本番とは別のリソースをここに指定する。
+    "observability": {
+      "enabled": true,
+      "logs": {
+        "enabled": true,
+        "invocation_logs": true,
+        "head_sampling_rate": 1,
+        "persist": true,
+      },
+      "traces": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "persist": true,
+      },
+    },
   },
   "assets": {
     "directory": "./dist",

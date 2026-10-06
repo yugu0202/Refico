@@ -52,6 +52,30 @@ Worker名は wrangler.jsonc の name を変更してください。
 
 静的アセット設定: https://developers.cloudflare.com/workers/static-assets/
 
+### Workers Buildsとプレビュー
+
+GitHub連携では本番ブランチを `main`、ルートディレクトリを `/` に設定します。
+Branch control の Enable Preview Builds を有効にします。
+
+| 設定         | コマンド               |
+| ------------ | ---------------------- |
+| ビルド       | `pnpm build`           |
+| 本番デプロイ | `npx wrangler deploy`  |
+| プレビュー   | `npx wrangler preview` |
+
+Worker Previewsに対応したWranglerを使用します。プレビュー設定は
+`wrangler.jsonc` の `previews` に定義し、ログ・呼び出しログ・トレースも有効にしています。
+静的アセットとcompatibility設定はトップレベルの設定を使用します。
+
+D1を導入する際は、本番用とプレビュー用に別のデータベースを作成します。
+トップレベルの `d1_databases` に本番用、`previews.d1_databases` にプレビュー用を指定し、
+アプリから使うバインディング名（例: `DB`）は揃えます。
+D1はプレビューごとに自動作成されません。同じプレビュー用DBを指定したブランチ同士はデータを共有します。
+ブランチ単位で分ける場合は、各ブランチの `previews.d1_databases` に別のDBを指定します。
+マイグレーションも接続先に合わせて適用します。Secretsは本番とプレビューで別途設定します。
+
+Worker Previews設定: https://developers.cloudflare.com/workers/previews/configuration/
+
 ## データと計算
 
 src/domain/inventory.ts に換算・在庫・原価計算をまとめています。
