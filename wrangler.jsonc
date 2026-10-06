@@ -36,8 +36,8 @@
     "vars": {
       "APP_ENV": "preview",
       "AUTH_MODE": "access",
-      "ACCESS_TEAM_DOMAIN": "YOUR_TEAM.cloudflareaccess.com",
-      "ACCESS_AUD": "YOUR_ACCESS_APPLICATION_AUD",
+      "ACCESS_TEAM_DOMAIN": "yugu0202.cloudflareaccess.com",
+      "ACCESS_AUD": "7886527b66d25e050a2443ed082f0185285ccfa7345527aea0709338a7e8dabe",
     },
     "d1_databases": [
       {
