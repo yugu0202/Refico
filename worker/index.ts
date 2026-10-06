@@ -53,7 +53,23 @@ export default {
       const db = env.DB.withSession("first-primary");
       let user: { id: string; name: string; email: string } | null;
       if (mode === "access") {
-        user = await accessUser(ctx?.access, db);
+        if (
+          !ctx?.access &&
+          request.headers.has("Cf-Access-Jwt-Assertion") &&
+          (!env.ACCESS_TEAM_DOMAIN ||
+            !/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(
+              env.ACCESS_TEAM_DOMAIN,
+            ) ||
+            !env.ACCESS_AUD)
+        )
+          return json(
+            {
+              error: "Access認証のサーバー設定が完了していません",
+              authMode: mode,
+            },
+            503,
+          );
+        user = await accessUser(ctx?.access, db, request, env);
         if (!user)
           return json(
             { error: "Cloudflare Accessで認証してください", authMode: mode },

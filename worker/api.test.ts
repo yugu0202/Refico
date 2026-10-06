@@ -123,6 +123,8 @@ test("AccessプレビューはGoogle設定なしで認証し、偽造ヘッダ�
     ASSETS: { fetch: async () => new Response("assets") },
     APP_ENV: "preview",
     AUTH_MODE: "access",
+    ACCESS_TEAM_DOMAIN: "test.cloudflareaccess.com",
+    ACCESS_AUD: "preview-policy",
     BETTER_AUTH_URL: "",
     BETTER_AUTH_SECRET: "",
     GOOGLE_CLIENT_ID: "",

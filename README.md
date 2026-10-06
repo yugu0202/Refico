@@ -69,13 +69,13 @@ pnpm deploy
 ### プレビューのCloudflare Access
 
 `previews.vars`は`APP_ENV=preview`、`AUTH_MODE=access`に設定済みです。本番の`AUTH_MODE=google`とは分離します。
-CloudflareのWorkers設定で対象Workerの**プレビュー全体をWorker単位でAccess保護**してください。認証済みの`ctx.access.getIdentity()`からユーザーを取得し、自動でアプリを開きます。Google OAuthクライアント、認証Secrets、固定コールバックURLはプレビューに不要です。
+CloudflareのWorkers設定で対象Workerの**プレビュー全体をWorker単位でAccess保護**してください。Static Assets構成では`ctx.access`がWorkerへ渡らないため、`Cf-Access-Jwt-Assertion`の署名・発行元・対象アプリ・有効期限を検証して自動ログインします。`previews.vars.ACCESS_TEAM_DOMAIN`にチームドメイン（`<team>.cloudflareaccess.com`）、`ACCESS_AUD`に対象プレビューを保護するAccessアプリのApplication Audience (AUD)を設定してください。どちらも公開設定でSecretsは不要です。Google OAuthクライアント、認証Secrets、固定コールバックURLはプレビューに不要です。
 
-Accessの認証情報がないリクエストは401で拒否します。メールアドレスのヘッダーだけを信用したり、固定のテストユーザーへフォールバックしたりしません。Accessモードを本番に設定した場合も拒否します。ホスト名単位のAccess保護だけでは`ctx.access`を使うこの構成に対応しません。
+Accessの認証情報がないリクエストは401で拒否します。メールアドレスのヘッダーだけを信用したり、固定のテストユーザーへフォールバックしたりしません。Accessモードを本番に設定した場合も拒否します。ホスト名単位で保護する場合も、対象プレビューとAPIの両方を保護し、そのAccessアプリのAUDを設定してください。
 
 プレビューD1は本番と別に作成・マイグレーションしてください。同じプレビューDBを指定したブランチ間では、同じAccessユーザーのデータを共有します。
 
-Access方式をローカルで確認する場合は、Wranglerの開発用設定で認証情報を模擬できます（本番・プレビューのAccessポリシーを変更するものではありません）。別のローカル設定ファイルに以下を指定します。
+Static Assetsを外したローカルWorkerでctx.access方式を確認する場合は、Wranglerの開発用設定で認証情報を模擬できます（本番・プレビューのAccessポリシーを変更するものではありません）。別のローカル設定ファイルに以下を指定します。
 
 ```jsonc
 {

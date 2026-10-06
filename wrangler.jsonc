@@ -7,7 +7,7 @@
   "vars": {
     "APP_ENV": "production",
     "AUTH_MODE": "google",
-    "BETTER_AUTH_URL": "refico.yugu0202.net"
+    "BETTER_AUTH_URL": "refico.yugu0202.net",
   },
   "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [
@@ -33,7 +33,12 @@
     },
   },
   "previews": {
-    "vars": { "APP_ENV": "preview", "AUTH_MODE": "access" },
+    "vars": {
+      "APP_ENV": "preview",
+      "AUTH_MODE": "access",
+      "ACCESS_TEAM_DOMAIN": "YOUR_TEAM.cloudflareaccess.com",
+      "ACCESS_AUD": "YOUR_ACCESS_APPLICATION_AUD",
+    },
     "d1_databases": [
       {
         "binding": "DB",
