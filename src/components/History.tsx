@@ -94,59 +94,66 @@ export function History({
             </div>
           ))
         : meals.slice(start, end).map((m) => (
-            <details className="meal-row" key={m.id}>
-              <summary>
-                <strong>
-                  {dateLabel(m.date)} · {m.kind}
-                </strong>
-                <span>
-                  {m.batch?.name ??
-                    `${m.usages.length + (m.prepared?.length ?? 0)}品`}
-                </span>
-                <strong className="numeric">{money(mealCost(m))}</strong>
-              </summary>
-              <div className="meal-detail">
-                {m.usages.map((u) => (
-                  <div key={u.productId}>
-                    <span>
-                      {state.products.find((p) => p.id === u.productId)?.name}{" "}
-                      {number(u.quantity)}
-                      {u.unit}
-                    </span>
-                    <span>
-                      {money(u.allocations.reduce((sum, a) => sum + a.cost, 0))}
-                    </span>
-                  </div>
-                ))}
-                {(m.prepared ?? []).map((p) => (
-                  <div key={p.batchId}>
-                    <span>
-                      {state.meals.find((m) => m.id === p.batchId)?.batch?.name}{" "}
-                      {number(p.quantity)}食分
-                    </span>
-                    <span>{money(p.cost)}</span>
-                  </div>
-                ))}
-                {m.batch && (
-                  <p className="hint">
-                    作った量 {number(m.batch.servings)}食分 · 今回食べた量{" "}
-                    {number(m.batch.eatenServings)}食分
-                  </p>
-                )}
-                <Tooltip title="食事履歴を編集">
-                  <IconButton
-                    className="meal-history-edit"
-                    onClick={() => setEditingId(m.id)}
-                    aria-label={`${dateLabel(m.date)} ${m.kind}の履歴を編集`}
-                    sx={{ width: 44, height: 44, flexShrink: 0 }}
-                  >
-                    <SvgIcon fontSize="small">
-                      <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
-                    </SvgIcon>
-                  </IconButton>
-                </Tooltip>
-              </div>
-            </details>
+            <div className="meal-history-row" key={m.id}>
+              <details className="meal-row">
+                <summary>
+                  <strong>
+                    {dateLabel(m.date)} · {m.kind}
+                  </strong>
+                  <span>
+                    {m.batch?.name ??
+                      `${m.usages.length + (m.prepared?.length ?? 0)}品`}
+                  </span>
+                  <strong className="numeric">{money(mealCost(m))}</strong>
+                </summary>
+                <div className="meal-detail">
+                  {m.usages.map((u) => (
+                    <div key={u.productId}>
+                      <span>
+                        {state.products.find((p) => p.id === u.productId)?.name}{" "}
+                        {number(u.quantity)}
+                        {u.unit}
+                      </span>
+                      <span>
+                        {money(
+                          u.allocations.reduce((sum, a) => sum + a.cost, 0),
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                  {(m.prepared ?? []).map((p) => (
+                    <div key={p.batchId}>
+                      <span>
+                        {
+                          state.meals.find((m) => m.id === p.batchId)?.batch
+                            ?.name
+                        }{" "}
+                        {number(p.quantity)}食分
+                      </span>
+                      <span>{money(p.cost)}</span>
+                    </div>
+                  ))}
+                  {m.batch && (
+                    <p className="hint">
+                      作った量 {number(m.batch.servings)}食分 · 今回食べた量{" "}
+                      {number(m.batch.eatenServings)}食分
+                    </p>
+                  )}
+                </div>
+              </details>
+              <Tooltip title="食事履歴を編集">
+                <IconButton
+                  className="meal-history-edit"
+                  onClick={() => setEditingId(m.id)}
+                  aria-label={`${dateLabel(m.date)} ${m.kind}の履歴を編集`}
+                  sx={{ width: 44, height: 44, flexShrink: 0 }}
+                >
+                  <SvgIcon fontSize="small">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                  </SvgIcon>
+                </IconButton>
+              </Tooltip>
+            </div>
           ))}
       {all && count > 20 && (
         <div className="history-pagination">

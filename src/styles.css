@@ -573,7 +573,16 @@ label .amount-input select {
 .history-section .meal-detail > div > span:last-child {
   flex-shrink: 0;
 }
-.history-section .meal-detail .meal-history-edit {
-  display: flex;
-  margin: 8px 0 0 auto;
+.meal-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  column-gap: 16px;
+  align-items: start;
+  border-bottom: 1px solid var(--border);
+}
+.meal-history-row .meal-row {
+  border-bottom: 0;
+}
+.meal-history-row .meal-history-edit {
+  margin-top: 3px;
 }
