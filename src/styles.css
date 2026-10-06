@@ -475,3 +475,67 @@ label .amount-input select {
 .amount-input .MuiFormControl-root {
   min-width: 0;
 }
+
+.daily {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+.daily-total {
+  margin-bottom: 0;
+}
+.month-total {
+  text-align: right;
+}
+.month-total > p:last-child {
+  margin: 8px 0 0;
+  font-size: clamp(22px, 4vw, 28px);
+  font-weight: 650;
+}
+.calendar-controls {
+  display: flex;
+  gap: 4px;
+}
+.calendar-controls button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px;
+}
+.cost-calendar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.calendar-weekday {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 8px 0;
+}
+.cost-calendar .calendar-day {
+  min-width: 0;
+  min-height: 72px;
+  padding: 8px 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: inherit;
+  border: 1px solid transparent;
+}
+.cost-calendar .calendar-day[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: #eef2e7;
+  font-weight: 700;
+}
+.calendar-day[aria-current="date"] .calendar-date {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  font-weight: 700;
+}
+.calendar-cost {
+  font-size: clamp(10px, 2.8vw, 14px);
+  line-height: 1.4;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}

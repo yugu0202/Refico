@@ -20,6 +20,7 @@ import { ProductForm } from "./components/ProductForm";
 import { PurchaseForm } from "./components/PurchaseForm";
 import { MealForm } from "./components/MealForm";
 import { StockAdjustmentForm } from "./components/StockAdjustmentForm";
+import { CostCalendar } from "./components/CostCalendar";
 import { InventoryRow } from "./components/InventoryRow";
 import { money, number, localDate, dateLabel } from "./format";
 const navigation = [
@@ -60,6 +61,8 @@ export default function App() {
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(
     null,
   );
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const selectedDate = selectedDay ?? today;
   const [search, setSearch] = useState("");
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -104,9 +107,15 @@ export default function App() {
     );
   }
   const meals = state.meals.filter(
-    (m) => m.date === today && (!m.batch || m.batch.eatenServings > 0),
+    (m) => m.date === selectedDate && (!m.batch || m.batch.eatenServings > 0),
   );
-  const total = meals.reduce((sum, m) => sum + mealCost(m), 0);
+  const costs = new Map(dailyCosts(state));
+  const total = costs.get(today) ?? 0;
+  const monthTotal = [...costs].reduce(
+    (sum, [date, cost]) =>
+      date.startsWith(today.slice(0, 7)) ? sum + cost : sum,
+    0,
+  );
   const filtered = state.products.filter((p) => p.name.includes(search));
   const prepared = state.meals.filter(
     (m) => m.batch && preparedRemaining(state, m) > 0,
@@ -125,7 +134,6 @@ export default function App() {
           </div>
           <div className="numeric">
             <strong>{number(remaining)}食分</strong>
-
           </div>
         </div>
       );
@@ -264,31 +272,28 @@ export default function App() {
             {page === "home" && (
               <>
                 <section className="daily" aria-labelledby="daily-title">
-                  <p id="daily-title" className="eyebrow">
-                    今日の食費
-                  </p>
-                  <p className="daily-total">{money(total)}</p>
-                  <div className="meal-totals">
-                    {["朝食", "昼食", "夕食", "その他"].map((kind) => {
-                      const entries = meals.filter((m) => m.kind === kind);
-                      return (
-                        <div key={kind}>
-                          <span>{kind}</span>
-                          <strong>
-                            {entries.length
-                              ? money(
-                                  entries.reduce((s, m) => s + mealCost(m), 0),
-                                )
-                              : "—"}
-                          </strong>
-                        </div>
-                      );
-                    })}
+                  <div>
+                    <p id="daily-title" className="eyebrow">
+                      今日の食費
+                    </p>
+                    <p className="daily-total">{money(total)}</p>
+                  </div>
+                  <div className="month-total">
+                    <p className="eyebrow">今月合計</p>
+                    <p>{money(monthTotal)}</p>
                   </div>
                 </section>
-                <section>
+                <CostCalendar
+                  today={today}
+                  selectedDate={selectedDate}
+                  costs={costs}
+                  onSelect={setSelectedDay}
+                />
+                <section aria-labelledby="selected-meals-title">
                   <div className="section-heading">
-                    <h2>今日の食事</h2>
+                    <h2 id="selected-meals-title">
+                      {dateLabel(selectedDate)}の食事
+                    </h2>
                     <Button
                       variant="text"
                       className="text-button"
@@ -301,7 +306,10 @@ export default function App() {
                     <p className="empty">まだ食事の記録がありません。</p>
                   ) : (
                     meals.map((meal) => (
-                      <details className="meal-row" key={meal.id}>
+                      <details
+                        className="meal-row"
+                        key={`${selectedDate}-${meal.id}`}
+                      >
                         <summary>
                           <strong>{meal.kind}</strong>
                           <span>
@@ -364,25 +372,6 @@ export default function App() {
                         </div>
                       </details>
                     ))
-                  )}
-                </section>
-                <section>
-                  <div className="section-heading">
-                    <h2>日別の食費</h2>
-                    <span className="hint">使用した分の金額</span>
-                  </div>
-                  {dailyCosts(state).length ? (
-                    dailyCosts(state).map(([date, cost]) => (
-                      <div className="history-row" key={date}>
-                        <span>
-                          {dateLabel(date)}
-                          <small>{date.slice(0, 4)}</small>
-                        </span>
-                        <strong>{money(cost)}</strong>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="empty">まだ食費の記録がありません。</p>
                   )}
                 </section>
                 {state.products.length === 0 && (
