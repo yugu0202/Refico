@@ -27,6 +27,32 @@ body {
 a {
   color: inherit;
 }
+.login-screen {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: max(32px, env(safe-area-inset-top))
+    max(24px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom))
+    max(24px, env(safe-area-inset-left));
+}
+.login-content {
+  width: 100%;
+  max-width: 320px;
+}
+.login-content .brand {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+.login-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
 .app-shell {
   max-width: 860px;
   padding: 0 32px;
