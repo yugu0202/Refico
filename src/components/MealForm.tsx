@@ -130,14 +130,14 @@ export function MealForm({
         label="残りを作り置きにする"
       />
       {batchEnabled && (
-        <>
+        <div className="batch-fields">
           <TextField
             label="料理名"
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <div className="two-columns">
+          <div className="two-columns batch-amounts">
             <TextField
               label="作った量（食分）"
               required
@@ -155,7 +155,7 @@ export function MealForm({
               onChange={(e) => setEaten(e.target.value)}
             />
           </div>
-        </>
+        </div>
       )}
       <h2>使った食材</h2>
       {available.length === 0 && (
