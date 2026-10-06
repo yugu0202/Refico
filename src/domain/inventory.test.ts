@@ -1,0 +1,122 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  createProduct,
+  emptyState,
+  recordMeal,
+  recordPurchase,
+  mealCost,
+  stock,
+  dailyCosts,
+  toBase,
+} from "./inventory.ts";
+import { parseState } from "./storage.ts";
+const date = "2026-10-06";
+function rice() {
+  const product = createProduct("白米", "g", [{ name: "合", factor: 150 }]);
+  return { product, state: { ...emptyState(), products: [product] } };
+}
+test("kgで購入した米を合で使い、金額・在庫・入力単位を保持する", () => {
+  const { product, state } = rice();
+  const purchased = recordPurchase(state, product.id, 5, "kg", 4000, date);
+  const next = recordMeal(purchased, date, "夕食", [
+    { productId: product.id, quantity: 2, unit: "合" },
+  ]);
+  assert.equal(mealCost(next.meals[0]), 240);
+  assert.deepEqual(stock(next, product.id), { quantity: 4700000, value: 3760 });
+  assert.equal(next.meals[0].usages[0].unit, "合");
+  assert.deepEqual(dailyCosts(next), [[date, 240]]);
+  assert.deepEqual(parseState(JSON.stringify(next)), next);
+});
+test("購入日順のFIFOで2ロットに配分する", () => {
+  const { product, state } = rice();
+  let next = recordPurchase(state, product.id, 100, "g", 100, date);
+  next = recordPurchase(next, product.id, 200, "g", 100, "2026-10-05");
+  next = recordMeal(next, date, "昼食", [
+    { productId: product.id, quantity: 250, unit: "g" },
+  ]);
+  assert.equal(mealCost(next.meals[0]), 150);
+  assert.deepEqual(
+    next.meals[0].usages[0].allocations.map((a) => a.quantity),
+    [200000, 50000],
+  );
+  assert.deepEqual(stock(next, product.id), { quantity: 50000, value: 50 });
+});
+test("端数配分の合計は購入価格と一致する", () => {
+  const product = createProduct("卵", "個");
+  let state = recordPurchase(
+    { ...emptyState(), products: [product] },
+    product.id,
+    3,
+    "個",
+    100,
+    date,
+  );
+  for (let i = 0; i < 3; i++)
+    state = recordMeal(state, date, "朝食", [
+      { productId: product.id, quantity: 1, unit: "個" },
+    ]);
+  assert.deepEqual(state.meals.map(mealCost), [33, 34, 33]);
+  assert.deepEqual(stock(state, product.id), { quantity: 0, value: 0 });
+});
+test("在庫不足の複数食材の記録は全体を変更しない", () => {
+  const { product, state } = rice();
+  const other = createProduct("牛乳", "ml");
+  let next = { ...state, products: [...state.products, other] };
+  next = recordPurchase(next, product.id, 1, "kg", 1000, date);
+  next = recordPurchase(next, other.id, 100, "ml", 100, date);
+  const original = JSON.stringify(next);
+  assert.throws(
+    () =>
+      recordMeal(next, date, "昼食", [
+        { productId: product.id, quantity: 1, unit: "合" },
+        { productId: other.id, quantity: 200, unit: "ml" },
+      ]),
+    /在庫が不足/,
+  );
+  assert.equal(JSON.stringify(next), original);
+});
+test("食事の日付より後の購入を使えない", () => {
+  const { product, state } = rice();
+  const next = recordPurchase(state, product.id, 1, "kg", 100, date);
+  assert.throws(
+    () =>
+      recordMeal(next, "2026-10-05", "夕食", [
+        { productId: product.id, quantity: 1, unit: "合" },
+      ]),
+    /在庫が不足/,
+  );
+});
+test("不正数量・重複単位・不正日付・重複食材を拒否する", () => {
+  for (const q of [0, -1, Infinity, NaN, 0.0001])
+    assert.throws(() => toBase(q, 1));
+  assert.throws(() => createProduct("米", "g", [{ name: "kg", factor: 1 }]));
+  const { product, state } = rice();
+  assert.throws(() =>
+    recordPurchase(state, product.id, 1, "kg", 100, "2026-02-30"),
+  );
+  const purchased = recordPurchase(state, product.id, 1, "kg", 100, date);
+  assert.throws(
+    () =>
+      recordMeal(
+        purchased,
+        date,
+        "夕食",
+        [1, 2].map(() => ({ productId: product.id, quantity: 1, unit: "合" })),
+      ),
+    /1行/,
+  );
+});
+test("破損データと過剰消費データを読み込まない", () => {
+  assert.throws(() => parseState("{broken"));
+  assert.throws(() => parseState('{"version":2}'));
+  const { product, state } = rice();
+  const next = recordMeal(
+    recordPurchase(state, product.id, 1, "kg", 100, date),
+    date,
+    "夕食",
+    [{ productId: product.id, quantity: 1, unit: "合" }],
+  );
+  next.meals[0].usages[0].allocations[0].quantity = 2000000;
+  assert.throws(() => parseState(JSON.stringify(next)));
+});
