@@ -1,4 +1,4 @@
-j{
+{
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "refico",
   "main": "worker/index.ts",
