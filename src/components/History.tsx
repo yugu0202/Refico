@@ -1,5 +1,8 @@
 import { useState } from "react";
 import Button from "@mui/material/Button";
+import IconButton from "@mui/material/IconButton";
+import SvgIcon from "@mui/material/SvgIcon";
+import Tooltip from "@mui/material/Tooltip";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -76,12 +79,17 @@ export function History({
               </div>
               <div className="numeric purchase-history-actions">
                 <strong>{money(p.price)}</strong>
-                <Button
-                  onClick={() => setEditingId(p.id)}
-                  aria-label={`${dateLabel(p.date)}の購入履歴を編集`}
-                >
-                  編集
-                </Button>
+                <Tooltip title="購入履歴を編集">
+                  <IconButton
+                    onClick={() => setEditingId(p.id)}
+                    aria-label={`${dateLabel(p.date)}の購入履歴を編集`}
+                    sx={{ width: 44, height: 44, flexShrink: 0 }}
+                  >
+                    <SvgIcon fontSize="small">
+                      <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                    </SvgIcon>
+                  </IconButton>
+                </Tooltip>
               </div>
             </div>
           ))
@@ -125,12 +133,17 @@ export function History({
                     {number(m.batch.eatenServings)}食分
                   </p>
                 )}
-                <Button
-                  onClick={() => setEditingId(m.id)}
-                  aria-label={`${dateLabel(m.date)} ${m.kind}の履歴を編集`}
-                >
-                  編集
-                </Button>
+                <Tooltip title="食事履歴を編集">
+                  <IconButton
+                    onClick={() => setEditingId(m.id)}
+                    aria-label={`${dateLabel(m.date)} ${m.kind}の履歴を編集`}
+                    sx={{ width: 44, height: 44, flexShrink: 0 }}
+                  >
+                    <SvgIcon fontSize="small">
+                      <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                    </SvgIcon>
+                  </IconButton>
+                </Tooltip>
               </div>
             </details>
           ))}
