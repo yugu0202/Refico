@@ -24,7 +24,6 @@
     "@emotion/styled": "^11.14.1",
     "@mui/material": "^9.4.0",
     "better-auth": "^1.7.7",
-    "jose": "^6.2.12",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zod": "^4.6.5"

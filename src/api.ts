@@ -4,8 +4,8 @@ import type { State } from "./domain/inventory.ts";
 export const authClient = createAuthClient();
 export class ApiError extends Error {
   status: number;
-  authMode?: "google" | "access";
-  constructor(message: string, status: number, authMode?: "google" | "access") {
+  authMode?: "google" | "test";
+  constructor(message: string, status: number, authMode?: "google" | "test") {
     super(message);
     this.status = status;
     this.authMode = authMode;
@@ -16,7 +16,7 @@ export interface Snapshot {
   revision: number;
 }
 export interface Bootstrap extends Snapshot {
-  authMode: "google" | "access";
+  authMode: "google" | "test";
   householdId: string;
   user: { name: string; email: string };
 }

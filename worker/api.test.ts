@@ -116,62 +116,42 @@ test("認証済みAPIは所有者を分離し、再送・古い更新・偽造�
   }
 });
 
-test("AccessプレビューはGoogle設定なしで認証し、偽造ヘッダー・認証なし・本番利用を拒否する", async () => {
+test("共通プレビューはURL・Cookieによらず保存を共有し、本番利用と別Originを拒否する", async () => {
   const { sqlite, db } = testDatabase();
   const env: Env = {
     DB: db,
     ASSETS: { fetch: async () => new Response("assets") },
     APP_ENV: "preview",
-    AUTH_MODE: "access",
-    ACCESS_TEAM_DOMAIN: "test.cloudflareaccess.com",
-    ACCESS_AUD: "preview-policy",
+    AUTH_MODE: "test",
     BETTER_AUTH_URL: "",
     BETTER_AUTH_SECRET: "",
     GOOGLE_CLIENT_ID: "",
     GOOGLE_CLIENT_SECRET: "",
   };
-  const identity = (id: string) => ({
-    access: {
-      aud: "preview-policy",
-      getIdentity: async () => ({
-        user_uuid: id,
-        email: `${id}@example.test`,
-        name: id,
-      }),
-    },
-  });
-  const request = (body?: unknown, origin = "https://feature.refico.example") =>
-    new Request(
-      "https://feature.refico.example/api/" + (body ? "commands" : "bootstrap"),
-      {
-        method: body ? "POST" : "GET",
-        headers: {
-          "Cf-Access-Jwt-Assertion": "forged",
-          "Cf-Access-Authenticated-User-Email": "forged@example.test",
-          ...(body ? { origin, "Content-Type": "application/json" } : {}),
-        },
-        ...(body ? { body: JSON.stringify(body) } : {}),
+  const request = (
+    host = "branch-a.example",
+    body?: unknown,
+    origin = `https://${host}`,
+  ) =>
+    new Request(`https://${host}/api/${body ? "commands" : "bootstrap"}`, {
+      method: body ? "POST" : "GET",
+      headers: {
+        cookie: "unrelated=value",
+        "Cf-Access-Authenticated-User-Email": "ignored@example.test",
+        ...(body ? { origin, "Content-Type": "application/json" } : {}),
       },
-    );
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
   try {
-    assert.equal((await worker.fetch(request(), env)).status, 401);
-    assert.equal(
-      (
-        await worker.fetch(request(), env, {
-          access: { aud: "preview", getIdentity: async () => undefined },
-        })
-      ).status,
-      401,
-    );
-    const response = await worker.fetch(request(), env, identity("a"));
+    const response = await worker.fetch(request(), env);
     assert.equal(response.status, 200);
     const baseline = (await response.json()) as {
       authMode: string;
-      revision: number;
       householdId: string;
+      revision: number;
     };
-    assert.equal(baseline.authMode, "access");
-    assert.equal(baseline.householdId, "personal:access:a");
+    assert.equal(baseline.authMode, "test");
+    assert.equal(baseline.householdId, "personal:preview:shared");
     const body = {
       requestId: crypto.randomUUID(),
       revision: 0,
@@ -180,38 +160,74 @@ test("AccessプレビューはGoogle設定なしで認証し、偽造ヘッダ�
     assert.equal(
       (
         await worker.fetch(
-          request(body, "https://evil.example"),
+          request("branch-a.example", body, "https://evil.example"),
           env,
-          identity("a"),
         )
       ).status,
       403,
     );
     assert.equal(
-      (await worker.fetch(request(body), env, identity("a"))).status,
+      (await worker.fetch(request("branch-a.example", body), env)).status,
       200,
     );
-    const other = (await (
-      await worker.fetch(request(), env, identity("b"))
-    ).json()) as { state: { products: unknown[] } };
-    assert.equal(other.state.products.length, 0);
+    const saved = (await (
+      await worker.fetch(
+        new Request("https://branch-b.example/api/bootstrap"),
+        env,
+      )
+    ).json()) as {
+      householdId: string;
+      revision: number;
+      state: { products: unknown[] };
+    };
+    assert.equal(saved.householdId, baseline.householdId);
+    assert.equal(saved.revision, 1);
+    assert.ok(saved.state.products.length > 0);
+    assert.equal(
+      sqlite.prepare("SELECT count(*) AS count FROM user").get()?.count,
+      1,
+    );
+    assert.equal(
+      sqlite.prepare("SELECT count(*) AS count FROM households").get()?.count,
+      1,
+    );
     assert.equal(
       (
         await worker.fetch(
-          request(),
-          { ...env, APP_ENV: "production" },
-          identity("a"),
+          request("branch-b.example", {
+            ...body,
+            requestId: crypto.randomUUID(),
+          }),
+          env,
         )
       ).status,
-      503,
+      409,
     );
-    const google = {
-      ...env,
-      AUTH_MODE: "google" as const,
-      APP_ENV: "production" as const,
-    };
     assert.equal(
-      (await worker.fetch(request(), google, identity("a"))).status,
+      (
+        await worker.fetch(
+          new Request("https://branch-a.example/api/auth/sign-out", {
+            method: "POST",
+          }),
+          env,
+        )
+      ).status,
+      404,
+    );
+    for (const appEnv of ["production", undefined] as const) {
+      assert.equal(
+        (await worker.fetch(request(), { ...env, APP_ENV: appEnv })).status,
+        503,
+      );
+    }
+    assert.equal(
+      (
+        await worker.fetch(request(), {
+          ...env,
+          AUTH_MODE: "google",
+          APP_ENV: "production",
+        })
+      ).status,
       503,
     );
   } finally {

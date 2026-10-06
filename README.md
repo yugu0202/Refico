@@ -52,7 +52,7 @@ pnpm exec wrangler d1 create refico-preview
 ```
 
 2. `wrangler.jsonc`のトップレベルと`previews.d1_databases`の仮IDをそれぞれのIDに置き換えます。DBバインディング名は両方`DB`です。仮IDは本番リソースを指していません。
-3. 本番公開URLをトップレベルの`vars.BETTER_AUTH_URL`に設定します。Google OAuthのコールバックURLと一致させます。プレビューはCloudflare Accessを使用するので`BETTER_AUTH_URL`とGoogle設定は不要です。
+3. 本番公開URLをトップレベルの`vars.BETTER_AUTH_URL`に設定します。Google OAuthのコールバックURLと一致させます。プレビューは共通テストアカウントを使用するので`BETTER_AUTH_URL`とGoogle設定は不要です。
 4. Google Cloud ConsoleでOAuthクライアント（ウェブアプリケーション）を作ります。Authorized redirect URIsに`<公開URL>/api/auth/callback/google`を登録します。ローカルは`http://localhost:8787/api/auth/callback/google`。プレビューではGoogle OAuthを使用しません。
 5. `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`BETTER_AUTH_SECRET`をWorkerのSecretsに登録します。認証secretは`openssl rand -hex 32`などで生成します。OAuthの秘密値はコミットしません。
 6. 接続先DBごとにマイグレーションを適用してからデプロイします。
@@ -66,33 +66,15 @@ pnpm exec wrangler secret put BETTER_AUTH_SECRET
 pnpm deploy
 ```
 
-### プレビューのCloudflare Access
+### プレビューの共通テストアカウント
 
-`previews.vars`は`APP_ENV=preview`、`AUTH_MODE=access`に設定済みです。本番の`AUTH_MODE=google`とは分離します。
-CloudflareのWorkers設定で対象Workerの**プレビュー全体をWorker単位でAccess保護**してください。Static Assets構成では`ctx.access`がWorkerへ渡らないため、`Cf-Access-Jwt-Assertion`の署名・発行元・対象アプリ・有効期限を検証して自動ログインします。`previews.vars.ACCESS_TEAM_DOMAIN`にチームドメイン（`<team>.cloudflareaccess.com`）、`ACCESS_AUD`に対象プレビューを保護するAccessアプリのApplication Audience (AUD)を設定してください。どちらも公開設定でSecretsは不要です。Google OAuthクライアント、認証Secrets、固定コールバックURLはプレビューに不要です。
+`previews.vars`は`APP_ENV=preview`、`AUTH_MODE=test`に設定済みです。アプリ内のログインを省略し、プレビューDBに固定IDの共通ユーザーを作成します。同じプレビューD1を使うブランチ・URL・ブラウザでは、全員が同じ家庭のデータを共有します。Cookieを削除しても保存済みデータを確認できます。Google設定・認証Secrets・AccessのAUD設定は不要です。
 
-Accessの認証情報がないリクエストは401で拒否します。メールアドレスのヘッダーだけを信用したり、固定のテストユーザーへフォールバックしたりしません。Accessモードを本番に設定した場合も拒否します。ホスト名単位で保護する場合も、対象プレビューとAPIの両方を保護し、そのAccessアプリのAUDを設定してください。
+Cloudflare Accessで対象プレビュー全体（静的アセットとAPI）を保護してください。Accessは入口の制限として利用し、アプリではAccess JWTやユーザー情報を検証しません。Access保護がないURLでは誰でも共通データを読み書きできます。本番で`AUTH_MODE=test`を指定した場合はAPIを拒否します。
 
-プレビューD1は本番と別に作成・マイグレーションしてください。同じプレビューDBを指定したブランチ間では、同じAccessユーザーのデータを共有します。
+プレビューD1は本番と別に作成・マイグレーションしてください。以前のAccessユーザーの記録は共通アカウントへ移行しません。競合は既存のリビジョン検証で拒否します。
 
-Static Assetsを外したローカルWorkerでctx.access方式を確認する場合は、Wranglerの開発用設定で認証情報を模擬できます（本番・プレビューのAccessポリシーを変更するものではありません）。別のローカル設定ファイルに以下を指定します。
-
-```jsonc
-{
-  "vars": { "APP_ENV": "preview", "AUTH_MODE": "access" },
-  "access": {
-    "dev": {
-      "aud": "refico-local",
-      "identity": {
-        "user_uuid": "local-user",
-        "email": "developer@example.test",
-      },
-    },
-  },
-}
-```
-
-公式仕様: https://developers.cloudflare.com/workers/configuration/cloudflare-access/
+ローカルで試す場合は別のWrangler設定で`APP_ENV=preview`、`AUTH_MODE=test`とローカルD1を指定してください。
 
 ### ローカル
 

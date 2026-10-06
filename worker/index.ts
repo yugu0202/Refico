@@ -1,5 +1,4 @@
-import type { CloudflareAccessContext } from "@cloudflare/workers-types";
-import { accessUser } from "./access.ts";
+import { previewUser } from "./preview-user.ts";
 import { getAuth } from "./auth.ts";
 import type { Env } from "./env.ts";
 import {
@@ -19,24 +18,23 @@ export function sameOrigin(
 ) {
   return (
     request.headers.get("origin") ===
-    (env.AUTH_MODE === "access"
+    (env.AUTH_MODE === "test"
       ? new URL(request.url).origin
       : new URL(env.BETTER_AUTH_URL).origin)
   );
 }
 export default {
-  async fetch(
-    request: Request,
-    env: Env,
-    ctx?: { readonly access?: CloudflareAccessContext },
-  ): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const path = new URL(request.url).pathname;
     if (!path.startsWith("/api/")) return env.ASSETS.fetch(request);
     if (path === "/api/health" && request.method === "GET")
       return json({ status: "ok", storage: "server" });
     const mode = env.AUTH_MODE ?? "google";
-    if (mode === "access" && env.APP_ENV !== "preview")
-      return json({ error: "Access認証はプレビューでのみ利用できます" }, 503);
+    if (
+      (mode !== "google" && mode !== "test") ||
+      (mode === "test" && env.APP_ENV !== "preview")
+    )
+      return json({ error: "認証設定を確認してください", authMode: mode }, 503);
     if (
       !env.DB ||
       (mode === "google" &&
@@ -52,29 +50,8 @@ export default {
     try {
       const db = env.DB.withSession("first-primary");
       let user: { id: string; name: string; email: string } | null;
-      if (mode === "access") {
-        if (
-          !ctx?.access &&
-          request.headers.has("Cf-Access-Jwt-Assertion") &&
-          (!env.ACCESS_TEAM_DOMAIN ||
-            !/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(
-              env.ACCESS_TEAM_DOMAIN,
-            ) ||
-            !env.ACCESS_AUD)
-        )
-          return json(
-            {
-              error: "Access認証のサーバー設定が完了していません",
-              authMode: mode,
-            },
-            503,
-          );
-        user = await accessUser(ctx?.access, db, request, env);
-        if (!user)
-          return json(
-            { error: "Cloudflare Accessで認証してください", authMode: mode },
-            401,
-          );
+      if (mode === "test") {
+        user = await previewUser(db);
         if (path.startsWith("/api/auth/"))
           return json({ error: "Not found" }, 404);
       } else {
@@ -87,7 +64,7 @@ export default {
       }
       if (request.method !== "GET" && !sameOrigin(request, env))
         return json({ error: "許可されていない送信元です" }, 403);
-      // Membership is resolved server-side from Google or verified Access identity.
+      // Membership is resolved server-side from Google session or the shared preview account.
       const householdId = await personalHousehold(db, user.id);
       if (path === "/api/bootstrap" && request.method === "GET") {
         const snapshot = await loadSnapshot(db, householdId);

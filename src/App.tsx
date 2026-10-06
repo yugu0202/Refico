@@ -58,7 +58,7 @@ export default function App() {
   const [today, setToday] = useState(localDate);
   const [state, setState] = useState<State>(emptyState);
   const [ready, setReady] = useState(false);
-  const [authMode, setAuthMode] = useState<"google" | "access" | null>(null);
+  const [authMode, setAuthMode] = useState<"google" | "test" | null>(null);
   const [user, setUser] = useState<{ name: string; email: string } | null>(
     null,
   );
@@ -116,10 +116,6 @@ export default function App() {
   }
   async function logout() {
     if (busyRef.current) return;
-    if (authMode === "access") {
-      window.location.assign("/cdn-cgi/access/logout");
-      return;
-    }
     try {
       const response = await authClient.signOut();
       if (response.error) throw new Error(response.error.message);
@@ -304,9 +300,11 @@ export default function App() {
           {user ? (
             <>
               <span className="hint">{user.name}</span>
-              <Button disabled={busy} onClick={() => void logout()}>
-                ログアウト
-              </Button>
+              {authMode === "google" && (
+                <Button disabled={busy} onClick={() => void logout()}>
+                  ログアウト
+                </Button>
+              )}
             </>
           ) : authMode === "google" ? (
             <Button onClick={() => void login()}>Googleでログイン</Button>
@@ -360,8 +358,6 @@ export default function App() {
           <p className="hint">
             {storageError ? (
               <Button onClick={() => void reload()}>再読み込み</Button>
-            ) : authMode === "access" ? (
-              "Cloudflare Accessで認証してください。"
             ) : authMode === "google" ? (
               "Googleでログインしてください。"
             ) : (
