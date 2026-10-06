@@ -27,6 +27,23 @@ body {
 a {
   color: inherit;
 }
+.login-screen {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(32px, env(safe-area-inset-top))
+    max(24px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom))
+    max(24px, env(safe-area-inset-left));
+}
+.login-content {
+  width: 100%;
+  max-width: 320px;
+  text-align: center;
+}
+.login-content .brand {
+  margin-bottom: 32px;
+}
 .app-shell {
   max-width: 860px;
   padding: 0 32px;
