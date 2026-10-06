@@ -78,7 +78,6 @@ a {
 }
 main {
   padding-top: 28px;
-  min-height: 65vh;
 }
 .page-heading,
 .section-heading {
@@ -231,7 +230,7 @@ label .amount-input select {
   grid-template-columns: minmax(0, 1fr) 105px;
   gap: 8px;
 }
-.entry-form > .text-button {
+.entry-form .form-fields > .text-button {
   display: block;
   margin: -8px 0 22px;
 }
@@ -585,4 +584,14 @@ label .amount-input select {
 }
 .meal-history-row .meal-history-edit {
   margin-top: 3px;
+}
+
+.form-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.entry-form > .form-fields {
+  grid-column: 1 / -1;
 }

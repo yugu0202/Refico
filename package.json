@@ -11,23 +11,31 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",
     "check": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/domain/*.test.ts",
+    "test": "node --experimental-strip-types --test src/domain/*.test.ts src/*.test.ts worker/*.test.ts scripts/*.test.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "dev:worker": "pnpm build && wrangler dev",
-    "deploy": "pnpm build && wrangler deploy",
-    "format": "prettier --write ."
+    "deploy": "pnpm build && pnpm deploy:worker",
+    "format": "prettier --write .",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "auth:schema": "node scripts/generate-auth-schema.mjs",
+    "deploy:worker": "node scripts/deploy.mjs production",
+    "deploy:preview": "node scripts/deploy.mjs preview"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/material": "^9.4.0",
+    "better-auth": "^1.7.7",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261005.1",
     "@types/node": "^26.6.4",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "jsonc-parser": "^3.3.1",
     "prettier": "^3.9.9",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",

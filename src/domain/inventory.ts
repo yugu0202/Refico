@@ -480,7 +480,7 @@ export function recordPreparedAdjustment(
   date: string,
   reason = "",
   allowUnchanged = false,
-  replayLegacy = false,
+  replayDiscard = false,
 ): State {
   const meal = state.meals.find((m) => m.id === batchId);
   requireValue(!!meal?.batch, "作り置きが見つかりません");
@@ -510,7 +510,11 @@ export function recordPreparedAdjustment(
     "残量を変更してください",
   );
   const delta = targetQuantity - balance.quantity;
-  if (delta > 0 && !replayLegacy) {
+  requireValue(
+    !replayDiscard || delta <= 0,
+    "廃棄記録の残量が修正後の在庫を超えています",
+  );
+  if (delta > 0) {
     // More portions correct the original yield, rather than creating new food.
     const servings = toBase(meal!.batch!.servings, 1) + delta;
     requireValue(Number.isSafeInteger(servings), "食数が上限を超えています");
@@ -529,10 +533,7 @@ export function recordPreparedAdjustment(
   const targetValue =
     delta < 0
       ? balance.value - preparedUsageCost(state, meal!, -delta, date)
-      : balance.value +
-        Math.round(
-          (cookingCost(meal!) * delta) / toBase(meal!.batch!.servings, 1),
-        );
+      : balance.value;
   requireValue(
     Number.isSafeInteger(targetValue) && targetValue >= 0,
     "原価が大きすぎます",

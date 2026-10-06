@@ -11,7 +11,7 @@ import {
   dailyCosts,
   updateProduct,
 } from "./inventory.ts";
-import { parseState } from "./storage.ts";
+import { parseState } from "./validation.ts";
 const date = "2026-10-06";
 function setup() {
   const product = createProduct("卵", "個");

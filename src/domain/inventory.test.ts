@@ -14,7 +14,7 @@ import {
   updatePreparedName,
   preparedRemaining,
 } from "./inventory.ts";
-import { parseState } from "./storage.ts";
+import { parseState } from "./validation.ts";
 const date = "2026-10-06";
 function rice() {
   const product = createProduct("白米", "g", [{ name: "合", factor: 150 }]);

@@ -11,8 +11,7 @@ import {
   recordPreparedAdjustment,
   recordStockAdjustment,
 } from "./inventory.ts";
-const KEY = "refico:v1";
-// Validate stored data before allowing edits. Malformed data is preserved for recovery.
+// Validate the calculation projection before persisting any server-side update.
 export function parseState(raw: string): State {
   const state: State = JSON.parse(raw);
   const check = (ok: boolean) => {
@@ -327,11 +326,4 @@ export function parseState(raw: string): State {
     }
   }
   return state;
-}
-export function loadState(): State {
-  const raw = localStorage.getItem(KEY);
-  return raw ? parseState(raw) : emptyState();
-}
-export function saveState(state: State): void {
-  localStorage.setItem(KEY, JSON.stringify(state));
 }

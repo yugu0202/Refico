@@ -1,3 +1,4 @@
+import type { Command } from "../domain/commands";
 import { useState } from "react";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
@@ -8,7 +9,7 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import { PurchaseForm } from "./PurchaseForm";
 import { MealForm } from "./MealForm";
-import { mealCost, updateProductUnits, type State } from "../domain/inventory";
+import { mealCost, type State } from "../domain/inventory";
 import { money, number, dateLabel } from "../format";
 
 export function History({
@@ -16,11 +17,13 @@ export function History({
   today,
   type,
   onSave,
+  saving,
 }: {
+  saving: boolean;
   state: State;
   today: string;
   type: "purchase" | "meal";
-  onSave: (next: State, message: string) => void;
+  onSave: (command: Command, message: string) => Promise<void>;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [all, setAll] = useState(false);
@@ -38,8 +41,8 @@ export function History({
   const end = all ? start + 20 : 5;
   const purchase = purchases.find((p) => p.id === editingId);
   const meal = meals.find((m) => m.id === editingId);
-  const save = (next: State) => {
-    onSave(
+  const save = async (next: Command) => {
+    await onSave(
       next,
       type === "purchase" ? "購入履歴を更新しました" : "食事履歴を更新しました",
     );
@@ -81,6 +84,7 @@ export function History({
                 <strong>{money(p.price)}</strong>
                 <Tooltip title="購入履歴を編集">
                   <IconButton
+                    disabled={saving}
                     onClick={() => setEditingId(p.id)}
                     aria-label={`${dateLabel(p.date)}の購入履歴を編集`}
                     sx={{ width: 44, height: 44, flexShrink: 0 }}
@@ -144,6 +148,7 @@ export function History({
               <Tooltip title="食事履歴を編集">
                 <IconButton
                   className="meal-history-edit"
+                  disabled={saving}
                   onClick={() => setEditingId(m.id)}
                   aria-label={`${dateLabel(m.date)} ${m.kind}の履歴を編集`}
                   sx={{ width: 44, height: 44, flexShrink: 0 }}
@@ -170,7 +175,9 @@ export function History({
       )}
       <Dialog
         open={!!editingId}
-        onClose={() => setEditingId(null)}
+        onClose={() => {
+          if (!saving) setEditingId(null);
+        }}
         fullWidth
         maxWidth="sm"
         aria-labelledby="history-edit-title"
@@ -193,20 +200,22 @@ export function History({
               today={today}
               onCancel={() => setEditingId(null)}
               onSave={save}
-              onCreateProduct={(product) => {
+              onCreateProduct={async (product) => {
                 if (state.products.some((p) => p.name === product.name))
                   throw new Error("同じ名前の食材が登録されています");
-                onSave(
-                  { ...state, products: [...state.products, product] },
+                await onSave(
+                  { type: "product.create", product },
                   "食材を追加しました",
                 );
               }}
               onAddUnit={(product, unit) =>
                 onSave(
-                  updateProductUnits(state, product.id, [
-                    ...product.units,
-                    unit,
-                  ]),
+                  {
+                    type: "product.update",
+                    id: product.id,
+                    name: product.name,
+                    units: [...product.units, unit],
+                  },
                   "単位を追加しました",
                 )
               }

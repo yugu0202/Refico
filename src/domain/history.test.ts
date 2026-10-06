@@ -14,7 +14,7 @@ import {
   type State,
 } from "./inventory.ts";
 import { updatePurchase, updateMeal } from "./history.ts";
-import { parseState } from "./storage.ts";
+import { parseState } from "./validation.ts";
 
 const date = "2026-10-01";
 function setup() {
@@ -181,37 +181,6 @@ test("増加ロットを含む複数の調整・後続購入を再構築する",
     price: 202,
   });
   assert.equal(stock(next, product.id).quantity, 20000);
-  assert.deepEqual(reload(next), next);
-});
-
-test("旧形式の作り置き増加調整も履歴編集後に読み込める", () => {
-  let { state, product } = setup();
-  state = recordMeal(
-    state,
-    date,
-    "夕食",
-    [{ productId: product.id, quantity: 100, unit: "g" }],
-    { name: "おにぎり", servings: 3, eatenServings: 1 },
-  );
-  state = recordPreparedAdjustment(
-    state,
-    state.meals[0].id,
-    3,
-    date,
-    "",
-    false,
-    true,
-  );
-  state = recordMeal(state, date, "昼食", [], undefined, [
-    { batchId: state.meals[0].id, quantity: 1 },
-  ]);
-  const next = updatePurchase(state, state.purchases[0].id, {
-    ...state.purchases[0],
-    price: 201,
-  });
-  assert.equal(next.preparedAdjustments![0].beforeValue, 134);
-  assert.equal(next.preparedAdjustments![0].targetValue, 201);
-  assert.equal(mealCost(next.meals[1]), 67);
   assert.deepEqual(reload(next), next);
 });
 

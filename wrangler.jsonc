@@ -4,6 +4,20 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-06",
   "preview_urls": true,
+  "vars": {
+    "APP_ENV": "production",
+    "AUTH_MODE": "google",
+    "BETTER_AUTH_URL": "refico.yugu0202.net",
+  },
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "refico",
+      "database_id": "383db856-8cc9-4d3e-8ebb-f527c09388e0",
+      "migrations_dir": "migrations",
+    },
+  ],
   "observability": {
     "enabled": true,
     "logs": {
@@ -19,7 +33,18 @@
     },
   },
   "previews": {
-    // D1などを追加する際は、本番とは別のリソースをここに指定する。
+    "vars": {
+      "APP_ENV": "preview",
+      "AUTH_MODE": "test",
+    },
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "refico-preview",
+        "database_id": "2842d966-3c30-4885-9a30-62815c6d7ba8",
+        "migrations_dir": "migrations",
+      },
+    ],
     "observability": {
       "enabled": true,
       "logs": {
