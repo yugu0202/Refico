@@ -7,7 +7,8 @@ import {
   unitsFor,
   mealKinds,
   cumulativeCost,
-  portionCost,
+  preparedUsageCost,
+  recordPreparedAdjustment,
   recordStockAdjustment,
 } from "./inventory.ts";
 const KEY = "refico:v1";
@@ -226,8 +227,55 @@ export function parseState(raw: string): State {
       );
     }
   }
-  const portions = new Map<string, number>();
-  for (const meal of state.meals) {
+  check(
+    state.preparedAdjustments === undefined ||
+      Array.isArray(state.preparedAdjustments),
+  );
+  const preparedAdjustments = state.preparedAdjustments ?? [];
+  let position = 0;
+  for (const a of preparedAdjustments) {
+    id(a.id);
+    check(
+      validDate(a.date) &&
+        typeof a.reason === "string" &&
+        a.reason.length <= 200 &&
+        Number.isSafeInteger(a.mealCount) &&
+        a.mealCount >= position &&
+        a.mealCount <= state.meals.length &&
+        [
+          a.beforeQuantity,
+          a.targetQuantity,
+          a.beforeValue,
+          a.targetValue,
+        ].every((v) => Number.isSafeInteger(v) && v >= 0),
+    );
+    position = a.mealCount;
+  }
+  let adjustmentIndex = 0;
+  for (let mealIndex = 0; mealIndex <= state.meals.length; mealIndex++) {
+    while (preparedAdjustments[adjustmentIndex]?.mealCount === mealIndex) {
+      const a = preparedAdjustments[adjustmentIndex];
+      const prior = {
+        ...state,
+        meals: state.meals.slice(0, mealIndex),
+        preparedAdjustments: preparedAdjustments.slice(0, adjustmentIndex),
+      };
+      const expected = recordPreparedAdjustment(
+        prior,
+        a.batchId,
+        a.targetQuantity / 1000,
+        a.date,
+        a.reason,
+      ).preparedAdjustments!.at(-1)!;
+      check(
+        a.beforeQuantity === expected.beforeQuantity &&
+          a.beforeValue === expected.beforeValue &&
+          a.targetValue === expected.targetValue,
+      );
+      adjustmentIndex++;
+    }
+    if (mealIndex === state.meals.length) break;
+    const meal = state.meals[mealIndex];
     if (meal.batch !== undefined) {
       const b = meal.batch;
       check(
@@ -244,10 +292,7 @@ export function parseState(raw: string): State {
           b.eatenServings >= 0 &&
           b.eatenServings < b.servings,
       );
-      portions.set(
-        meal.id,
-        b.eatenServings === 0 ? 0 : toBase(b.eatenServings, 1),
-      );
+      if (b.eatenServings > 0) toBase(b.eatenServings, 1);
     }
     if (meal.prepared !== undefined) {
       check(Array.isArray(meal.prepared));
@@ -256,19 +301,26 @@ export function parseState(raw: string): State {
         const source = state.meals.find((m) => m.id === p.batchId);
         check(
           !!source?.batch &&
-            portions.has(p.batchId) &&
+            state.meals.slice(0, mealIndex).some((m) => m.id === p.batchId) &&
             source!.date <= meal.date &&
             !seen.has(p.batchId),
         );
         seen.add(p.batchId);
-        const used = portions.get(p.batchId)!;
-        const next = used + toBase(p.quantity, 1);
+        const prior = {
+          ...state,
+          meals: state.meals.slice(0, mealIndex),
+          preparedAdjustments: preparedAdjustments.slice(0, adjustmentIndex),
+        };
         check(
-          next <= toBase(source!.batch!.servings, 1) &&
-            Number.isSafeInteger(p.cost) &&
-            p.cost === portionCost(source!, next) - portionCost(source!, used),
+          Number.isSafeInteger(p.cost) &&
+            p.cost ===
+              preparedUsageCost(
+                prior,
+                source!,
+                toBase(p.quantity, 1),
+                meal.date,
+              ),
         );
-        portions.set(p.batchId, next);
       }
     }
   }

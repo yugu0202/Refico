@@ -54,12 +54,24 @@ export interface StockAdjustment {
   mealCount: number;
   purchaseCount: number;
 }
+export interface PreparedAdjustment {
+  id: string;
+  batchId: string;
+  date: string;
+  reason: string;
+  beforeQuantity: number;
+  targetQuantity: number;
+  beforeValue: number;
+  targetValue: number;
+  mealCount: number;
+}
 export interface State {
   version: 1;
   products: Product[];
   purchases: Purchase[];
   meals: Meal[];
   adjustments?: StockAdjustment[];
+  preparedAdjustments?: PreparedAdjustment[];
 }
 export const emptyState = (): State => ({
   version: 1,
@@ -300,15 +312,10 @@ export function recordMeal(
       !!source?.batch && source.date <= date,
       "食事の日付までの作り置きを選択してください",
     );
-    const used = preparedConsumed(state, source!);
     const quantity = toBase(input.quantity, 1);
-    requireValue(
-      used + quantity <= toBase(source!.batch!.servings, 1),
-      "作り置きの残量が不足しています",
-    );
     return {
       ...input,
-      cost: portionCost(source!, used + quantity) - portionCost(source!, used),
+      cost: preparedUsageCost(state, source!, quantity, date),
     };
   });
   requireValue(
@@ -386,10 +393,120 @@ export function preparedConsumed(state: State, meal: Meal): number {
       .reduce((sum, p) => sum + toBase(p.quantity, 1), 0)
   );
 }
-export function preparedRemaining(state: State, meal: Meal): number {
-  return (
-    (toBase(meal.batch!.servings, 1) - preparedConsumed(state, meal)) / 1000
+// A correction starts a new remaining-value snapshot. Historic meal costs stay fixed.
+function preparedSnapshot(state: State, meal: Meal) {
+  const adjustment = (state.preparedAdjustments ?? [])
+    .filter((a) => a.batchId === meal.id)
+    .at(-1);
+  const quantity =
+    adjustment?.targetQuantity ?? toBase(meal.batch!.servings, 1);
+  const value = adjustment?.targetValue ?? cookingCost(meal);
+  const consumed =
+    (adjustment ? 0 : Math.round(meal.batch!.eatenServings * 1000)) +
+    state.meals
+      .slice(adjustment?.mealCount ?? 0)
+      .flatMap((m) => m.prepared ?? [])
+      .filter((p) => p.batchId === meal.id)
+      .reduce((sum, p) => sum + toBase(p.quantity, 1), 0);
+  const costAt = (used: number) =>
+    quantity === 0
+      ? 0
+      : cumulativeCost(
+          { baseQuantity: quantity, price: value } as Purchase,
+          used,
+        );
+  return { quantity, value, consumed, costAt };
+}
+export function preparedBalance(state: State, meal: Meal) {
+  const s = preparedSnapshot(state, meal);
+  return {
+    quantity: s.quantity - s.consumed,
+    value: s.value - s.costAt(s.consumed),
+  };
+}
+export function preparedUsageCost(
+  state: State,
+  meal: Meal,
+  quantity: number,
+  date: string,
+) {
+  const s = preparedSnapshot(state, meal);
+  requireValue(
+    s.consumed + quantity <= s.quantity,
+    "作り置きの残量が不足しています",
   );
+  const latest = (state.preparedAdjustments ?? [])
+    .filter((a) => a.batchId === meal.id)
+    .at(-1);
+  requireValue(
+    !latest || latest.date <= date,
+    "在庫調整日以降の食事を入力してください",
+  );
+  return s.costAt(s.consumed + quantity) - s.costAt(s.consumed);
+}
+export function preparedRemaining(state: State, meal: Meal): number {
+  return preparedBalance(state, meal).quantity / 1000;
+}
+export function recordPreparedAdjustment(
+  state: State,
+  batchId: string,
+  quantity: number,
+  date: string,
+  reason = "",
+): State {
+  const meal = state.meals.find((m) => m.id === batchId);
+  requireValue(!!meal?.batch, "作り置きが見つかりません");
+  requireValue(
+    validDate(date) && date >= meal!.date,
+    "作った日以降の調整日を入力してください",
+  );
+  const latest = (state.preparedAdjustments ?? [])
+    .filter((a) => a.batchId === batchId)
+    .at(-1);
+  requireValue(
+    !latest || latest.date <= date,
+    "前回の調整日以降の日付を入力してください",
+  );
+  requireValue(
+    typeof reason === "string" && reason.trim().length <= 200,
+    "理由は200文字以内で入力してください",
+  );
+  requireValue(
+    Number.isFinite(quantity) && quantity >= 0,
+    "残量は0以上で入力してください",
+  );
+  const targetQuantity = quantity === 0 ? 0 : toBase(quantity, 1);
+  const balance = preparedBalance(state, meal!);
+  requireValue(targetQuantity !== balance.quantity, "残量を変更してください");
+  const delta = targetQuantity - balance.quantity;
+  const targetValue =
+    delta < 0
+      ? balance.value - preparedUsageCost(state, meal!, -delta, date)
+      : balance.value +
+        Math.round(
+          (cookingCost(meal!) * delta) / toBase(meal!.batch!.servings, 1),
+        );
+  requireValue(
+    Number.isSafeInteger(targetValue) && targetValue >= 0,
+    "原価が大きすぎます",
+  );
+  return {
+    ...state,
+    preparedAdjustments: [
+      ...(state.preparedAdjustments ?? []),
+      {
+        id: crypto.randomUUID(),
+        batchId,
+        date,
+        reason: reason.trim(),
+        beforeQuantity: balance.quantity,
+        targetQuantity,
+        beforeValue: balance.value,
+        targetValue,
+        mealCount: state.meals.length,
+      },
+    ],
+  };
 }
 export const mealCost = (meal: Meal) =>
   (meal.batch

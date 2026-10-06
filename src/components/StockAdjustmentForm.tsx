@@ -6,6 +6,9 @@ import TextField from "@mui/material/TextField";
 import { useState, type FormEvent } from "react";
 import {
   recordStockAdjustment,
+  recordPreparedAdjustment,
+  preparedBalance,
+  type Meal,
   stock,
   type Product,
   type State,
@@ -15,31 +18,34 @@ import { money, number } from "../format";
 export function StockAdjustmentForm({
   state,
   product,
+  prepared,
   today,
   onSave,
   onCancel,
 }: {
   state: State;
-  product: Product;
+  product?: Product;
+  prepared?: Meal;
   today: string;
   onSave: (state: State) => void;
   onCancel: () => void;
 }) {
-  const balance = stock(state, product.id);
+  const name = prepared ? prepared.batch!.name : product!.name;
+  const unit = prepared ? "食分" : product!.baseUnit;
+  const balance = prepared
+    ? preparedBalance(state, prepared)
+    : stock(state, product!.id);
+  const adjust = (quantity: number) =>
+    prepared
+      ? recordPreparedAdjustment(state, prepared.id, quantity, today, reason)
+      : recordStockAdjustment(state, product!.id, quantity, today, reason);
   const [quantity, setQuantity] = useState(String(balance.quantity / 1000));
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   let preview: State | undefined;
   let previewError = "";
   try {
-    if (quantity.trim())
-      preview = recordStockAdjustment(
-        state,
-        product.id,
-        Number(quantity),
-        today,
-        reason,
-      );
+    if (quantity.trim()) preview = adjust(Number(quantity));
   } catch (e) {
     previewError = e instanceof Error ? e.message : "入力を確認してください";
   }
@@ -47,15 +53,7 @@ export function StockAdjustmentForm({
     event.preventDefault();
     try {
       if (!quantity.trim()) throw new Error("実際の残量を入力してください");
-      onSave(
-        recordStockAdjustment(
-          state,
-          product.id,
-          Number(quantity),
-          today,
-          reason,
-        ),
-      );
+      onSave(adjust(Number(quantity)));
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存できませんでした");
     }
@@ -68,17 +66,17 @@ export function StockAdjustmentForm({
       maxWidth="xs"
       aria-labelledby="adjustment-title"
     >
-      <DialogTitle id="adjustment-title">{product.name}の在庫調整</DialogTitle>
+      <DialogTitle id="adjustment-title">{name}の在庫調整</DialogTitle>
       <DialogContent>
         <form onSubmit={submit}>
           <p>
-            現在の残量 {number(balance.quantity / 1000)} {product.baseUnit}
+            現在の残量 {number(balance.quantity / 1000)} {unit}
           </p>
           <TextField
             className="field"
             autoFocus
             required
-            label={`実際の残量（${product.baseUnit}）`}
+            label={`実際の残量（${unit}）`}
             type="number"
             value={quantity}
             onChange={(e) => {
@@ -103,14 +101,18 @@ export function StockAdjustmentForm({
           {preview && (
             <p className="hint">
               調整量 {Number(quantity) > balance.quantity / 1000 ? "+" : ""}
-              {number(Number(quantity) - balance.quantity / 1000)}{" "}
-              {product.baseUnit}
+              {number(Number(quantity) - balance.quantity / 1000)} {unit}
               {" · "}
               {Number(quantity) > balance.quantity / 1000
                 ? "追加分の原価"
                 : "減少分の原価"}{" "}
               {money(
-                Math.abs(stock(preview, product.id).value - balance.value),
+                Math.abs(
+                  (prepared
+                    ? preparedBalance(preview, prepared)
+                    : stock(preview, product!.id)
+                  ).value - balance.value,
+                ),
               )}
             </p>
           )}

@@ -62,6 +62,7 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [storageError, setStorageError] = useState("");
   const [notice, setNotice] = useState("");
+  const [adjustingPrepared, setAdjustingPrepared] = useState<Meal | null>(null);
   const [editingPrepared, setEditingPrepared] = useState<Meal | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(
@@ -100,6 +101,7 @@ export default function App() {
   }
   function navigate(next: Page) {
     setPage(next);
+    setAdjustingPrepared(null);
     setEditingPrepared(null);
     setEditingProduct(null);
     setAdjustingProduct(null);
@@ -124,9 +126,7 @@ export default function App() {
     0,
   );
   const filtered = state.products.filter((p) => p.name.includes(search));
-  const prepared = state.meals.filter(
-    (m) => m.batch && preparedRemaining(state, m) > 0,
-  );
+  const prepared = state.meals.filter((m) => m.batch);
   const filteredPrepared = prepared.filter((m) =>
     m.batch!.name.includes(search),
   );
@@ -160,6 +160,18 @@ export default function App() {
           </div>
           <div className="numeric">
             <strong>{number(remaining)}食分</strong>
+            <Button
+              type="button"
+              variant="text"
+              aria-label={`${m.batch!.name}の在庫を調整`}
+              onClick={() => {
+                setAdjustingPrepared(m);
+                setNotice("");
+              }}
+              sx={{ display: "block", marginLeft: "auto", minWidth: 0 }}
+            >
+              在庫調整
+            </Button>
           </div>
         </div>
       );
@@ -245,6 +257,19 @@ export default function App() {
           </p>
         ) : (
           <>
+            {adjustingPrepared && (
+              <StockAdjustmentForm
+                key={adjustingPrepared.id}
+                state={state}
+                prepared={adjustingPrepared}
+                today={today}
+                onCancel={() => setAdjustingPrepared(null)}
+                onSave={(next) => {
+                  persist(next, "在庫を調整しました");
+                  setAdjustingPrepared(null);
+                }}
+              />
+            )}
             {adjustingProduct && (
               <StockAdjustmentForm
                 key={adjustingProduct.id}
@@ -490,6 +515,33 @@ export default function App() {
                     </p>
                   )}
                 </section>
+                {(state.preparedAdjustments ?? []).length > 0 && (
+                  <section>
+                    <h2>作り置きの在庫調整履歴</h2>
+                    {[...(state.preparedAdjustments ?? [])]
+                      .reverse()
+                      .map((a) => (
+                        <div className="purchase-row" key={a.id}>
+                          <div>
+                            <strong>
+                              {
+                                state.meals.find((m) => m.id === a.batchId)
+                                  ?.batch?.name
+                              }
+                            </strong>
+                            <p className="hint">
+                              {dateLabel(a.date)}
+                              {a.reason ? ` · ${a.reason}` : ""}
+                            </p>
+                          </div>
+                          <span className="numeric">
+                            {number(a.beforeQuantity / 1000)} →{" "}
+                            {number(a.targetQuantity / 1000)} 食分
+                          </span>
+                        </div>
+                      ))}
+                  </section>
+                )}
                 {(state.adjustments ?? []).length > 0 && (
                   <section>
                     <h2>在庫調整履歴</h2>
