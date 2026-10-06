@@ -6,13 +6,13 @@
     "Segoe UI",
     "Noto Sans JP",
     sans-serif;
-  color: #1c1917;
-  background: #fafaf9;
+  color: var(--mui-palette-text-primary);
+  background: var(--mui-palette-background-default);
   font-synthesis: none;
   font-variant-numeric: tabular-nums;
-  --border: #dedbd6;
-  --muted: #625d57;
-  --accent: #3f6212;
+  --border: var(--mui-palette-divider);
+  --muted: var(--mui-palette-text-secondary);
+  --accent: var(--mui-palette-primary-main);
 }
 * {
   box-sizing: border-box;
@@ -26,6 +26,51 @@ body {
 }
 a {
   color: inherit;
+}
+.login-theme {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  right: max(16px, env(safe-area-inset-right));
+}
+.brand-logo {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.brand-logo-dark {
+  display: none;
+}
+:root[data-mui-color-scheme="dark"] .brand-logo-light {
+  display: none;
+}
+:root[data-mui-color-scheme="dark"] .brand-logo-dark {
+  display: block;
+}
+.login-screen {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: max(32px, env(safe-area-inset-top))
+    max(24px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom))
+    max(24px, env(safe-area-inset-left));
+}
+.login-content {
+  width: 100%;
+  max-width: 320px;
+}
+.login-content .brand {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+.login-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 14px;
 }
 .app-shell {
   max-width: 860px;
@@ -50,6 +95,17 @@ a {
 }
 .brand img {
   flex-shrink: 0;
+}
+.header-account {
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.header-account > .hint {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .header-date {
   color: var(--muted);
@@ -207,14 +263,14 @@ section {
 .notice {
   font-size: 13px;
   padding: 12px 14px;
-  background: #eef2e7;
-  color: #30480e;
+  background: var(--selected-background);
+  color: var(--notice-text);
   border-left: 2px solid var(--accent);
 }
 .error {
   font-size: 13px;
-  color: #9b2c20;
-  background: #fdf1ed;
+  color: var(--mui-palette-error-main);
+  background: var(--error-background);
   padding: 12px;
   line-height: 1.7;
 }
@@ -317,7 +373,7 @@ label .amount-input select {
   margin-left: 8px;
 }
 .inset {
-  background: #fff;
+  background: var(--mui-palette-background-paper);
   border: 1px solid var(--border);
   padding: 20px;
   border-radius: 6px;
@@ -387,18 +443,39 @@ label .amount-input select {
   .batch-amounts {
     grid-template-columns: minmax(0, 1fr);
   }
-  html {
-    scroll-padding-bottom: calc(88px + env(safe-area-inset-bottom));
-  }
+  /* The nav owns its row: no document spacer can create empty scrolling
+     below it. dvh tracks the browser chrome and safe area on mobile. */
   .app-shell {
-    padding: 0 18px calc(80px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+    padding: env(safe-area-inset-top) 0 0;
+  }
+  .app-shell > .app-header {
+    flex-shrink: 0;
+    padding: 0 max(18px, env(safe-area-inset-right)) 0
+      max(18px, env(safe-area-inset-left));
+  }
+  .app-shell > main {
+    order: 2;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    padding: 23px max(18px, env(safe-area-inset-right)) 16px
+      max(18px, env(safe-area-inset-left));
+    scroll-padding-block: 16px;
+  }
+  .app-shell > main > :last-child {
+    margin-bottom: 0;
   }
   .app-header {
     min-height: 76px;
   }
   .navigation {
-    position: fixed;
-    inset: auto 0 0;
+    order: 3;
+    flex-shrink: 0;
     z-index: 10;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -407,7 +484,7 @@ label .amount-input select {
       env(safe-area-inset-left);
     border-top: 1px solid var(--border);
     border-bottom: 0;
-    background: #fff;
+    background: var(--mui-palette-background-paper);
   }
   .navigation button {
     min-width: 0;
@@ -534,7 +611,7 @@ label .amount-input select {
 }
 .cost-calendar .calendar-day[aria-pressed="true"] {
   border-color: var(--accent);
-  background: #eef2e7;
+  background: var(--selected-background);
   font-weight: 700;
 }
 .calendar-day[aria-current="date"] .calendar-date {

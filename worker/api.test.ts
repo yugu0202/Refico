@@ -9,6 +9,7 @@ test("認証済みAPIは所有者を分離し、再送・古い更新・偽造�
   const { sqlite, db } = testDatabase();
   const secret = "test-secret-for-refico-at-least-thirty-two-characters";
   const env: Env = {
+    APP_ENV: "production",
     DB: db,
     ASSETS: { fetch: async () => new Response("assets") },
     BETTER_AUTH_URL: "http://localhost:8787",
@@ -62,12 +63,17 @@ test("認証済みAPIは所有者を分離し、再送・古い更新・偽造�
     );
     const before = (await (await request("bootstrap", "a")).json()) as {
       revision: number;
+      sampleDataEnabled: boolean;
     };
     assert.equal(before.revision, 0);
+    assert.equal(before.sampleDataEnabled, false);
     const body = {
       requestId: crypto.randomUUID(),
       revision: 0,
-      command: { type: "sample.create", date: "2026-10-01" },
+      command: {
+        type: "product.create",
+        product: { id: "rice", name: "米", baseUnit: "g", units: [] },
+      },
     };
     const saved = await request("commands", "a", body);
     assert.equal(saved.status, 200, await saved.clone().text());
@@ -77,7 +83,10 @@ test("認証済みAPIは所有者を分離し、再送・古い更新・偽造�
       (
         await request("commands", "a", {
           ...body,
-          command: { type: "sample.create", date: "2026-10-02" },
+          command: {
+            ...body.command,
+            product: { ...body.command.product, name: "白米" },
+          },
         })
       ).status,
       409,
@@ -147,10 +156,12 @@ test("共通プレビューはURL・Cookieによらず保存を共有し、本�
     assert.equal(response.status, 200);
     const baseline = (await response.json()) as {
       authMode: string;
+      sampleDataEnabled: boolean;
       householdId: string;
       revision: number;
     };
     assert.equal(baseline.authMode, "test");
+    assert.equal(baseline.sampleDataEnabled, true);
     assert.equal(baseline.householdId, "personal:preview:shared");
     const body = {
       requestId: crypto.randomUUID(),

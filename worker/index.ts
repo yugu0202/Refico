@@ -1,6 +1,7 @@
 import { previewUser } from "./preview-user.ts";
 import { getAuth } from "./auth.ts";
 import type { Env } from "./env.ts";
+import { sampleDataEnabled } from "./env.ts";
 import {
   personalHousehold,
   loadSnapshot,
@@ -72,6 +73,7 @@ export default {
           revision: snapshot.revision,
           householdId,
           authMode: mode,
+          sampleDataEnabled: sampleDataEnabled(env),
           state: toView(snapshot.model),
           user: { name: user.name, email: user.email },
         });
@@ -96,6 +98,12 @@ export default {
         if (!parsed.success)
           return json({ error: "入力を確認してください" }, 400);
         const { requestId, revision, command } = parsed.data;
+        // Enforce deployment policy before receipts, so even a replay is denied.
+        if (command.type === "sample.create" && !sampleDataEnabled(env))
+          return json(
+            { error: "サンプルデータはこの環境では追加できません" },
+            403,
+          );
         const fingerprint = JSON.stringify({ revision, command });
         const oldReceipt = await receipt(db, householdId, requestId);
         if (oldReceipt && oldReceipt.fingerprint !== fingerprint)

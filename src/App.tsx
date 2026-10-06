@@ -1,6 +1,9 @@
+import { ThemeControl } from "./components/ThemeControl";
+import { BrandLogo } from "./components/BrandLogo";
 import type { Command } from "./domain/commands";
 import { ApiError, bootstrap, sendCommand, authClient } from "./api";
 import { History } from "./components/History";
+import { LoginScreen } from "./components/LoginScreen";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
 import { PreparedNameForm } from "./components/PreparedNameForm";
@@ -54,11 +57,21 @@ const navigation = [
 ] as const;
 type Page = (typeof navigation)[number]["id"];
 export default function App() {
+  const mainRef = useRef<HTMLElement>(null);
   const [page, setPage] = useState<Page>("home");
   const [today, setToday] = useState(localDate);
   const [state, setState] = useState<State>(emptyState);
   const [ready, setReady] = useState(false);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [signingIn, setSigningIn] = useState(false);
+  const signingInRef = useRef(false);
+  const [loginError, setLoginError] = useState(() =>
+    new URLSearchParams(window.location.search).get("login") === "failed"
+      ? "ログインできませんでした。もう一度お試しください。"
+      : "",
+  );
   const [authMode, setAuthMode] = useState<"google" | "test" | null>(null);
+  const [sampleDataEnabled, setSampleDataEnabled] = useState(false);
   const [user, setUser] = useState<{ name: string; email: string } | null>(
     null,
   );
@@ -70,10 +83,12 @@ export default function App() {
   async function reload(force = false) {
     if (busyRef.current && !force) return;
     const generation = ++loadGeneration.current;
+    setAuthChecking(true);
     try {
       const data = await bootstrap();
       if (generation === loadGeneration.current) setAuthMode(data.authMode);
       if (generation !== loadGeneration.current) return;
+      setSampleDataEnabled(data.sampleDataEnabled === true);
       if (
         identityRef.current !== data.householdId ||
         data.revision >= revisionRef.current
@@ -83,10 +98,12 @@ export default function App() {
         setState(data.state);
         setUser(data.user);
         setReady(true);
+        setLoginError("");
         setStorageError("");
       }
     } catch (e) {
       if (generation !== loadGeneration.current) return;
+      setSampleDataEnabled(false);
       if (e instanceof ApiError && e.authMode) setAuthMode(e.authMode);
       if (e instanceof ApiError && e.status === 401) {
         identityRef.current = "";
@@ -99,19 +116,26 @@ export default function App() {
         setStorageError(
           e instanceof Error ? e.message : "読み込めませんでした",
         );
+    } finally {
+      if (generation === loadGeneration.current) setAuthChecking(false);
     }
   }
   async function login() {
+    if (signingInRef.current || authChecking || authMode !== "google") return;
+    signingInRef.current = true;
+    setSigningIn(true);
+    setLoginError("");
     try {
       const response = await authClient.signIn.social({
         provider: "google",
         callbackURL: "/",
+        errorCallbackURL: "/?login=failed",
       });
       if (response.error) throw new Error(response.error.message);
-    } catch (e) {
-      setStorageError(
-        e instanceof Error ? e.message : "ログインできませんでした",
-      );
+    } catch {
+      setLoginError("ログインできませんでした。もう一度お試しください。");
+      signingInRef.current = false;
+      setSigningIn(false);
     }
   }
   async function logout() {
@@ -124,6 +148,9 @@ export default function App() {
       revisionRef.current = 0;
       setUser(null);
       setReady(false);
+      setAuthChecking(false);
+      setLoginError("");
+      setStorageError("");
       setState(emptyState());
       navigate("home");
     } catch (e) {
@@ -146,8 +173,14 @@ export default function App() {
   const [search, setSearch] = useState("");
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
+    mainRef.current?.scrollTo({ top: 0, behavior: "instant" });
   }, [page]);
   useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("login") === "failed") {
+      url.searchParams.delete("login");
+      window.history.replaceState(window.history.state, "", url);
+    }
     void reload();
     const refresh = () => {
       setToday(localDate());
@@ -283,6 +316,17 @@ export default function App() {
         }
       />
     ));
+  if (!ready)
+    return (
+      <LoginScreen
+        loading={authChecking}
+        signingIn={signingIn}
+        canLogin={authMode === "google" && !authChecking && !storageError}
+        error={storageError || loginError}
+        onLogin={() => void login()}
+        onRetry={storageError ? () => void reload() : undefined}
+      />
+    );
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -294,10 +338,15 @@ export default function App() {
             navigate("home");
           }}
         >
-          <img src="/logo.svg" width="28" height="28" alt="" />
+          <BrandLogo size={28} />
           Refico
         </a>
-        <Stack direction="row" sx={{ alignItems: "center", gap: 1 }}>
+        <Stack
+          className="header-account"
+          direction="row"
+          sx={{ alignItems: "center", gap: 1 }}
+        >
+          <ThemeControl />
           {user ? (
             <>
               <span className="hint">{user.name}</span>
@@ -307,8 +356,6 @@ export default function App() {
                 </Button>
               )}
             </>
-          ) : authMode === "google" ? (
-            <Button onClick={() => void login()}>Googleでログイン</Button>
           ) : null}
         </Stack>
       </header>
@@ -333,7 +380,7 @@ export default function App() {
           </Button>
         ))}
       </nav>
-      <main>
+      <main ref={mainRef}>
         <div className="page-heading">
           <h1>{title}</h1>
         </div>
@@ -355,17 +402,7 @@ export default function App() {
             {notice}
           </p>
         )}
-        {!ready ? (
-          <p className="hint">
-            {storageError ? (
-              <Button onClick={() => void reload()}>再読み込み</Button>
-            ) : authMode === "google" ? (
-              "Googleでログインしてください。"
-            ) : (
-              "読み込み中…"
-            )}
-          </p>
-        ) : (
+        {ready && (
           <>
             {adjustingPrepared && (
               <StockAdjustmentForm
@@ -583,7 +620,7 @@ export default function App() {
                     ))
                   )}
                 </section>
-                {state.products.length === 0 && (
+                {sampleDataEnabled && state.products.length === 0 && (
                   <div className="sample">
                     <p>記録の流れを試す</p>
                     <Button

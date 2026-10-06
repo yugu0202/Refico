@@ -12,7 +12,7 @@ Cloudflare Workers上で動作する、食材の在庫管理と1日の食費計�
 - 在庫の残量・金額・購入履歴の確認
 - 食事への複数食材の使用記録と原価のプレビュー
 - 食事別・日別の食費表示
-- 空の状態からサンプルデータを追加
+- プレビュー・開発環境では空の状態からサンプルデータを追加
 
 React + MUI + TypeScript + Vite。Cloudflare Workersが静的アセットとAPIを配信します。
 GoogleログインとD1保存に対応し、ユーザー専用の家庭単位でデータを管理します。
@@ -73,6 +73,8 @@ Cloudflare Accessで対象プレビュー全体（静的アセットとAPI）を
 プレビューD1は本番と別に作成・マイグレーションしてください。以前のAccessユーザーの記録は共通アカウントへ移行しません。競合は既存のリビジョン検証で拒否します。
 
 ローカルで試す場合は別のWrangler設定で`APP_ENV=preview`、`AUTH_MODE=test`とローカルD1を指定してください。
+
+サンプルデータ追加は`APP_ENV=preview`または`APP_ENV=development`の場合だけ利用できます。本番・環境未設定・不明な値ではボタンを表示せず、`sample.create`コマンドも403で拒否します。画面の可否は`/api/bootstrap`の`sampleDataEnabled`で判断します。ローカルでGoogle認証を使う場合は`.dev.vars`に`APP_ENV=development`を指定してください。
 
 ### ローカル
 
