@@ -284,8 +284,12 @@ label .amount-input select {
 .search {
   max-width: 360px;
 }
-.inventory-groups {
+.inventory-list {
   margin: 24px 0 32px;
+}
+.inventory-kind {
+  font-weight: 600;
+  color: var(--muted);
 }
 .inventory-group-heading {
   display: flex;
