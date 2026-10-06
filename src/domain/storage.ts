@@ -7,6 +7,7 @@ import {
   unitsFor,
   mealKinds,
   cumulativeCost,
+  portionCost,
 } from "./inventory.ts";
 const KEY = "refico:v1";
 // Validate stored data before allowing edits. Malformed data is preserved for recovery.
@@ -65,7 +66,8 @@ export function parseState(raw: string): State {
       validDate(meal.date) &&
         mealKinds.includes(meal.kind) &&
         Array.isArray(meal.usages) &&
-        meal.usages.length > 0,
+        (meal.usages.length > 0 ||
+          (Array.isArray(meal.prepared) && meal.prepared.length > 0)),
     );
     for (const usage of meal.usages) {
       check(
@@ -101,6 +103,52 @@ export function parseState(raw: string): State {
         allocated += a.quantity;
       }
       check(allocated === usage.baseQuantity);
+    }
+  }
+  const portions = new Map<string, number>();
+  for (const meal of state.meals) {
+    if (meal.batch !== undefined) {
+      const b = meal.batch;
+      check(
+        !!b &&
+          typeof b.name === "string" &&
+          b.name.trim().length > 0 &&
+          b.name.length <= 100 &&
+          meal.usages.length > 0 &&
+          !meal.prepared?.length,
+      );
+      toBase(b.servings, 1);
+      check(
+        Number.isFinite(b.eatenServings) &&
+          b.eatenServings >= 0 &&
+          b.eatenServings < b.servings,
+      );
+      portions.set(
+        meal.id,
+        b.eatenServings === 0 ? 0 : toBase(b.eatenServings, 1),
+      );
+    }
+    if (meal.prepared !== undefined) {
+      check(Array.isArray(meal.prepared));
+      const seen = new Set<string>();
+      for (const p of meal.prepared) {
+        const source = state.meals.find((m) => m.id === p.batchId);
+        check(
+          !!source?.batch &&
+            portions.has(p.batchId) &&
+            source!.date <= meal.date &&
+            !seen.has(p.batchId),
+        );
+        seen.add(p.batchId);
+        const used = portions.get(p.batchId)!;
+        const next = used + toBase(p.quantity, 1);
+        check(
+          next <= toBase(source!.batch!.servings, 1) &&
+            Number.isSafeInteger(p.cost) &&
+            p.cost === portionCost(source!, next) - portionCost(source!, used),
+        );
+        portions.set(p.batchId, next);
+      }
     }
   }
   return state;

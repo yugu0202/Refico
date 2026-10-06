@@ -196,3 +196,98 @@ test("破損データと過剰消費データを読み込まない", () => {
   next.meals[0].usages[0].allocations[0].quantity = 2000000;
   assert.throws(() => parseState(JSON.stringify(next)));
 });
+test("作り置きは調理時に在庫を消費し、食べた日ごとに原価を配分する", () => {
+  const { product, state } = rice();
+  let next = recordPurchase(state, product.id, 300, "g", 100, date);
+  next = recordMeal(
+    next,
+    date,
+    "夕食",
+    [{ productId: product.id, quantity: 300, unit: "g" }],
+    { name: "ご飯", servings: 3, eatenServings: 1 },
+  );
+  const batchId = next.meals[0].id;
+  assert.deepEqual(stock(next, product.id), { quantity: 0, value: 0 });
+  next = recordMeal(next, "2026-10-07", "昼食", [], undefined, [
+    { batchId, quantity: 1 },
+  ]);
+  next = recordMeal(next, "2026-10-08", "昼食", [], undefined, [
+    { batchId, quantity: 1 },
+  ]);
+  assert.deepEqual(next.meals.map(mealCost), [33, 34, 33]);
+  assert.deepEqual(dailyCosts(next), [
+    ["2026-10-08", 33],
+    ["2026-10-07", 34],
+    [date, 33],
+  ]);
+  assert.deepEqual(parseState(JSON.stringify(next)), next);
+  assert.throws(
+    () =>
+      recordMeal(next, "2026-10-09", "昼食", [], undefined, [
+        { batchId, quantity: 1 },
+      ]),
+    /残量/,
+  );
+});
+test("全量作り置きと小数食分・直接使う食材を組み合わせる", () => {
+  const { product, state } = rice();
+  let next = recordPurchase(state, product.id, 300, "g", 100, date);
+  next = recordMeal(
+    next,
+    date,
+    "夕食",
+    [{ productId: product.id, quantity: 150, unit: "g" }],
+    { name: "ご飯", servings: 1.5, eatenServings: 0 },
+  );
+  assert.deepEqual(dailyCosts(next), []);
+  const batchId = next.meals[0].id;
+  assert.throws(() =>
+    recordMeal(next, "2026-10-05", "昼食", [], undefined, [
+      { batchId, quantity: 0.5 },
+    ]),
+  );
+  next = recordMeal(
+    next,
+    "2026-10-07",
+    "昼食",
+    [{ productId: product.id, quantity: 150, unit: "g" }],
+    undefined,
+    [{ batchId, quantity: 0.5 }],
+  );
+  next = recordMeal(next, "2026-10-08", "昼食", [], undefined, [
+    { batchId, quantity: 1 },
+  ]);
+  assert.equal(
+    next.meals.reduce((s, m) => s + mealCost(m), 0),
+    100,
+  );
+  assert.deepEqual(parseState(JSON.stringify(next)), next);
+  const broken = structuredClone(next);
+  broken.meals[1].prepared![0].cost++;
+  assert.throws(() => parseState(JSON.stringify(broken)));
+  const over = structuredClone(next);
+  over.meals[2].prepared![0].quantity = 2;
+  assert.throws(() => parseState(JSON.stringify(over)));
+});
+test("作り置きの不正入力を拒否して元の記録を保持する", () => {
+  const { product, state } = rice();
+  const next = recordPurchase(state, product.id, 300, "g", 100, date);
+  const raw = JSON.stringify(next);
+  for (const batch of [
+    { name: "", servings: 4, eatenServings: 1 },
+    { name: "米", servings: 0, eatenServings: 0 },
+    { name: "米", servings: 4, eatenServings: -1 },
+    { name: "米", servings: 4, eatenServings: 4 },
+    { name: "米", servings: 4, eatenServings: 0.0001 },
+  ])
+    assert.throws(() =>
+      recordMeal(
+        next,
+        date,
+        "夕食",
+        [{ productId: product.id, quantity: 300, unit: "g" }],
+        batch,
+      ),
+    );
+  assert.equal(JSON.stringify(next), raw);
+});

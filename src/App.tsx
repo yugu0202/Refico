@@ -6,6 +6,9 @@ import {
   dailyCosts,
   emptyState,
   mealCost,
+  preparedRemaining,
+  portionCost,
+  toBase,
   stock,
   updateProductUnits,
   updateProduct,
@@ -96,7 +99,9 @@ export default function App() {
       `${product.name}を追加しました`,
     );
   }
-  const meals = state.meals.filter((m) => m.date === today);
+  const meals = state.meals.filter(
+    (m) => m.date === today && (!m.batch || m.batch.eatenServings > 0),
+  );
   const total = meals.reduce((sum, m) => sum + mealCost(m), 0);
   const filtered = state.products.filter((p) => p.name.includes(search));
   const title = navigation.find((n) => n.id === page)!.label;
@@ -230,32 +235,63 @@ export default function App() {
                       <details className="meal-row" key={meal.id}>
                         <summary>
                           <strong>{meal.kind}</strong>
-                          <span>{meal.usages.length}食材</span>
+                          <span>
+                            {meal.batch
+                              ? meal.batch.name
+                              : meal.prepared?.length
+                                ? "作り置き"
+                                : `${meal.usages.length}食材`}
+                          </span>
                           <strong className="numeric">
                             {money(mealCost(meal))}
                           </strong>
                         </summary>
                         <div className="meal-detail">
-                          {meal.usages.map((u) => (
-                            <div key={u.productId}>
+                          {meal.batch && (
+                            <div>
+                              <span>
+                                {meal.batch.name}{" "}
+                                {number(meal.batch.eatenServings)}食分
+                              </span>
+                              <span>{money(mealCost(meal))}</span>
+                            </div>
+                          )}
+                          {(meal.prepared ?? []).map((p) => (
+                            <div key={p.batchId}>
                               <span>
                                 {
-                                  state.products.find(
-                                    (p) => p.id === u.productId,
-                                  )?.name
+                                  state.meals.find((m) => m.id === p.batchId)
+                                    ?.batch?.name
                                 }{" "}
-                                <small>
-                                  {number(u.quantity)}
-                                  {u.unit}
-                                </small>
+                                {number(p.quantity)}食分
                               </span>
-                              <span>
-                                {money(
-                                  u.allocations.reduce((s, a) => s + a.cost, 0),
-                                )}
-                              </span>
+                              <span>{money(p.cost)}</span>
                             </div>
                           ))}
+                          {!meal.batch &&
+                            meal.usages.map((u) => (
+                              <div key={u.productId}>
+                                <span>
+                                  {
+                                    state.products.find(
+                                      (p) => p.id === u.productId,
+                                    )?.name
+                                  }{" "}
+                                  <small>
+                                    {number(u.quantity)}
+                                    {u.unit}
+                                  </small>
+                                </span>
+                                <span>
+                                  {money(
+                                    u.allocations.reduce(
+                                      (s, a) => s + a.cost,
+                                      0,
+                                    ),
+                                  )}
+                                </span>
+                              </div>
+                            ))}
                         </div>
                       </details>
                     ))
@@ -330,6 +366,42 @@ export default function App() {
                 )}
               </>
             )}
+            {(page === "home" || page === "inventory") &&
+              state.meals.some(
+                (m) => m.batch && preparedRemaining(state, m) > 0,
+              ) && (
+                <section>
+                  <div className="section-heading">
+                    <h2>作り置き</h2>
+                    <Button onClick={() => navigate("meal")}>食事を記録</Button>
+                  </div>
+                  {state.meals
+                    .filter((m) => m.batch && preparedRemaining(state, m) > 0)
+                    .map((m) => {
+                      const remaining = preparedRemaining(state, m);
+                      return (
+                        <div className="purchase-row" key={m.id}>
+                          <div>
+                            <strong>{m.batch!.name}</strong>
+                            <p className="hint">
+                              {dateLabel(m.date)} · 残り{number(remaining)}食分
+                            </p>
+                          </div>
+                          <strong>
+                            {money(
+                              portionCost(m, toBase(m.batch!.servings, 1)) -
+                                portionCost(
+                                  m,
+                                  toBase(m.batch!.servings, 1) -
+                                    toBase(remaining, 1),
+                                ),
+                            )}
+                          </strong>
+                        </div>
+                      );
+                    })}
+                </section>
+              )}
             {page === "inventory" && (
               <>
                 <TextField
@@ -407,7 +479,12 @@ export default function App() {
                 today={today}
                 money={money}
                 onSave={(next) => {
-                  persist(next, "食事を記録しました");
+                  persist(
+                    next,
+                    next.meals.at(-1)?.batch?.eatenServings === 0
+                      ? "作り置きを保存しました"
+                      : "食事を記録しました",
+                  );
                   setPage("home");
                 }}
               />

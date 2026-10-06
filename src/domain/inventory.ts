@@ -36,6 +36,8 @@ export interface Meal {
   date: string;
   kind: string;
   usages: Usage[];
+  batch?: { name: string; servings: number; eatenServings: number };
+  prepared?: { batchId: string; quantity: number; cost: number }[];
 }
 export interface State {
   version: 1;
@@ -241,10 +243,57 @@ export function recordMeal(
   date: string,
   kind: string,
   inputs: MealInput[],
+  batch?: Meal["batch"],
+  preparedInputs: { batchId: string; quantity: number }[] = [],
 ): State {
   requireValue(validDate(date), "食事の日付を入力してください");
   requireValue(mealKinds.includes(kind), "食事の種類を選択してください");
-  requireValue(inputs.length > 0, "使った食材を追加してください");
+  requireValue(
+    inputs.length > 0 || preparedInputs.length > 0,
+    "食材か作り置きを追加してください",
+  );
+  if (batch) {
+    requireValue(
+      inputs.length > 0 && preparedInputs.length === 0,
+      "作り置きには食材を追加してください",
+    );
+    requireValue(
+      typeof batch.name === "string" &&
+        batch.name.trim().length > 0 &&
+        batch.name.trim().length <= 100,
+      "料理名を100文字以内で入力してください",
+    );
+    toBase(batch.servings, 1);
+    requireValue(
+      Number.isFinite(batch.eatenServings) &&
+        batch.eatenServings >= 0 &&
+        batch.eatenServings < batch.servings,
+      "今回食べた量は0以上、作った量未満で入力してください",
+    );
+    if (batch.eatenServings > 0) toBase(batch.eatenServings, 1);
+  }
+  requireValue(
+    new Set(preparedInputs.map((i) => i.batchId)).size ===
+      preparedInputs.length,
+    "同じ作り置きは1行にまとめてください",
+  );
+  const prepared = preparedInputs.map((input) => {
+    const source = state.meals.find((m) => m.id === input.batchId);
+    requireValue(
+      !!source?.batch && source.date <= date,
+      "食事の日付までの作り置きを選択してください",
+    );
+    const used = preparedConsumed(state, source!);
+    const quantity = toBase(input.quantity, 1);
+    requireValue(
+      used + quantity <= toBase(source!.batch!.servings, 1),
+      "作り置きの残量が不足しています",
+    );
+    return {
+      ...input,
+      cost: portionCost(source!, used + quantity) - portionCost(source!, used),
+    };
+  });
   requireValue(
     new Set(inputs.map((i) => i.productId)).size === inputs.length,
     "同じ食材は1行にまとめてください",
@@ -284,14 +333,57 @@ export function recordMeal(
   });
   return {
     ...state,
-    meals: [...state.meals, { id: crypto.randomUUID(), date, kind, usages }],
+    meals: [
+      ...state.meals,
+      {
+        id: crypto.randomUUID(),
+        date,
+        kind,
+        usages,
+        ...(batch ? { batch: { ...batch, name: batch.name.trim() } } : {}),
+        ...(prepared.length ? { prepared } : {}),
+      },
+    ],
   };
 }
-export const mealCost = (meal: Meal) =>
+export const cookingCost = (meal: Meal) =>
   meal.usages.flatMap((u) => u.allocations).reduce((sum, a) => sum + a.cost, 0);
+// Allocate yen by cumulative rounding so all portions exactly match the cooking cost.
+export function portionCost(meal: Meal, quantity: number): number {
+  return cumulativeCost(
+    {
+      price: cookingCost(meal),
+      baseQuantity: toBase(meal.batch!.servings, 1),
+    } as Purchase,
+    quantity,
+  );
+}
+export function preparedConsumed(state: State, meal: Meal): number {
+  return (
+    (meal.batch!.eatenServings === 0
+      ? 0
+      : toBase(meal.batch!.eatenServings, 1)) +
+    state.meals
+      .flatMap((m) => m.prepared ?? [])
+      .filter((p) => p.batchId === meal.id)
+      .reduce((sum, p) => sum + toBase(p.quantity, 1), 0)
+  );
+}
+export function preparedRemaining(state: State, meal: Meal): number {
+  return (
+    (toBase(meal.batch!.servings, 1) - preparedConsumed(state, meal)) / 1000
+  );
+}
+export const mealCost = (meal: Meal) =>
+  (meal.batch
+    ? portionCost(meal, Math.round(meal.batch.eatenServings * 1000))
+    : cookingCost(meal)) +
+  (meal.prepared ?? []).reduce((sum, p) => sum + p.cost, 0);
 export function dailyCosts(state: State) {
   const days = new Map<string, number>();
-  for (const meal of state.meals)
+  for (const meal of state.meals) {
+    if (meal.batch && meal.batch.eatenServings === 0) continue;
     days.set(meal.date, (days.get(meal.date) ?? 0) + mealCost(meal));
+  }
   return [...days].sort(([a], [b]) => b.localeCompare(a));
 }

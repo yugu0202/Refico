@@ -1,3 +1,5 @@
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
 import { useState, type FormEvent } from "react";
@@ -6,6 +8,7 @@ import {
   recordMeal,
   mealCost,
   stock,
+  preparedRemaining,
   type State,
 } from "../domain/inventory";
 import { AmountInput } from "./AmountInput";
@@ -38,19 +41,47 @@ export function MealForm({
     key: crypto.randomUUID(),
   });
   const [rows, setRows] = useState<Draft[]>([draft()]);
+  const [batchEnabled, setBatchEnabled] = useState(false);
+  const [name, setName] = useState("");
+  const [servings, setServings] = useState("");
+  const [eaten, setEaten] = useState("0");
+  const [preparedRows, setPreparedRows] = useState<
+    { key: string; batchId: string; quantity: string }[]
+  >([]);
+  const batches = state.meals.filter(
+    (m) => m.batch && m.date <= date && preparedRemaining(state, m) > 0,
+  );
+  const buildRecord = () =>
+    recordMeal(
+      state,
+      date,
+      kind,
+      rows
+        .filter((r) => r.productId || r.quantity)
+        .map((r) => ({ ...r, quantity: Number(r.quantity) })),
+      batchEnabled
+        ? { name, servings: Number(servings), eatenServings: Number(eaten) }
+        : undefined,
+      batchEnabled
+        ? []
+        : preparedRows.map((r) => ({
+            batchId: r.batchId,
+            quantity: Number(r.quantity),
+          })),
+    );
   const [error, setError] = useState("");
   const update = (key: string, changes: Partial<Draft>) =>
     setRows(rows.map((r) => (r.key === key ? { ...r, ...changes } : r)));
   let estimate: number | undefined;
   let estimateError = "";
   try {
-    if (rows.every((r) => r.productId && r.quantity)) {
-      const next = recordMeal(
-        state,
-        date,
-        kind,
-        rows.map((r) => ({ ...r, quantity: Number(r.quantity) })),
-      );
+    if (
+      (rows.some((r) => r.productId) || preparedRows.length > 0) &&
+      rows
+        .filter((r) => r.productId || r.quantity)
+        .every((r) => r.productId && r.quantity)
+    ) {
+      const next = buildRecord();
       estimate = mealCost(next.meals.at(-1)!);
     }
   } catch (e) {
@@ -59,14 +90,7 @@ export function MealForm({
   function submit(event: FormEvent) {
     event.preventDefault();
     try {
-      onSave(
-        recordMeal(
-          state,
-          date,
-          kind,
-          rows.map((r) => ({ ...r, quantity: Number(r.quantity) })),
-        ),
-      );
+      onSave(buildRecord());
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存できませんでした");
     }
@@ -96,6 +120,43 @@ export function MealForm({
           ))}
         </TextField>
       </div>
+      <FormControlLabel
+        control={
+          <Checkbox
+            checked={batchEnabled}
+            onChange={(e) => setBatchEnabled(e.target.checked)}
+          />
+        }
+        label="残りを作り置きにする"
+      />
+      {batchEnabled && (
+        <>
+          <TextField
+            label="料理名"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <div className="two-columns">
+            <TextField
+              label="作った量（食分）"
+              required
+              type="number"
+              slotProps={{ htmlInput: { min: 0.001, step: 0.001 } }}
+              value={servings}
+              onChange={(e) => setServings(e.target.value)}
+            />
+            <TextField
+              label="今回食べた量（食分）"
+              required
+              type="number"
+              slotProps={{ htmlInput: { min: 0, step: 0.001 } }}
+              value={eaten}
+              onChange={(e) => setEaten(e.target.value)}
+            />
+          </div>
+        </>
+      )}
       <h2>使った食材</h2>
       {available.length === 0 && (
         <p className="hint">
@@ -109,7 +170,9 @@ export function MealForm({
             <TextField
               label={`食材 ${index + 1}`}
               select
-              required
+              required={
+                batchEnabled || preparedRows.length === 0 || !!row.quantity
+              }
               value={row.productId}
               slotProps={{
                 select: { native: true },
@@ -170,6 +233,81 @@ export function MealForm({
       >
         ＋ 食材を追加
       </Button>
+      {!batchEnabled && (
+        <>
+          <h2>作り置き</h2>
+          {preparedRows.map((row, index) => (
+            <div className="ingredient" key={row.key}>
+              <TextField
+                label={`作り置き ${index + 1}`}
+                select
+                required
+                value={row.batchId}
+                slotProps={{
+                  select: { native: true },
+                  inputLabel: { shrink: true },
+                }}
+                onChange={(e) =>
+                  setPreparedRows(
+                    preparedRows.map((r) =>
+                      r.key === row.key ? { ...r, batchId: e.target.value } : r,
+                    ),
+                  )
+                }
+              >
+                <option value="" disabled>
+                  作り置きを選択
+                </option>
+                {batches
+                  .filter(
+                    (m) =>
+                      m.id === row.batchId ||
+                      !preparedRows.some((r) => r.batchId === m.id),
+                  )
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.batch!.name}（残り{preparedRemaining(state, m)}食分）
+                    </option>
+                  ))}
+              </TextField>
+              <TextField
+                label="食べた量（食分）"
+                required
+                type="number"
+                value={row.quantity}
+                slotProps={{ htmlInput: { min: 0.001, step: 0.001 } }}
+                onChange={(e) =>
+                  setPreparedRows(
+                    preparedRows.map((r) =>
+                      r.key === row.key
+                        ? { ...r, quantity: e.target.value }
+                        : r,
+                    ),
+                  )
+                }
+              />
+              <Button
+                onClick={() =>
+                  setPreparedRows(preparedRows.filter((r) => r.key !== row.key))
+                }
+              >
+                削除
+              </Button>
+            </div>
+          ))}
+          <Button
+            disabled={preparedRows.length >= batches.length}
+            onClick={() =>
+              setPreparedRows([
+                ...preparedRows,
+                { key: crypto.randomUUID(), batchId: "", quantity: "" },
+              ])
+            }
+          >
+            ＋ 作り置きを追加
+          </Button>
+        </>
+      )}
       <div className="estimate">
         <span>この食事の金額</span>
         <strong>{estimate === undefined ? "—" : money(estimate)}</strong>
@@ -185,7 +323,9 @@ export function MealForm({
           type="submit"
           disabled={estimate === undefined}
         >
-          食事を記録
+          {batchEnabled && Number(eaten) === 0
+            ? "作り置きを保存"
+            : "食事を記録"}
         </Button>
       </div>
     </form>
