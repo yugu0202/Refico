@@ -104,6 +104,36 @@ export default function App() {
   );
   const total = meals.reduce((sum, m) => sum + mealCost(m), 0);
   const filtered = state.products.filter((p) => p.name.includes(search));
+  const prepared = state.meals.filter(
+    (m) => m.batch && preparedRemaining(state, m) > 0,
+  );
+  const filteredPrepared = prepared.filter((m) =>
+    m.batch!.name.includes(search),
+  );
+  const preparedRows = (items: typeof prepared) =>
+    items.map((m) => {
+      const remaining = preparedRemaining(state, m);
+      return (
+        <div className="inventory-row" key={m.id}>
+          <div>
+            <strong>{m.batch!.name}</strong>
+            <p className="hint">作った日 {dateLabel(m.date)}</p>
+          </div>
+          <div className="numeric">
+            <strong>{number(remaining)}食分</strong>
+            <p className="hint">
+              {money(
+                portionCost(m, toBase(m.batch!.servings, 1)) -
+                  portionCost(
+                    m,
+                    toBase(m.batch!.servings, 1) - toBase(remaining, 1),
+                  ),
+              )}
+            </p>
+          </div>
+        </div>
+      );
+    });
   const title = navigation.find((n) => n.id === page)!.label;
   const inventoryRows = (products: Product[]) =>
     products.map((product) => (
@@ -366,64 +396,60 @@ export default function App() {
                 )}
               </>
             )}
-            {(page === "home" || page === "inventory") &&
-              state.meals.some(
-                (m) => m.batch && preparedRemaining(state, m) > 0,
-              ) && (
-                <section>
-                  <div className="section-heading">
-                    <h2>作り置き</h2>
-                    <Button onClick={() => navigate("meal")}>食事を記録</Button>
-                  </div>
-                  {state.meals
-                    .filter((m) => m.batch && preparedRemaining(state, m) > 0)
-                    .map((m) => {
-                      const remaining = preparedRemaining(state, m);
-                      return (
-                        <div className="purchase-row" key={m.id}>
-                          <div>
-                            <strong>{m.batch!.name}</strong>
-                            <p className="hint">
-                              {dateLabel(m.date)} · 残り{number(remaining)}食分
-                            </p>
-                          </div>
-                          <strong>
-                            {money(
-                              portionCost(m, toBase(m.batch!.servings, 1)) -
-                                portionCost(
-                                  m,
-                                  toBase(m.batch!.servings, 1) -
-                                    toBase(remaining, 1),
-                                ),
-                            )}
-                          </strong>
-                        </div>
-                      );
-                    })}
-                </section>
-              )}
+            {page === "home" && prepared.length > 0 && (
+              <section>
+                <div className="section-heading">
+                  <h2>作り置き</h2>
+                  <Button onClick={() => navigate("meal")}>食事を記録</Button>
+                </div>
+                {preparedRows(prepared)}
+              </section>
+            )}
             {page === "inventory" && (
               <>
                 <TextField
                   className="search"
-                  label="食材を探す"
+                  label="在庫を探す"
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="食材名"
+                  placeholder="食材名・料理名"
                 />
-                <div className="list-caption">
-                  <span>{filtered.length}食材</span>
-                  <span>残量 / 在庫金額</span>
+                <div className="inventory-groups">
+                  {filteredPrepared.length > 0 && (
+                    <section aria-labelledby="prepared-heading">
+                      <div className="inventory-group-heading">
+                        <h2 id="prepared-heading">
+                          作り置き{" "}
+                          <span className="group-count">
+                            {filteredPrepared.length}
+                          </span>
+                        </h2>
+                        <span>残量 / 在庫金額</span>
+                      </div>
+                      {preparedRows(filteredPrepared)}
+                    </section>
+                  )}
+                  {filtered.length > 0 && (
+                    <section aria-labelledby="ingredients-heading">
+                      <div className="inventory-group-heading">
+                        <h2 id="ingredients-heading">
+                          食材{" "}
+                          <span className="group-count">{filtered.length}</span>
+                        </h2>
+                        <span>残量 / 在庫金額</span>
+                      </div>
+                      {inventoryRows(filtered)}
+                    </section>
+                  )}
+                  {filtered.length === 0 && filteredPrepared.length === 0 && (
+                    <p className="empty">
+                      {search
+                        ? "一致する在庫がありません。"
+                        : "在庫が登録されていません。"}
+                    </p>
+                  )}
                 </div>
-                {inventoryRows(filtered)}
-                {filtered.length === 0 && (
-                  <p className="empty">
-                    {state.products.length
-                      ? "一致する食材がありません。"
-                      : "食材が登録されていません。"}
-                  </p>
-                )}
                 <section>
                   <h2>購入履歴</h2>
                   {state.purchases.length === 0 ? (

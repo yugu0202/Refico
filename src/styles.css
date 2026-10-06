@@ -284,16 +284,28 @@ label .amount-input select {
 .search {
   max-width: 360px;
 }
-.list-caption {
+.inventory-groups {
+  margin: 24px 0 32px;
+}
+.inventory-group-heading {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  color: var(--muted);
-  font-size: 12px;
-  padding: 10px 0;
+  gap: 18px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
 }
-.list-caption ~ section {
-  margin-top: 32px;
+.inventory-group-heading h2 {
+  margin: 0;
+}
+.inventory-group-heading > span,
+.group-count {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.group-count {
+  margin-left: 8px;
 }
 .inset {
   background: #fff;
