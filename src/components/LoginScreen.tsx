@@ -21,7 +21,10 @@ export function LoginScreen({
   return (
     <main className="login-screen">
       <div className="login-content">
-        <h1 className="brand">Refico</h1>
+        <h1 className="brand">
+          <img src="/logo.svg" width="40" height="40" alt="" />
+          Refico
+        </h1>
         {loading ? (
           <div className="login-status" role="status">
             <CircularProgress size={20} aria-hidden="true" />

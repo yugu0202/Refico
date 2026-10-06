@@ -331,6 +331,7 @@ export default function App() {
             navigate("home");
           }}
         >
+          <img src="/logo.svg" width="28" height="28" alt="" />
           Refico
         </a>
         <Stack direction="row" sx={{ alignItems: "center", gap: 1 }}>
