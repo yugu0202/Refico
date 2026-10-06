@@ -130,7 +130,10 @@ export default function App() {
         <div className="inventory-row" key={m.id}>
           <div>
             <strong>{m.batch!.name}</strong>
-            <p className="hint">作った日 {dateLabel(m.date)}</p>
+            <p className="hint">
+              <span className="inventory-kind">作り置き</span> · 作った日{" "}
+              {dateLabel(m.date)}
+            </p>
           </div>
           <div className="numeric">
             <strong>{number(remaining)}食分</strong>
@@ -406,33 +409,21 @@ export default function App() {
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="食材名・料理名"
                 />
-                <div className="inventory-groups">
-                  {filteredPrepared.length > 0 && (
-                    <section aria-labelledby="prepared-heading">
-                      <div className="inventory-group-heading">
-                        <h2 id="prepared-heading">
-                          作り置き{" "}
-                          <span className="group-count">
-                            {filteredPrepared.length}
-                          </span>
-                        </h2>
-                        <span>残量</span>
-                      </div>
-                      {preparedRows(filteredPrepared)}
-                    </section>
-                  )}
-                  {filtered.length > 0 && (
-                    <section aria-labelledby="ingredients-heading">
-                      <div className="inventory-group-heading">
-                        <h2 id="ingredients-heading">
-                          食材{" "}
-                          <span className="group-count">{filtered.length}</span>
-                        </h2>
-                        <span>残量</span>
-                      </div>
-                      {inventoryRows(filtered)}
-                    </section>
-                  )}
+                <section
+                  className="inventory-list"
+                  aria-labelledby="inventory-list-heading"
+                >
+                  <div className="inventory-group-heading">
+                    <h2 id="inventory-list-heading">
+                      在庫{" "}
+                      <span className="group-count">
+                        {filtered.length + filteredPrepared.length}
+                      </span>
+                    </h2>
+                    <span>残量</span>
+                  </div>
+                  {preparedRows(filteredPrepared)}
+                  {inventoryRows(filtered)}
                   {filtered.length === 0 && filteredPrepared.length === 0 && (
                     <p className="empty">
                       {search
@@ -440,7 +431,7 @@ export default function App() {
                         : "在庫が登録されていません。"}
                     </p>
                   )}
-                </div>
+                </section>
                 {(state.adjustments ?? []).length > 0 && (
                   <section>
                     <h2>在庫調整履歴</h2>
