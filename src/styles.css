@@ -96,17 +96,6 @@ a {
 .brand img {
   flex-shrink: 0;
 }
-.header-account {
-  min-width: 0;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-.header-account > .hint {
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .header-date {
   color: var(--muted);
   font-size: 13px;
