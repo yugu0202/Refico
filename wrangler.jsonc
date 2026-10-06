@@ -7,7 +7,7 @@
   "vars": {
     "APP_ENV": "production",
     "AUTH_MODE": "google",
-    "BETTER_AUTH_URL": "refico.yugu0202.net",
+    "BETTER_AUTH_URL": "https://refico.yugu0202.net",
   },
   "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [
