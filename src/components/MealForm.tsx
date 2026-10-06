@@ -111,7 +111,10 @@ export function MealForm({
               select
               required
               value={row.productId}
-              slotProps={{ select: { native: true } }}
+              slotProps={{
+                select: { native: true },
+                inputLabel: { shrink: true },
+              }}
               onChange={(e) =>
                 update(row.key, {
                   productId: e.target.value,
