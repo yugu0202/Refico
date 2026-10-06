@@ -9,9 +9,6 @@ import {
   emptyState,
   mealCost,
   preparedRemaining,
-  portionCost,
-  toBase,
-  stock,
   updateProductUnits,
   updateProduct,
   type State,
@@ -128,17 +125,7 @@ export default function App() {
           </div>
           <div className="numeric">
             <strong>{number(remaining)}食分</strong>
-            {page === "home" && (
-              <p className="hint">
-                {money(
-                  portionCost(m, toBase(m.batch!.servings, 1)) -
-                    portionCost(
-                      m,
-                      toBase(m.batch!.servings, 1) - toBase(remaining, 1),
-                    ),
-                )}
-              </p>
-            )}
+
           </div>
         </div>
       );
@@ -150,7 +137,7 @@ export default function App() {
         key={product.id}
         product={product}
         state={state}
-        showValue={page === "home"}
+        showValue={false}
         onAdjust={
           page === "inventory"
             ? () => {
@@ -381,34 +368,6 @@ export default function App() {
                 </section>
                 <section>
                   <div className="section-heading">
-                    <h2>在庫</h2>
-                    <Button
-                      variant="text"
-                      className="text-button"
-                      onClick={() => navigate("inventory")}
-                    >
-                      すべて見る →
-                    </Button>
-                  </div>
-                  {state.products.some(
-                    (p) => stock(state, p.id).quantity > 0,
-                  ) ? (
-                    inventoryRows(
-                      state.products
-                        .filter((p) => stock(state, p.id).quantity > 0)
-                        .slice(0, 5),
-                    )
-                  ) : (
-                    <p className="empty">在庫がありません。</p>
-                  )}
-                  <div className="actions">
-                    <Button onClick={() => navigate("purchase")}>
-                      ＋ 購入を記録
-                    </Button>
-                  </div>
-                </section>
-                <section>
-                  <div className="section-heading">
                     <h2>日別の食費</h2>
                     <span className="hint">使用した分の金額</span>
                   </div>
@@ -447,15 +406,6 @@ export default function App() {
                   </div>
                 )}
               </>
-            )}
-            {page === "home" && prepared.length > 0 && (
-              <section>
-                <div className="section-heading">
-                  <h2>作り置き</h2>
-                  <Button onClick={() => navigate("meal")}>食事を記録</Button>
-                </div>
-                {preparedRows(prepared)}
-              </section>
             )}
             {page === "inventory" && (
               <>
