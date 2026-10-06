@@ -14,6 +14,7 @@ import {
 import { AmountInput } from "./AmountInput";
 interface Draft {
   productId: string;
+  batchId: string;
   quantity: string;
   unit: string;
   key: string;
@@ -36,6 +37,7 @@ export function MealForm({
   const [kind, setKind] = useState("夕食");
   const draft = (): Draft => ({
     productId: "",
+    batchId: "",
     quantity: "",
     unit: "g",
     key: crypto.randomUUID(),
@@ -45,9 +47,6 @@ export function MealForm({
   const [name, setName] = useState("");
   const [servings, setServings] = useState("");
   const [eaten, setEaten] = useState("0");
-  const [preparedRows, setPreparedRows] = useState<
-    { key: string; batchId: string; quantity: string }[]
-  >([]);
   const batches = state.meals.filter(
     (m) => m.batch && m.date <= date && preparedRemaining(state, m) > 0,
   );
@@ -57,17 +56,19 @@ export function MealForm({
       date,
       kind,
       rows
-        .filter((r) => r.productId || r.quantity)
+        .filter((r) => !r.batchId && (r.productId || r.quantity))
         .map((r) => ({ ...r, quantity: Number(r.quantity) })),
       batchEnabled
         ? { name, servings: Number(servings), eatenServings: Number(eaten) }
         : undefined,
       batchEnabled
         ? []
-        : preparedRows.map((r) => ({
-            batchId: r.batchId,
-            quantity: Number(r.quantity),
-          })),
+        : rows
+            .filter((r) => r.batchId)
+            .map((r) => ({
+              batchId: r.batchId,
+              quantity: Number(r.quantity),
+            })),
     );
   const [error, setError] = useState("");
   const update = (key: string, changes: Partial<Draft>) =>
@@ -76,10 +77,10 @@ export function MealForm({
   let estimateError = "";
   try {
     if (
-      (rows.some((r) => r.productId) || preparedRows.length > 0) &&
+      rows.some((r) => r.productId || r.batchId) &&
       rows
-        .filter((r) => r.productId || r.quantity)
-        .every((r) => r.productId && r.quantity)
+        .filter((r) => r.productId || r.batchId || r.quantity)
+        .every((r) => (r.productId || r.batchId) && r.quantity)
     ) {
       const next = buildRecord();
       estimate = mealCost(next.meals.at(-1)!);
@@ -124,6 +125,7 @@ export function MealForm({
         control={
           <Checkbox
             checked={batchEnabled}
+            disabled={rows.some((r) => !!r.batchId)}
             onChange={(e) => setBatchEnabled(e.target.checked)}
           />
         }
@@ -157,8 +159,8 @@ export function MealForm({
           </div>
         </div>
       )}
-      <h2>使った食材</h2>
-      {available.length === 0 && (
+      <h2>使ったもの</h2>
+      {available.length === 0 && (batchEnabled || batches.length === 0) && (
         <p className="hint">
           在庫がありません。購入を記録すると食材を選べます。
         </p>
@@ -168,40 +170,77 @@ export function MealForm({
         return (
           <div className="ingredient" key={row.key}>
             <TextField
-              label={`食材 ${index + 1}`}
+              label={`使ったもの ${index + 1}`}
               select
-              required={
-                batchEnabled || preparedRows.length === 0 || !!row.quantity
+              required
+              value={
+                row.batchId
+                  ? `batch:${row.batchId}`
+                  : row.productId
+                    ? `product:${row.productId}`
+                    : ""
               }
-              value={row.productId}
               slotProps={{
                 select: { native: true },
                 inputLabel: { shrink: true },
               }}
-              onChange={(e) =>
+              onChange={(e) => {
+                const value = e.target.value;
+                const isBatch = value.startsWith("batch:");
+                const id = value.slice(value.indexOf(":") + 1);
                 update(row.key, {
-                  productId: e.target.value,
-                  unit:
-                    state.products.find((p) => p.id === e.target.value)
-                      ?.baseUnit ?? "g",
-                })
-              }
+                  productId: isBatch ? "" : id,
+                  batchId: isBatch ? id : "",
+                  quantity: "",
+                  unit: isBatch
+                    ? "食分"
+                    : (state.products.find((p) => p.id === id)?.baseUnit ??
+                      "g"),
+                });
+              }}
             >
               <option value="" disabled>
-                食材を選択
+                食材・作り置きを選択
               </option>
-              {available
-                .filter(
-                  (p) =>
-                    p.id === row.productId ||
-                    !rows.some((r) => r.productId === p.id),
-                )
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
+              <optgroup label="食材">
+                {available
+                  .filter(
+                    (p) =>
+                      p.id === row.productId ||
+                      !rows.some((r) => r.productId === p.id),
+                  )
+                  .map((p) => (
+                    <option key={p.id} value={`product:${p.id}`}>
+                      {p.name}
+                    </option>
+                  ))}
+              </optgroup>
+              {!batchEnabled && batches.length > 0 && (
+                <optgroup label="作り置き">
+                  {batches
+                    .filter(
+                      (m) =>
+                        m.id === row.batchId ||
+                        !rows.some((r) => r.batchId === m.id),
+                    )
+                    .map((m) => (
+                      <option key={m.id} value={`batch:${m.id}`}>
+                        {m.batch!.name}（残り{preparedRemaining(state, m)}食分）
+                      </option>
+                    ))}
+                </optgroup>
+              )}
             </TextField>
+            {row.batchId && (
+              <TextField
+                label="食べた量（食分）"
+                required
+                type="number"
+                value={row.quantity}
+                slotProps={{ htmlInput: { min: 0.001, step: 0.001 } }}
+                onChange={(e) => update(row.key, { quantity: e.target.value })}
+              />
+            )}
             {product && (
               <AmountInput
                 id={`amount-${row.key}`}
@@ -215,7 +254,7 @@ export function MealForm({
               type="button"
               variant="text"
               className="text-button"
-              aria-label={`食材${index + 1}を削除`}
+              aria-label={`使ったもの${index + 1}を削除`}
               disabled={rows.length === 1}
               onClick={() => setRows(rows.filter((r) => r.key !== row.key))}
             >
@@ -228,86 +267,13 @@ export function MealForm({
         type="button"
         variant="text"
         className="text-button"
-        disabled={rows.length >= available.length}
+        disabled={
+          rows.length >= available.length + (batchEnabled ? 0 : batches.length)
+        }
         onClick={() => setRows([...rows, draft()])}
       >
-        ＋ 食材を追加
+        ＋ 追加
       </Button>
-      {!batchEnabled && (
-        <>
-          <h2>作り置き</h2>
-          {preparedRows.map((row, index) => (
-            <div className="ingredient" key={row.key}>
-              <TextField
-                label={`作り置き ${index + 1}`}
-                select
-                required
-                value={row.batchId}
-                slotProps={{
-                  select: { native: true },
-                  inputLabel: { shrink: true },
-                }}
-                onChange={(e) =>
-                  setPreparedRows(
-                    preparedRows.map((r) =>
-                      r.key === row.key ? { ...r, batchId: e.target.value } : r,
-                    ),
-                  )
-                }
-              >
-                <option value="" disabled>
-                  作り置きを選択
-                </option>
-                {batches
-                  .filter(
-                    (m) =>
-                      m.id === row.batchId ||
-                      !preparedRows.some((r) => r.batchId === m.id),
-                  )
-                  .map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.batch!.name}（残り{preparedRemaining(state, m)}食分）
-                    </option>
-                  ))}
-              </TextField>
-              <TextField
-                label="食べた量（食分）"
-                required
-                type="number"
-                value={row.quantity}
-                slotProps={{ htmlInput: { min: 0.001, step: 0.001 } }}
-                onChange={(e) =>
-                  setPreparedRows(
-                    preparedRows.map((r) =>
-                      r.key === row.key
-                        ? { ...r, quantity: e.target.value }
-                        : r,
-                    ),
-                  )
-                }
-              />
-              <Button
-                onClick={() =>
-                  setPreparedRows(preparedRows.filter((r) => r.key !== row.key))
-                }
-              >
-                削除
-              </Button>
-            </div>
-          ))}
-          <Button
-            disabled={preparedRows.length >= batches.length}
-            onClick={() =>
-              setPreparedRows([
-                ...preparedRows,
-                { key: crypto.randomUUID(), batchId: "", quantity: "" },
-              ])
-            }
-          >
-            ＋ 作り置きを追加
-          </Button>
-        </>
-      )}
       <div className="estimate">
         <span>この食事の金額</span>
         <strong>{estimate === undefined ? "—" : money(estimate)}</strong>
