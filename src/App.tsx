@@ -1,7 +1,7 @@
 import type { Command } from "./domain/commands";
 import { ApiError, bootstrap, sendCommand, authClient } from "./api";
-import { LoginScreen } from "./components/LoginScreen";
 import { History } from "./components/History";
+import { LoginScreen } from "./components/LoginScreen";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
 import { PreparedNameForm } from "./components/PreparedNameForm";
@@ -59,10 +59,14 @@ export default function App() {
   const [today, setToday] = useState(localDate);
   const [state, setState] = useState<State>(emptyState);
   const [ready, setReady] = useState(false);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [requiresLogin, setRequiresLogin] = useState(false);
-  const [loggingIn, setLoggingIn] = useState(false);
-  const loginRef = useRef(false);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [signingIn, setSigningIn] = useState(false);
+  const signingInRef = useRef(false);
+  const [loginError, setLoginError] = useState(() =>
+    new URLSearchParams(window.location.search).get("login") === "failed"
+      ? "ログインできませんでした。もう一度お試しください。"
+      : "",
+  );
   const [authMode, setAuthMode] = useState<"google" | "test" | null>(null);
   const [user, setUser] = useState<{ name: string; email: string } | null>(
     null,
@@ -75,7 +79,7 @@ export default function App() {
   async function reload(force = false) {
     if (busyRef.current && !force) return;
     const generation = ++loadGeneration.current;
-    setAuthLoading(true);
+    setAuthChecking(true);
     try {
       const data = await bootstrap();
       if (generation === loadGeneration.current) setAuthMode(data.authMode);
@@ -89,7 +93,7 @@ export default function App() {
         setState(data.state);
         setUser(data.user);
         setReady(true);
-        setRequiresLogin(false);
+        setLoginError("");
         setStorageError("");
       }
     } catch (e) {
@@ -101,34 +105,31 @@ export default function App() {
         setUser(null);
         setState(emptyState());
         setReady(false);
-        setRequiresLogin(true);
         setStorageError("");
       } else
         setStorageError(
           e instanceof Error ? e.message : "読み込めませんでした",
         );
     } finally {
-      if (generation === loadGeneration.current) setAuthLoading(false);
+      if (generation === loadGeneration.current) setAuthChecking(false);
     }
   }
   async function login() {
-    if (loginRef.current) return;
-    loginRef.current = true;
-    setLoggingIn(true);
-    setStorageError("");
+    if (signingInRef.current || authChecking || authMode !== "google") return;
+    signingInRef.current = true;
+    setSigningIn(true);
+    setLoginError("");
     try {
       const response = await authClient.signIn.social({
         provider: "google",
         callbackURL: "/",
+        errorCallbackURL: "/?login=failed",
       });
-      if (response.error)
-        throw new Error(response.error.message || "ログインできませんでした");
-    } catch (e) {
-      loginRef.current = false;
-      setLoggingIn(false);
-      setStorageError(
-        e instanceof Error ? e.message : "ログインできませんでした",
-      );
+      if (response.error) throw new Error(response.error.message);
+    } catch {
+      setLoginError("ログインできませんでした。もう一度お試しください。");
+      signingInRef.current = false;
+      setSigningIn(false);
     }
   }
   async function logout() {
@@ -141,8 +142,9 @@ export default function App() {
       revisionRef.current = 0;
       setUser(null);
       setReady(false);
-      setRequiresLogin(true);
-      setAuthLoading(false);
+      setAuthChecking(false);
+      setLoginError("");
+      setStorageError("");
       setState(emptyState());
       navigate("home");
     } catch (e) {
@@ -167,6 +169,11 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [page]);
   useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("login") === "failed") {
+      url.searchParams.delete("login");
+      window.history.replaceState(window.history.state, "", url);
+    }
     void reload();
     const refresh = () => {
       setToday(localDate());
@@ -305,12 +312,12 @@ export default function App() {
   if (!ready)
     return (
       <LoginScreen
-        loading={authLoading}
-        canLogin={requiresLogin && authMode === "google"}
-        loggingIn={loggingIn}
-        error={storageError}
+        loading={authChecking}
+        signingIn={signingIn}
+        canLogin={authMode === "google" && !authChecking && !storageError}
+        error={storageError || loginError}
         onLogin={() => void login()}
-        onRetry={() => void reload()}
+        onRetry={storageError ? () => void reload() : undefined}
       />
     );
   return (

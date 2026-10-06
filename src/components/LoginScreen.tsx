@@ -3,17 +3,17 @@ import CircularProgress from "@mui/material/CircularProgress";
 
 interface Props {
   loading: boolean;
+  signingIn: boolean;
   canLogin: boolean;
-  loggingIn: boolean;
   error: string;
   onLogin: () => void;
-  onRetry: () => void;
+  onRetry?: () => void;
 }
 
 export function LoginScreen({
   loading,
+  signingIn,
   canLogin,
-  loggingIn,
   error,
   onLogin,
   onRetry,
@@ -34,16 +34,12 @@ export function LoginScreen({
                 {error}
               </p>
             )}
-            {canLogin ? (
-              <Button
-                fullWidth
-                variant="contained"
-                disabled={loggingIn}
-                onClick={onLogin}
-              >
-                {loggingIn ? "ログイン中…" : "Googleでログイン"}
+            {canLogin && (
+              <Button fullWidth variant="contained" disabled={signingIn} onClick={onLogin}>
+                {signingIn ? "ログイン中…" : "Googleでログイン"}
               </Button>
-            ) : (
+            )}
+            {onRetry && (
               <Button fullWidth onClick={onRetry}>
                 再読み込み
               </Button>
