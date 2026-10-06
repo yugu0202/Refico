@@ -17,6 +17,7 @@ export interface Snapshot {
 }
 export interface Bootstrap extends Snapshot {
   authMode: "google" | "test";
+  sampleDataEnabled: boolean;
   householdId: string;
   user: { name: string; email: string };
 }
