@@ -177,7 +177,7 @@ export function History({
         }}
       >
         <DialogTitle id="history-edit-title">{title}を編集</DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ "&&": { paddingTop: 1.5 } }}>
           {purchase && type === "purchase" && (
             <PurchaseForm
               key={purchase.id}
