@@ -353,16 +353,6 @@ label .amount-input select {
   padding-top: 12px;
   font-size: 13px;
 }
-.sample .hint {
-  display: block;
-}
-footer {
-  margin-top: 40px;
-  padding: 20px 0 30px;
-  border-top: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 11px;
-}
 @media (max-width: 600px) {
   html {
     scroll-padding-bottom: calc(88px + env(safe-area-inset-bottom));

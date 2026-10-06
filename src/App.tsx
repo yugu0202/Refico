@@ -224,9 +224,7 @@ export default function App() {
                     </Button>
                   </div>
                   {meals.length === 0 ? (
-                    <p className="empty">
-                      まだ食事の記録がありません。使った食材から食費を計算できます。
-                    </p>
+                    <p className="empty">まだ食事の記録がありません。</p>
                   ) : (
                     meals.map((meal) => (
                       <details className="meal-row" key={meal.id}>
@@ -283,9 +281,7 @@ export default function App() {
                         .slice(0, 5),
                     )
                   ) : (
-                    <p className="empty">
-                      購入を記録すると、ここに食材の残量が表示されます。
-                    </p>
+                    <p className="empty">在庫がありません。</p>
                   )}
                   <div className="actions">
                     <Button onClick={() => navigate("purchase")}>
@@ -309,9 +305,7 @@ export default function App() {
                       </div>
                     ))
                   ) : (
-                    <p className="empty">
-                      食事を記録すると、日ごとの合計が表示されます。
-                    </p>
+                    <p className="empty">まだ食費の記録がありません。</p>
                   )}
                 </section>
                 {state.products.length === 0 && (
@@ -320,10 +314,7 @@ export default function App() {
                     <Button
                       onClick={() => {
                         try {
-                          persist(
-                            sampleState(today),
-                            "サンプルを追加しました。白米・卵・鶏もも肉が登録されています",
-                          );
+                          persist(sampleState(today), "サンプルを追加しました");
                         } catch (e) {
                           setStorageError(
                             e instanceof Error
@@ -335,7 +326,6 @@ export default function App() {
                     >
                       サンプルデータを入れる
                     </Button>
-                    <span className="hint">空の状態でのみ追加できます。</span>
                   </div>
                 )}
               </>
@@ -359,7 +349,7 @@ export default function App() {
                   <p className="empty">
                     {state.products.length
                       ? "一致する食材がありません。"
-                      : "購入を記録すると、ここに食材が表示されます。"}
+                      : "食材が登録されていません。"}
                   </p>
                 )}
                 <section>
@@ -425,7 +415,6 @@ export default function App() {
           </>
         )}
       </main>
-      <footer>ひな形 · データはこのブラウザに保存されます</footer>
     </div>
   );
 }

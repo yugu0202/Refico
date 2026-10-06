@@ -171,9 +171,6 @@ export function MealForm({
         <span>この食事の金額</span>
         <strong>{estimate === undefined ? "—" : money(estimate)}</strong>
       </div>
-      <p className="hint">
-        購入日が古い在庫から計算します。記録すると在庫が減ります。
-      </p>
       {(error || estimateError) && (
         <p className="error" role="alert">
           {error || estimateError}

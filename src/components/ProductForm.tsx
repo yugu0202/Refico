@@ -76,12 +76,6 @@ export function ProductForm({
             <option key={u}>{u}</option>
           ))}
         </TextField>
-        <p className="hint">kg ↔ g、L ↔ ml は自動で換算します。</p>
-        {product && (
-          <p className="hint">
-            食材名は履歴にも反映します。単位の換算値は今後の記録に適用し、過去の数量・原価は保持します。
-          </p>
-        )}
         <h3>この食材で使う単位</h3>
         {units.map((u, index) => (
           <div className="unit-row" key={index}>
@@ -140,10 +134,7 @@ export function ProductForm({
         >
           ＋ 単位を追加
         </Button>
-        <p className="hint">
-          例：白米は 1合 = 150g、卵は 1パック =
-          10個。換算値は食材に合わせて登録します。
-        </p>
+        <p className="hint">例：白米は 1合 = 150g、卵は 1パック = 10個。</p>
         {error && (
           <p role="alert" className="error">
             {error}
