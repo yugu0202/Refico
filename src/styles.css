@@ -45,13 +45,6 @@ a {
   letter-spacing: -0.8px;
   text-decoration: none;
 }
-.brand span {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0;
-  padding-left: 16px;
-}
 .header-date {
   color: var(--muted);
   font-size: 13px;
@@ -67,6 +60,7 @@ a {
   border-bottom: 2px solid transparent;
   border-radius: 0;
   padding: 12px 0;
+  gap: 6px;
   color: var(--muted);
   background: transparent;
   white-space: nowrap;
@@ -75,6 +69,12 @@ a {
   border-color: var(--accent);
   color: var(--accent);
   font-weight: 700;
+}
+.navigation .navigation-icon {
+  font-size: 22px;
+}
+.navigation-short-label {
+  display: none;
 }
 main {
   padding-top: 28px;
@@ -364,24 +364,44 @@ footer {
   font-size: 11px;
 }
 @media (max-width: 600px) {
+  html {
+    scroll-padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  }
   .app-shell {
-    padding: 0 18px;
+    padding: 0 18px calc(80px + env(safe-area-inset-bottom));
   }
   .app-header {
     min-height: 76px;
   }
-  .brand span {
-    display: block;
-    padding: 3px 0 0;
-    font-size: 11px;
-  }
   .navigation {
-    justify-content: space-between;
-    gap: 10px;
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 10;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
+    border-top: 1px solid var(--border);
+    border-bottom: 0;
+    background: #fff;
   }
   .navigation button {
     min-width: 0;
-    font-size: 13px;
+    min-height: 64px;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 4px;
+    border-top: 2px solid transparent;
+    border-bottom: 0;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .navigation-label {
+    display: none;
+  }
+  .navigation-short-label {
+    display: inline;
   }
   main {
     padding-top: 23px;

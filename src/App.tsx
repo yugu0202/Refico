@@ -1,4 +1,5 @@
 import Button from "@mui/material/Button";
+import SvgIcon from "@mui/material/SvgIcon";
 import TextField from "@mui/material/TextField";
 import { useEffect, useState } from "react";
 import {
@@ -19,10 +20,30 @@ import { MealForm } from "./components/MealForm";
 import { InventoryRow } from "./components/InventoryRow";
 import { money, number, localDate, dateLabel } from "./format";
 const navigation = [
-  { id: "home", label: "今日" },
-  { id: "inventory", label: "在庫" },
-  { id: "purchase", label: "購入を記録" },
-  { id: "meal", label: "食事を記録" },
+  {
+    id: "home",
+    label: "ホーム",
+    shortLabel: "ホーム",
+    icon: "M3 10 12 3l9 7M5 9v12h5v-7h4v7h5V9",
+  },
+  {
+    id: "inventory",
+    label: "在庫",
+    shortLabel: "在庫",
+    icon: "M6 3h12v18H6zM6 10h12M9 6v1M9 13v3",
+  },
+  {
+    id: "purchase",
+    label: "購入を記録",
+    shortLabel: "購入",
+    icon: "M3 9h18l-2 12H5L3 9ZM8 9l4-6 4 6M9 13v4M15 13v4",
+  },
+  {
+    id: "meal",
+    label: "食事を記録",
+    shortLabel: "食事",
+    icon: "M5 3v5a3 3 0 0 0 6 0V3M8 3v18M19 3c-3 2-4 5-4 9h4M19 3v18",
+  },
 ] as const;
 type Page = (typeof navigation)[number]["id"];
 export default function App() {
@@ -34,6 +55,9 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [search, setSearch] = useState("");
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [page]);
   useEffect(() => {
     try {
       setState(loadState());
@@ -104,7 +128,7 @@ export default function App() {
             navigate("home");
           }}
         >
-          Refico<span>在庫と食費</span>
+          Refico
         </a>
         <span className="header-date">{dateLabel(today)}</span>
       </header>
@@ -116,7 +140,15 @@ export default function App() {
             aria-current={page === n.id ? "page" : undefined}
             onClick={() => navigate(n.id)}
           >
-            {n.label}
+            <SvgIcon
+              className="navigation-icon"
+              aria-hidden="true"
+              sx={{ fill: "none", stroke: "currentColor", strokeWidth: 1.8 }}
+            >
+              <path d={n.icon} strokeLinecap="round" strokeLinejoin="round" />
+            </SvgIcon>
+            <span className="navigation-label">{n.label}</span>
+            <span className="navigation-short-label">{n.shortLabel}</span>
           </Button>
         ))}
       </nav>
