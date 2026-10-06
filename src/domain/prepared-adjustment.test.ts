@@ -31,7 +31,7 @@ function setup() {
   );
   return { state, id: state.meals[0].id };
 }
-test("作り置きの減少・増加と食事を交互に記録し過去の原価を保持する", () => {
+test("作り置きの増加は作成時の食数を修正し、廃棄数量を保って原価を再計算する", () => {
   const { state, id } = setup();
   const costs = dailyCosts(state);
   let next = recordPreparedAdjustment(state, id, 2, date, " 廃棄 ");
@@ -49,9 +49,15 @@ test("作り置きの減少・増加と食事を交互に記録し過去の原�
   next = recordPreparedAdjustment(next, id, 3.5, "2026-10-07", "記録修正");
   assert.deepEqual(preparedBalance(next, next.meals[0]), {
     quantity: 3500,
-    value: 88,
+    value: 59,
   });
-  assert.deepEqual(dailyCosts(next), priorCosts);
+  assert.notDeepEqual(dailyCosts(next), priorCosts);
+  assert.equal(next.meals[0].batch!.servings, 6);
+  assert.equal(
+    next.preparedAdjustments![0].beforeQuantity -
+      next.preparedAdjustments![0].targetQuantity,
+    1000,
+  );
   next = recordMeal(next, "2026-10-08", "昼食", [], undefined, [
     { batchId: id, quantity: 1.5 },
   ]);
@@ -60,7 +66,7 @@ test("作り置きの減少・増加と食事を交互に記録し過去の原�
   ]);
   assert.equal(
     next.meals[2].prepared![0].cost + next.meals[3].prepared![0].cost,
-    88,
+    59,
   );
   assert.deepEqual(preparedBalance(next, next.meals[0]), {
     quantity: 0,
@@ -87,12 +93,12 @@ test("0残量への調整・復元と同じ記録位置での連続調整", () =
   next = recordPreparedAdjustment(next, id, 1, date);
   assert.deepEqual(preparedBalance(next, next.meals[0]), {
     quantity: 1000,
-    value: 25,
+    value: 20,
   });
   next = recordMeal(next, date, "夕食", [], undefined, [
     { batchId: id, quantity: 1 },
   ]);
-  assert.equal(next.meals[1].prepared![0].cost, 25);
+  assert.equal(next.meals[1].prepared![0].cost, 20);
   assert.deepEqual(parseState(JSON.stringify(next)), next);
 });
 test("不正な調整と破損した保存データを拒否する", () => {
@@ -128,4 +134,46 @@ test("不正な調整と破損した保存データを拒否する", () => {
     assert.throws(() => parseState(JSON.stringify(broken)));
   }
   assert.deepEqual(parseState(JSON.stringify(state)), state);
+});
+
+test("900円の3食分を5食分に修正し、食べた分も180円にする", () => {
+  const product = createProduct("米", "g");
+  let state = recordPurchase(
+    { ...emptyState(), products: [product] },
+    product.id,
+    300,
+    "g",
+    900,
+    date,
+  );
+  state = recordMeal(
+    state,
+    date,
+    "夕食",
+    [{ productId: product.id, quantity: 300, unit: "g" }],
+    { name: "ご飯", servings: 3, eatenServings: 1 },
+  );
+  const id = state.meals[0].id;
+  let next = recordPreparedAdjustment(state, id, 4, date);
+  assert.equal(next.meals[0].batch!.servings, 5);
+  assert.deepEqual(dailyCosts(next), [[date, 180]]);
+  assert.deepEqual(preparedBalance(next, next.meals[0]), {
+    quantity: 4000,
+    value: 720,
+  });
+  next = recordMeal(next, "2026-10-07", "昼食", [], undefined, [
+    { batchId: id, quantity: 1 },
+  ]);
+  next = recordPreparedAdjustment(next, id, 5, "2026-10-07");
+  assert.equal(next.meals[0].batch!.servings, 7);
+  assert.equal(next.meals[1].prepared![0].cost, 128);
+  next = recordMeal(next, "2026-10-08", "夕食", [], undefined, [
+    { batchId: id, quantity: 5 },
+  ]);
+  assert.equal(
+    dailyCosts(next).reduce((sum, [, cost]) => sum + cost, 0),
+    900,
+  );
+  assert.deepEqual(parseState(JSON.stringify(next)), next);
+  assert.equal(state.meals[0].batch!.servings, 3);
 });

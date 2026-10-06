@@ -267,6 +267,7 @@ export function parseState(raw: string): State {
         a.date,
         a.reason,
         true,
+        true,
       ).preparedAdjustments!.at(-1)!;
       check(
         a.beforeQuantity === expected.beforeQuantity &&

@@ -480,6 +480,7 @@ export function recordPreparedAdjustment(
   date: string,
   reason = "",
   allowUnchanged = false,
+  replayLegacy = false,
 ): State {
   const meal = state.meals.find((m) => m.id === batchId);
   requireValue(!!meal?.batch, "作り置きが見つかりません");
@@ -509,6 +510,22 @@ export function recordPreparedAdjustment(
     "残量を変更してください",
   );
   const delta = targetQuantity - balance.quantity;
+  if (delta > 0 && !replayLegacy) {
+    // More portions correct the original yield, rather than creating new food.
+    const servings = toBase(meal!.batch!.servings, 1) + delta;
+    requireValue(Number.isSafeInteger(servings), "食数が上限を超えています");
+    return repricePrepared(
+      {
+        ...state,
+        meals: state.meals.map((m) =>
+          m.id === batchId
+            ? { ...m, batch: { ...m.batch!, servings: servings / 1000 } }
+            : m,
+        ),
+      },
+      batchId,
+    );
+  }
   const targetValue =
     delta < 0
       ? balance.value - preparedUsageCost(state, meal!, -delta, date)
@@ -670,4 +687,54 @@ export function updatePreparedName(
         : meal,
     ),
   };
+}
+
+// Reprice the batch from cooking time. Discarded quantities remain discarded;
+// unrelated ingredients and batches retain their stored allocations and costs.
+function repricePrepared(source: State, batchId: string): State {
+  let next: State = { ...source, meals: [], preparedAdjustments: [] };
+  const adjustments = source.preparedAdjustments ?? [];
+  let cursor = 0;
+  for (let index = 0; index <= source.meals.length; index++) {
+    while (adjustments[cursor]?.mealCount === index) {
+      const old = adjustments[cursor++];
+      if (old.batchId !== batchId) {
+        next.preparedAdjustments!.push(old);
+        continue;
+      }
+      const meal = next.meals.find((m) => m.id === batchId)!;
+      // Keep each correction's quantity delta when revising the original yield.
+      const target =
+        preparedBalance(next, meal).quantity +
+        old.targetQuantity -
+        old.beforeQuantity;
+      next = recordPreparedAdjustment(
+        next,
+        batchId,
+        target / 1000,
+        old.date,
+        old.reason,
+        true,
+        true,
+      );
+      next.preparedAdjustments!.at(-1)!.id = old.id;
+    }
+    if (index === source.meals.length) break;
+    const meal = source.meals[index];
+    const prepared = meal.prepared?.map((p) =>
+      p.batchId !== batchId
+        ? p
+        : {
+            ...p,
+            cost: preparedUsageCost(
+              next,
+              next.meals.find((m) => m.id === batchId)!,
+              toBase(p.quantity, 1),
+              meal.date,
+            ),
+          },
+    );
+    next.meals.push({ ...meal, ...(prepared ? { prepared } : {}) });
+  }
+  return next;
 }

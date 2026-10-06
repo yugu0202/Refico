@@ -8,6 +8,7 @@ import {
   recordStockAdjustment,
   recordPreparedAdjustment,
   preparedBalance,
+  cookingCost,
   type Meal,
   stock,
   type Product,
@@ -100,19 +101,41 @@ export function StockAdjustmentForm({
           />
           {preview && (
             <p className="hint">
-              調整量 {Number(quantity) > balance.quantity / 1000 ? "+" : ""}
-              {number(Number(quantity) - balance.quantity / 1000)} {unit}
-              {" · "}
-              {Number(quantity) > balance.quantity / 1000
-                ? "追加分の原価"
-                : "減少分の原価"}{" "}
-              {money(
-                Math.abs(
-                  (prepared
-                    ? preparedBalance(preview, prepared)
-                    : stock(preview, product!.id)
-                  ).value - balance.value,
-                ),
+              {prepared && Number(quantity) > balance.quantity / 1000 ? (
+                <>
+                  作った食数{" "}
+                  {number(
+                    preview.meals.find((m) => m.id === prepared.id)!.batch!
+                      .servings,
+                  )}
+                  食分 · 1食分{" "}
+                  {money(
+                    cookingCost(prepared) /
+                      preview.meals.find((m) => m.id === prepared.id)!.batch!
+                        .servings,
+                  )}
+                </>
+              ) : (
+                <>
+                  調整量 {Number(quantity) > balance.quantity / 1000 ? "+" : ""}
+                  {number(Number(quantity) - balance.quantity / 1000)} {unit} ·{" "}
+                  {prepared
+                    ? "廃棄分の原価"
+                    : Number(quantity) > balance.quantity / 1000
+                      ? "追加分の原価"
+                      : "減少分の原価"}{" "}
+                  {money(
+                    Math.abs(
+                      (prepared
+                        ? preparedBalance(
+                            preview,
+                            preview.meals.find((m) => m.id === prepared.id)!,
+                          )
+                        : stock(preview, product!.id)
+                      ).value - balance.value,
+                    ),
+                  )}
+                </>
               )}
             </p>
           )}

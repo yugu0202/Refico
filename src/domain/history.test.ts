@@ -184,7 +184,7 @@ test("増加ロットを含む複数の調整・後続購入を再構築する",
   assert.deepEqual(reload(next), next);
 });
 
-test("作り置き調整の前後の原価も再計算する", () => {
+test("旧形式の作り置き増加調整も履歴編集後に読み込める", () => {
   let { state, product } = setup();
   state = recordMeal(
     state,
@@ -193,7 +193,15 @@ test("作り置き調整の前後の原価も再計算する", () => {
     [{ productId: product.id, quantity: 100, unit: "g" }],
     { name: "おにぎり", servings: 3, eatenServings: 1 },
   );
-  state = recordPreparedAdjustment(state, state.meals[0].id, 3, date);
+  state = recordPreparedAdjustment(
+    state,
+    state.meals[0].id,
+    3,
+    date,
+    "",
+    false,
+    true,
+  );
   state = recordMeal(state, date, "昼食", [], undefined, [
     { batchId: state.meals[0].id, quantity: 1 },
   ]);
@@ -219,5 +227,27 @@ test("後から遡って購入を追加しても無関係な食事のロット�
     price: 600,
   });
   assert.deepEqual(next.meals[0].usages[0].allocations[0], originalAllocation);
+  assert.deepEqual(reload(next), next);
+});
+
+test("食数を増加修正した後の購入価格編集も調理原価を維持する", () => {
+  let { state, product } = setup();
+  state = recordMeal(
+    state,
+    date,
+    "夕食",
+    [{ productId: product.id, quantity: 100, unit: "g" }],
+    { name: "おにぎり", servings: 3, eatenServings: 1 },
+  );
+  state = recordPreparedAdjustment(state, state.meals[0].id, 3, date);
+  state = recordMeal(state, date, "昼食", [], undefined, [
+    { batchId: state.meals[0].id, quantity: 3 },
+  ]);
+  const next = updatePurchase(state, state.purchases[0].id, {
+    ...state.purchases[0],
+    price: 201,
+  });
+  assert.equal(next.meals[0].batch!.servings, 4);
+  assert.equal(mealCost(next.meals[0]) + mealCost(next.meals[1]), 201);
   assert.deepEqual(reload(next), next);
 });

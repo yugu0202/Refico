@@ -65,6 +65,7 @@ function rebuild(source: State): State {
         old.date,
         old.reason,
         true,
+        true,
       );
       next.preparedAdjustments!.at(-1)!.id = old.id;
     }
