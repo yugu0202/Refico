@@ -121,15 +121,17 @@ export default function App() {
           </div>
           <div className="numeric">
             <strong>{number(remaining)}食分</strong>
-            <p className="hint">
-              {money(
-                portionCost(m, toBase(m.batch!.servings, 1)) -
-                  portionCost(
-                    m,
-                    toBase(m.batch!.servings, 1) - toBase(remaining, 1),
-                  ),
-              )}
-            </p>
+            {page === "home" && (
+              <p className="hint">
+                {money(
+                  portionCost(m, toBase(m.batch!.servings, 1)) -
+                    portionCost(
+                      m,
+                      toBase(m.batch!.servings, 1) - toBase(remaining, 1),
+                    ),
+                )}
+              </p>
+            )}
           </div>
         </div>
       );
@@ -142,6 +144,7 @@ export default function App() {
         product={product}
         state={state}
         showUnits={page === "inventory"}
+        showValue={page === "home"}
         onEdit={
           page === "inventory"
             ? () => {
@@ -425,7 +428,7 @@ export default function App() {
                             {filteredPrepared.length}
                           </span>
                         </h2>
-                        <span>残量 / 在庫金額</span>
+                        <span>残量</span>
                       </div>
                       {preparedRows(filteredPrepared)}
                     </section>
@@ -437,7 +440,7 @@ export default function App() {
                           食材{" "}
                           <span className="group-count">{filtered.length}</span>
                         </h2>
-                        <span>残量 / 在庫金額</span>
+                        <span>残量</span>
                       </div>
                       {inventoryRows(filtered)}
                     </section>

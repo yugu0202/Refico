@@ -6,11 +6,13 @@ export function InventoryRow({
   product,
   state,
   showUnits = false,
+  showValue = true,
   onEdit,
 }: {
   product: Product;
   state: State;
   showUnits?: boolean;
+  showValue?: boolean;
   onEdit?: () => void;
 }) {
   const balance = stock(state, product.id);
@@ -52,7 +54,7 @@ export function InventoryRow({
       </div>
       <div className="numeric">
         <strong>{q}</strong>
-        <p className="hint">{money(balance.value)}</p>
+        {showValue && <p className="hint">{money(balance.value)}</p>}
       </div>
     </div>
   );
