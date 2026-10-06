@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useColorScheme } from "@mui/material/styles";
 import IconButton from "@mui/material/IconButton";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import SvgIcon from "@mui/material/SvgIcon";
 import Tooltip from "@mui/material/Tooltip";
-import { theme } from "../theme";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 
 const options = [
   { value: "system", label: "端末設定" },
@@ -13,20 +14,37 @@ const options = [
   { value: "dark", label: "ダーク" },
 ] as const;
 
-export function ThemeControl() {
-  const { mode, systemMode, setMode } = useColorScheme();
+export function ThemeControl({ inline = false }: { inline?: boolean }) {
+  const { mode, setMode } = useColorScheme();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const effectiveMode = mode === "system" ? systemMode : mode;
-  useEffect(() => {
-    if (!effectiveMode) return;
-    document.documentElement.style.colorScheme = effectiveMode;
-    document
-      .querySelector('meta[name="theme-color"]')
-      ?.setAttribute(
-        "content",
-        theme.colorSchemes![effectiveMode]!.palette.background.default,
-      );
-  }, [effectiveMode]);
+  if (inline)
+    return (
+      <ToggleButtonGroup
+        exclusive
+        value={mode ?? "system"}
+        aria-label="テーマ"
+        onChange={(_, next: "system" | "light" | "dark" | null) => {
+          if (next) setMode(next);
+        }}
+        sx={{ width: "100%" }}
+      >
+        {options.map((option) => (
+          <ToggleButton
+            key={option.value}
+            value={option.value}
+            sx={{
+              flex: 1,
+              minHeight: 44,
+              px: 1,
+              textTransform: "none",
+              "&.Mui-selected": { fontWeight: 700 },
+            }}
+          >
+            {option.label}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
+    );
   return (
     <>
       <Tooltip title="テーマ">

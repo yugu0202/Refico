@@ -1,4 +1,4 @@
-import { ThemeControl } from "./components/ThemeControl";
+import { AccountMenu } from "./components/AccountMenu";
 import { BrandLogo } from "./components/BrandLogo";
 import type { Command } from "./domain/commands";
 import { ApiError, bootstrap, sendCommand, authClient } from "./api";
@@ -139,25 +139,20 @@ export default function App() {
     }
   }
   async function logout() {
-    if (busyRef.current) return;
-    try {
-      const response = await authClient.signOut();
-      if (response.error) throw new Error(response.error.message);
-      ++loadGeneration.current;
-      identityRef.current = "";
-      revisionRef.current = 0;
-      setUser(null);
-      setReady(false);
-      setAuthChecking(false);
-      setLoginError("");
-      setStorageError("");
-      setState(emptyState());
-      navigate("home");
-    } catch (e) {
-      setStorageError(
-        e instanceof Error ? e.message : "ログアウトできませんでした",
-      );
-    }
+    if (busyRef.current)
+      throw new Error("保存中です。完了してから操作してください");
+    const response = await authClient.signOut();
+    if (response.error) throw new Error(response.error.message);
+    ++loadGeneration.current;
+    identityRef.current = "";
+    revisionRef.current = 0;
+    setUser(null);
+    setReady(false);
+    setAuthChecking(false);
+    setLoginError("");
+    setStorageError("");
+    setState(emptyState());
+    navigate("home");
   }
   const [storageError, setStorageError] = useState("");
   const [notice, setNotice] = useState("");
@@ -341,23 +336,12 @@ export default function App() {
           <BrandLogo size={28} />
           Refico
         </a>
-        <Stack
-          className="header-account"
-          direction="row"
-          sx={{ alignItems: "center", gap: 1 }}
-        >
-          <ThemeControl />
-          {user ? (
-            <>
-              <span className="hint">{user.name}</span>
-              {authMode === "google" && (
-                <Button disabled={busy} onClick={() => void logout()}>
-                  ログアウト
-                </Button>
-              )}
-            </>
-          ) : null}
-        </Stack>
+        <AccountMenu
+          user={user}
+          canLogout={authMode === "google"}
+          busy={busy}
+          onLogout={logout}
+        />
       </header>
       <nav className="navigation" aria-label="メインメニュー">
         {navigation.map((n) => (
