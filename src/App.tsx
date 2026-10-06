@@ -143,7 +143,6 @@ export default function App() {
         key={product.id}
         product={product}
         state={state}
-        showUnits={page === "inventory"}
         showValue={page === "home"}
         onEdit={
           page === "inventory"

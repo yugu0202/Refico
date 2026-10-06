@@ -5,13 +5,11 @@ import { money, number } from "../format";
 export function InventoryRow({
   product,
   state,
-  showUnits = false,
   showValue = true,
   onEdit,
 }: {
   product: Product;
   state: State;
-  showUnits?: boolean;
   showValue?: boolean;
   onEdit?: () => void;
 }) {
@@ -34,13 +32,6 @@ export function InventoryRow({
             ? `最終購入 ${last.date.replaceAll("-", "/")} · ${number(last.quantity)}${last.unit} / ${money(last.price)}`
             : "購入の記録はまだありません"}
         </p>
-        {product.units.length > 0 && showUnits && (
-          <p className="hint">
-            {product.units
-              .map((u) => `1${u.name} = ${number(u.factor)}${product.baseUnit}`)
-              .join(" / ")}
-          </p>
-        )}
         {onEdit && (
           <Button
             type="button"
