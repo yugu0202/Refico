@@ -22,9 +22,11 @@ export function LoginScreen({
 }: Props) {
   return (
     <main className="login-screen">
-      <div className="login-theme">
-        <ThemeControl />
-      </div>
+      {!loading && (
+        <div className="login-theme">
+          <ThemeControl />
+        </div>
+      )}
       <div className="login-content">
         <h1 className="brand">
           <BrandLogo size={40} />
