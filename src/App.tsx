@@ -1,3 +1,4 @@
+import { History } from "./components/History";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
 import { PreparedNameForm } from "./components/PreparedNameForm";
@@ -70,6 +71,7 @@ export default function App() {
   );
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const selectedDate = selectedDay ?? today;
+  const [formVersion, setFormVersion] = useState(0);
   const [search, setSearch] = useState("");
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -567,72 +569,61 @@ export default function App() {
                     })}
                   </section>
                 )}
-                <section>
-                  <h2>購入履歴</h2>
-                  {state.purchases.filter((p) => !p.adjustmentId).length ===
-                  0 ? (
-                    <p className="empty">まだ購入の記録がありません。</p>
-                  ) : (
-                    state.purchases
-                      .filter((p) => !p.adjustmentId)
-                      .sort((a, b) => b.date.localeCompare(a.date))
-                      .map((p) => (
-                        <div className="purchase-row" key={p.id}>
-                          <div>
-                            <strong>
-                              {
-                                state.products.find((v) => v.id === p.productId)
-                                  ?.name
-                              }
-                            </strong>
-                            <p className="hint">
-                              {p.date.replaceAll("-", "/")} ·{" "}
-                              {number(p.quantity)}
-                              {p.unit}
-                            </p>
-                          </div>
-                          <strong>{money(p.price)}</strong>
-                        </div>
-                      ))
-                  )}
-                </section>
               </>
             )}
             {page === "purchase" && (
-              <PurchaseForm
-                state={state}
-                today={today}
-                onCreateProduct={saveProduct}
-                onAddUnit={(product, unit) => {
-                  persist(
-                    updateProductUnits(state, product.id, [
-                      ...product.units,
-                      unit,
-                    ]),
-                    `${product.name}の単位を追加しました`,
-                  );
-                }}
-                onSave={(next) => {
-                  persist(next, "購入を記録しました");
-                  setPage("inventory");
-                }}
-              />
+              <>
+                <PurchaseForm
+                  key={formVersion}
+                  state={state}
+                  today={today}
+                  onCreateProduct={saveProduct}
+                  onAddUnit={(product, unit) => {
+                    persist(
+                      updateProductUnits(state, product.id, [
+                        ...product.units,
+                        unit,
+                      ]),
+                      `${product.name}の単位を追加しました`,
+                    );
+                  }}
+                  onSave={(next) => {
+                    persist(next, "購入を記録しました");
+                    setFormVersion((v) => v + 1);
+                  }}
+                />
+                <History
+                  type="purchase"
+                  state={state}
+                  today={today}
+                  onSave={persist}
+                />
+              </>
             )}
             {page === "meal" && (
-              <MealForm
-                state={state}
-                today={today}
-                money={money}
-                onSave={(next) => {
-                  persist(
-                    next,
-                    next.meals.at(-1)?.batch?.eatenServings === 0
-                      ? "作り置きを保存しました"
-                      : "食事を記録しました",
-                  );
-                  setPage("home");
-                }}
-              />
+              <>
+                <MealForm
+                  key={formVersion}
+                  state={state}
+                  today={today}
+                  money={money}
+                  onSave={(next) => {
+                    persist(
+                      next,
+                      next.meals.at(-1)?.batch?.eatenServings === 0
+                        ? "作り置きを保存しました"
+                        : "食事を記録しました",
+                    );
+                    setFormVersion((v) => v + 1);
+                  }}
+                />
+                <History
+                  type="meal"
+                  state={state}
+                  today={today}
+                  onSave={persist}
+                />
+              </>
             )}
           </>
         )}

@@ -274,6 +274,7 @@ export function recordMeal(
   inputs: MealInput[],
   batch?: Meal["batch"],
   preparedInputs: { batchId: string; quantity: number }[] = [],
+  snapshots: Usage[] = [],
 ): State {
   requireValue(validDate(date), "食事の日付を入力してください");
   requireValue(mealKinds.includes(kind), "食事の種類を選択してください");
@@ -323,18 +324,43 @@ export function recordMeal(
     "同じ食材は1行にまとめてください",
   );
   const usages = inputs.map((input) => {
-    const normalized = amount(
-      state,
-      input.productId,
-      input.quantity,
-      input.unit,
+    const snapshot = snapshots.find(
+      (u) => u.productId === input.productId && u.unit === input.unit,
     );
+    const normalized = snapshot
+      ? {
+          productId: input.productId,
+          quantity: input.quantity,
+          unit: input.unit,
+          factor: snapshot.factor,
+          baseQuantity: toBase(input.quantity, snapshot.factor),
+        }
+      : amount(state, input.productId, input.quantity, input.unit);
     let needed = normalized.baseQuantity;
     const allocations: Allocation[] = [];
     // Same-day lots retain insertion order. Future purchases cannot fund a past meal.
     const purchases = state.purchases
       .filter((p) => p.productId === input.productId && p.date <= date)
       .sort((a, b) => a.date.localeCompare(b.date));
+    // Keep existing lot assignments when possible so later backdated purchases
+    // do not silently change an unrelated meal's source lots during an edit.
+    const preserved =
+      snapshot?.baseQuantity === needed &&
+      snapshot.allocations.every((a) => {
+        const p = purchases.find((p) => p.id === a.purchaseId);
+        return !!p && p.baseQuantity - consumed(state, p.id) >= a.quantity;
+      });
+    if (preserved) {
+      for (const a of snapshot!.allocations) {
+        const p = purchases.find((p) => p.id === a.purchaseId)!;
+        const used = consumed(state, p.id);
+        allocations.push({
+          ...a,
+          cost: cumulativeCost(p, used + a.quantity) - cumulativeCost(p, used),
+        });
+      }
+      return { ...normalized, allocations };
+    }
     for (const purchase of purchases) {
       const used = consumed(state, purchase.id);
       const take = Math.min(needed, purchase.baseQuantity - used);
@@ -453,6 +479,7 @@ export function recordPreparedAdjustment(
   quantity: number,
   date: string,
   reason = "",
+  allowUnchanged = false,
 ): State {
   const meal = state.meals.find((m) => m.id === batchId);
   requireValue(!!meal?.batch, "作り置きが見つかりません");
@@ -477,7 +504,10 @@ export function recordPreparedAdjustment(
   );
   const targetQuantity = quantity === 0 ? 0 : toBase(quantity, 1);
   const balance = preparedBalance(state, meal!);
-  requireValue(targetQuantity !== balance.quantity, "残量を変更してください");
+  requireValue(
+    allowUnchanged || targetQuantity !== balance.quantity,
+    "残量を変更してください",
+  );
   const delta = targetQuantity - balance.quantity;
   const targetValue =
     delta < 0
@@ -541,6 +571,7 @@ export function recordStockAdjustment(
   quantity: number,
   date: string,
   reason = "",
+  allowUnchanged = false,
 ): State {
   const product = state.products.find((p) => p.id === productId);
   requireValue(!!product, "食材が見つかりません");
@@ -556,7 +587,7 @@ export function recordStockAdjustment(
   const targetQuantity = quantity === 0 ? 0 : toBase(quantity, 1);
   const beforeQuantity = stock(state, productId).quantity;
   const difference = targetQuantity - beforeQuantity;
-  requireValue(difference !== 0, "残量を変更してください");
+  requireValue(allowUnchanged || difference !== 0, "残量を変更してください");
   const adjustment: StockAdjustment = {
     id: crypto.randomUUID(),
     productId,

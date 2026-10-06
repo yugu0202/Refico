@@ -543,3 +543,28 @@ label .amount-input select {
   max-width: 100%;
   overflow-wrap: anywhere;
 }
+
+.history-section {
+  margin-top: 32px;
+}
+.history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+.history-section .meal-row summary {
+  gap: 10px;
+}
+.history-section .meal-row summary > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.history-section .meal-detail > div > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.history-section .meal-detail > div > span:last-child {
+  flex-shrink: 0;
+}

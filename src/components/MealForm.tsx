@@ -10,7 +10,11 @@ import {
   stock,
   preparedRemaining,
   type State,
+  type Meal,
+  type MealInput,
+  standardUnits,
 } from "../domain/inventory";
+import { updateMeal } from "../domain/history";
 import { AmountInput } from "./AmountInput";
 interface Draft {
   productId: string;
@@ -24,17 +28,21 @@ export function MealForm({
   today,
   onSave,
   money,
+  editing,
+  onCancel,
 }: {
+  editing?: Meal;
+  onCancel?: () => void;
   state: State;
   today: string;
   onSave: (state: State) => void;
   money: (n: number) => string;
 }) {
   const available = state.products.filter(
-    (p) => stock(state, p.id).quantity > 0,
+    (p) => !!editing || stock(state, p.id).quantity > 0,
   );
-  const [date, setDate] = useState(today);
-  const [kind, setKind] = useState("夕食");
+  const [date, setDate] = useState(editing?.date ?? today);
+  const [kind, setKind] = useState(editing?.kind ?? "夕食");
   const draft = (): Draft => ({
     productId: "",
     batchId: "",
@@ -42,34 +50,59 @@ export function MealForm({
     unit: "g",
     key: crypto.randomUUID(),
   });
-  const [rows, setRows] = useState<Draft[]>([draft()]);
-  const [batchEnabled, setBatchEnabled] = useState(false);
-  const [name, setName] = useState("");
-  const [servings, setServings] = useState("");
-  const [eaten, setEaten] = useState("0");
-  const batches = state.meals.filter(
-    (m) => m.batch && m.date <= date && preparedRemaining(state, m) > 0,
+  const [rows, setRows] = useState<Draft[]>(
+    editing
+      ? [
+          ...editing.usages.map((u) => ({
+            ...draft(),
+            productId: u.productId,
+            quantity: String(u.quantity),
+            unit: u.unit,
+          })),
+          ...(editing.prepared ?? []).map((p) => ({
+            ...draft(),
+            batchId: p.batchId,
+            quantity: String(p.quantity),
+            unit: "食分",
+          })),
+        ]
+      : [draft()],
   );
-  const buildRecord = () =>
-    recordMeal(
-      state,
-      date,
-      kind,
-      rows
-        .filter((r) => !r.batchId && (r.productId || r.quantity))
-        .map((r) => ({ ...r, quantity: Number(r.quantity) })),
-      batchEnabled
-        ? { name, servings: Number(servings), eatenServings: Number(eaten) }
-        : undefined,
-      batchEnabled
-        ? []
-        : rows
-            .filter((r) => r.batchId)
-            .map((r) => ({
-              batchId: r.batchId,
-              quantity: Number(r.quantity),
-            })),
-    );
+  const [batchEnabled, setBatchEnabled] = useState(!!editing?.batch);
+  const [name, setName] = useState(editing?.batch?.name ?? "");
+  const [servings, setServings] = useState(
+    editing?.batch ? String(editing.batch.servings) : "",
+  );
+  const [eaten, setEaten] = useState(
+    String(editing?.batch?.eatenServings ?? 0),
+  );
+  const batches = state.meals.filter(
+    (m) =>
+      m.id !== editing?.id &&
+      m.batch &&
+      m.date <= date &&
+      (!!editing || preparedRemaining(state, m) > 0),
+  );
+  const buildRecord = () => {
+    const inputs: MealInput[] = rows
+      .filter((r) => !r.batchId && (r.productId || r.quantity))
+      .map((r) => ({
+        productId: r.productId,
+        unit: r.unit,
+        quantity: Number(r.quantity),
+      }));
+    const batch = batchEnabled
+      ? { name, servings: Number(servings), eatenServings: Number(eaten) }
+      : undefined;
+    const prepared = batchEnabled
+      ? []
+      : rows
+          .filter((r) => r.batchId)
+          .map((r) => ({ batchId: r.batchId, quantity: Number(r.quantity) }));
+    return editing
+      ? updateMeal(state, editing.id, date, kind, inputs, batch, prepared)
+      : recordMeal(state, date, kind, inputs, batch, prepared);
+  };
   const [error, setError] = useState("");
   const update = (key: string, changes: Partial<Draft>) =>
     setRows(rows.map((r) => (r.key === key ? { ...r, ...changes } : r)));
@@ -83,7 +116,11 @@ export function MealForm({
         .every((r) => (r.productId || r.batchId) && r.quantity)
     ) {
       const next = buildRecord();
-      estimate = mealCost(next.meals.at(-1)!);
+      estimate = mealCost(
+        editing
+          ? next.meals.find((m) => m.id === editing.id)!
+          : next.meals.at(-1)!,
+      );
     }
   } catch (e) {
     estimateError = e instanceof Error ? e.message : "数量を確認してください";
@@ -166,7 +203,24 @@ export function MealForm({
         </p>
       )}
       {rows.map((row, index) => {
-        const product = state.products.find((p) => p.id === row.productId);
+        const selectedProduct = state.products.find(
+          (p) => p.id === row.productId,
+        );
+        const old = editing?.usages.find((u) => u.productId === row.productId);
+        const product =
+          selectedProduct && old
+            ? {
+                ...selectedProduct,
+                units: [
+                  ...selectedProduct.units.filter((u) => u.name !== old.unit),
+                  ...(standardUnits(selectedProduct.baseUnit).some(
+                    (u) => u.name === old.unit,
+                  )
+                    ? []
+                    : [{ name: old.unit, factor: old.factor }]),
+                ],
+              }
+            : selectedProduct;
         return (
           <div className="ingredient" key={row.key}>
             <TextField
@@ -283,15 +337,18 @@ export function MealForm({
           {error || estimateError}
         </p>
       )}
-      <div className="form-footer">
+      <div className={editing ? "actions" : "form-footer"}>
+        {onCancel && <Button onClick={onCancel}>キャンセル</Button>}
         <Button
           variant="contained"
           type="submit"
           disabled={estimate === undefined}
         >
-          {batchEnabled && Number(eaten) === 0
-            ? "作り置きを保存"
-            : "食事を記録"}
+          {editing
+            ? "変更を保存"
+            : batchEnabled && Number(eaten) === 0
+              ? "作り置きを保存"
+              : "食事を記録"}
         </Button>
       </div>
     </form>

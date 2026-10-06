@@ -76,7 +76,6 @@ export function parseState(raw: string): State {
         a.beforeQuantity >= 0 &&
         Number.isSafeInteger(a.targetQuantity) &&
         a.targetQuantity >= 0 &&
-        a.beforeQuantity !== a.targetQuantity &&
         Array.isArray(a.allocations) &&
         Number.isSafeInteger(a.mealCount) &&
         a.mealCount >= mealPosition &&
@@ -190,6 +189,7 @@ export function parseState(raw: string): State {
       a.targetQuantity / 1000,
       a.date,
       a.reason,
+      true,
     );
     const adjustment = expected.adjustments!.at(-1)!;
     check(
@@ -266,6 +266,7 @@ export function parseState(raw: string): State {
         a.targetQuantity / 1000,
         a.date,
         a.reason,
+        true,
       ).preparedAdjustments!.at(-1)!;
       check(
         a.beforeQuantity === expected.beforeQuantity &&

@@ -10,7 +10,10 @@ import {
   type State,
   type Product,
   type Unit,
+  type Purchase,
+  standardUnits,
 } from "../domain/inventory";
+import { updatePurchase } from "../domain/history";
 import { AmountInput } from "./AmountInput";
 import { ProductForm } from "./ProductForm";
 import { UnitForm } from "./UnitForm";
@@ -20,35 +23,67 @@ export function PurchaseForm({
   onSave,
   onCreateProduct,
   onAddUnit,
+  editing,
+  onCancel,
 }: {
+  editing?: Purchase;
+  onCancel?: () => void;
   state: State;
   today: string;
   onSave: (state: State) => void;
   onCreateProduct: (product: Product) => void;
   onAddUnit: (product: Product, unit: Unit) => void;
 }) {
-  const initialProduct = state.products.at(-1);
+  const initialProduct =
+    state.products.find((p) => p.id === editing?.productId) ??
+    state.products.at(-1);
   const [productId, setProductId] = useState(initialProduct?.id ?? "");
-  const [quantity, setQuantity] = useState("");
-  const [unit, setUnit] = useState<string>(initialProduct?.baseUnit ?? "g");
-  const [price, setPrice] = useState("");
-  const [date, setDate] = useState(today);
+  const [quantity, setQuantity] = useState(
+    editing ? String(editing.quantity) : "",
+  );
+  const [unit, setUnit] = useState<string>(
+    editing?.unit ?? initialProduct?.baseUnit ?? "g",
+  );
+  const [price, setPrice] = useState(editing ? String(editing.price) : "");
+  const [date, setDate] = useState(editing?.date ?? today);
   const [error, setError] = useState("");
   const [addingProduct, setAddingProduct] = useState(false);
   const [addingUnit, setAddingUnit] = useState(false);
-  const product = state.products.find((p) => p.id === productId);
+  const selectedProduct = state.products.find((p) => p.id === productId);
+  const product =
+    selectedProduct && editing?.productId === productId
+      ? {
+          ...selectedProduct,
+          units: [
+            ...selectedProduct.units.filter((u) => u.name !== editing.unit),
+            ...(standardUnits(selectedProduct.baseUnit).some(
+              (u) => u.name === editing.unit,
+            )
+              ? []
+              : [{ name: editing.unit, factor: editing.factor }]),
+          ],
+        }
+      : selectedProduct;
   function submit(event: FormEvent) {
     event.preventDefault();
     try {
       onSave(
-        recordPurchase(
-          state,
-          productId,
-          Number(quantity),
-          unit,
-          Number(price),
-          date,
-        ),
+        editing
+          ? updatePurchase(state, editing.id, {
+              productId,
+              quantity: Number(quantity),
+              unit,
+              price: Number(price),
+              date,
+            })
+          : recordPurchase(
+              state,
+              productId,
+              Number(quantity),
+              unit,
+              Number(price),
+              date,
+            ),
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存できませんでした");
@@ -133,9 +168,10 @@ export function PurchaseForm({
             {error}
           </p>
         )}
-        <div className="form-footer">
+        <div className={editing ? "actions" : "form-footer"}>
+          {onCancel && <Button onClick={onCancel}>キャンセル</Button>}
           <Button variant="contained" disabled={!product} type="submit">
-            購入を記録
+            {editing ? "変更を保存" : "購入を記録"}
           </Button>
         </div>
       </form>
@@ -174,7 +210,7 @@ export function PurchaseForm({
               product={product}
               onCancel={() => setAddingUnit(false)}
               onSave={(created) => {
-                onAddUnit(product, created);
+                onAddUnit(selectedProduct!, created);
                 setUnit(created.name.trim());
                 setAddingUnit(false);
                 setError("");
