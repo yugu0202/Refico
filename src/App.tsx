@@ -31,7 +31,6 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [storageError, setStorageError] = useState("");
   const [notice, setNotice] = useState("");
-  const [addProduct, setAddProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [search, setSearch] = useState("");
   useEffect(() => {
@@ -61,7 +60,6 @@ export default function App() {
   }
   function navigate(next: Page) {
     setPage(next);
-    setAddProduct(false);
     setEditingProduct(null);
     setNotice("");
   }
@@ -72,7 +70,6 @@ export default function App() {
       { ...state, products: [...state.products, product] },
       `${product.name}を追加しました`,
     );
-    setAddProduct(false);
   }
   const meals = state.meals.filter((m) => m.date === today);
   const total = meals.reduce((sum, m) => sum + mealCost(m), 0);
@@ -88,7 +85,6 @@ export default function App() {
         onEditUnits={
           page === "inventory"
             ? () => {
-                setAddProduct(false);
                 setEditingProduct(product);
                 setNotice("");
               }
@@ -126,16 +122,6 @@ export default function App() {
       <main>
         <div className="page-heading">
           <h1>{title}</h1>
-          {page === "inventory" && (
-            <Button
-              onClick={() => {
-                setEditingProduct(null);
-                setAddProduct(!addProduct);
-              }}
-            >
-              ＋ 食材を追加
-            </Button>
-          )}
         </div>
         {storageError && (
           <p className="error" role="alert">
@@ -166,12 +152,6 @@ export default function App() {
                   setEditingProduct(null);
                 }}
                 onCancel={() => setEditingProduct(null)}
-              />
-            )}
-            {addProduct && (
-              <ProductForm
-                onSave={saveProduct}
-                onCancel={() => setAddProduct(false)}
               />
             )}
             {page === "home" && (
@@ -346,7 +326,7 @@ export default function App() {
                   <p className="empty">
                     {state.products.length
                       ? "一致する食材がありません。"
-                      : "食材を追加して、購入を記録してください。"}
+                      : "購入を記録すると、ここに食材が表示されます。"}
                   </p>
                 )}
                 <section>
@@ -378,12 +358,20 @@ export default function App() {
                 </section>
               </>
             )}
-            {page === "purchase" && !addProduct && (
+            {page === "purchase" && (
               <PurchaseForm
-                key={state.products.length}
                 state={state}
                 today={today}
-                onAddProduct={() => setAddProduct(true)}
+                onCreateProduct={saveProduct}
+                onAddUnit={(product, unit) => {
+                  persist(
+                    updateProductUnits(state, product.id, [
+                      ...product.units,
+                      unit,
+                    ]),
+                    `${product.name}の単位を追加しました`,
+                  );
+                }}
                 onSave={(next) => {
                   persist(next, "購入を記録しました");
                   setPage("inventory");
