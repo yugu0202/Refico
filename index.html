@@ -6,7 +6,29 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
+    <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#fafaf9" />
+    <script>
+      // Apply the saved choice before the app loads to avoid a light flash.
+      (() => {
+        let mode = "system";
+        try {
+          mode = localStorage.getItem("refico-theme") || "system";
+        } catch {}
+        const dark =
+          mode === "dark" ||
+          (mode !== "light" &&
+            matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.setAttribute(
+          "data-mui-color-scheme",
+          dark ? "dark" : "light",
+        );
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        document.querySelector('meta[name="theme-color"]').content = dark
+          ? "#191c18"
+          : "#fafaf9";
+      })();
+    </script>
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />
     <link

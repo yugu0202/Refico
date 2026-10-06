@@ -7,7 +7,12 @@ import { theme } from "./theme";
 import "./styles.css";
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider theme={theme}>
+    <ThemeProvider
+      theme={theme}
+      defaultMode="system"
+      modeStorageKey="refico-theme"
+      disableTransitionOnChange
+    >
       <CssBaseline />
       <App />
     </ThemeProvider>
