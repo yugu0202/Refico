@@ -1,3 +1,5 @@
+import { ThemeControl } from "./ThemeControl";
+import { BrandLogo } from "./BrandLogo";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
 
@@ -20,9 +22,12 @@ export function LoginScreen({
 }: Props) {
   return (
     <main className="login-screen">
+      <div className="login-theme">
+        <ThemeControl />
+      </div>
       <div className="login-content">
         <h1 className="brand">
-          <img src="/logo.svg" width="40" height="40" alt="" />
+          <BrandLogo size={40} />
           Refico
         </h1>
         {loading ? (
@@ -38,7 +43,12 @@ export function LoginScreen({
               </p>
             )}
             {canLogin && (
-              <Button fullWidth variant="contained" disabled={signingIn} onClick={onLogin}>
+              <Button
+                fullWidth
+                variant="contained"
+                disabled={signingIn}
+                onClick={onLogin}
+              >
                 {signingIn ? "ログイン中…" : "Googleでログイン"}
               </Button>
             )}

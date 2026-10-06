@@ -1,9 +1,10 @@
+import type {} from "@mui/material/themeCssVarsAugmentation";
 import { createTheme } from "@mui/material/styles";
 
-// Both MUI and the plain CSS layout follow the OS color scheme through media
-// queries, including changes while the app is open. No stored override is used.
+// A shared root attribute switches MUI, plain CSS, and the brand together.
+// ThemeProvider defaults to the OS and persists an explicit user selection.
 export const theme = createTheme({
-  cssVariables: { colorSchemeSelector: "media" },
+  cssVariables: { colorSchemeSelector: "data-mui-color-scheme" },
   colorSchemes: {
     light: {
       palette: {
@@ -83,12 +84,10 @@ export const theme = createTheme({
           "--notice-text": "#30480e",
           "--error-background": "#fdf1ed",
         },
-        "@media (prefers-color-scheme: dark)": {
-          ":root": {
-            "--selected-background": "#303e25",
-            "--notice-text": "#cce7ad",
-            "--error-background": "#3c2824",
-          },
+        ':root[data-mui-color-scheme="dark"]': {
+          "--selected-background": "#303e25",
+          "--notice-text": "#cce7ad",
+          "--error-background": "#3c2824",
         },
         body: { fontVariantNumeric: "tabular-nums" },
       },

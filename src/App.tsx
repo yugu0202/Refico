@@ -1,3 +1,5 @@
+import { ThemeControl } from "./components/ThemeControl";
+import { BrandLogo } from "./components/BrandLogo";
 import type { Command } from "./domain/commands";
 import { ApiError, bootstrap, sendCommand, authClient } from "./api";
 import { History } from "./components/History";
@@ -55,6 +57,7 @@ const navigation = [
 ] as const;
 type Page = (typeof navigation)[number]["id"];
 export default function App() {
+  const mainRef = useRef<HTMLElement>(null);
   const [page, setPage] = useState<Page>("home");
   const [today, setToday] = useState(localDate);
   const [state, setState] = useState<State>(emptyState);
@@ -167,6 +170,7 @@ export default function App() {
   const [search, setSearch] = useState("");
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
+    mainRef.current?.scrollTo({ top: 0, behavior: "instant" });
   }, [page]);
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -331,10 +335,15 @@ export default function App() {
             navigate("home");
           }}
         >
-          <img src="/logo.svg" width="28" height="28" alt="" />
+          <BrandLogo size={28} />
           Refico
         </a>
-        <Stack direction="row" sx={{ alignItems: "center", gap: 1 }}>
+        <Stack
+          className="header-account"
+          direction="row"
+          sx={{ alignItems: "center", gap: 1 }}
+        >
+          <ThemeControl />
           {user ? (
             <>
               <span className="hint">{user.name}</span>
@@ -368,7 +377,7 @@ export default function App() {
           </Button>
         ))}
       </nav>
-      <main>
+      <main ref={mainRef}>
         <div className="page-heading">
           <h1>{title}</h1>
         </div>
