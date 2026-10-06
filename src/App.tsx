@@ -6,6 +6,7 @@ import {
   emptyState,
   mealCost,
   stock,
+  updateProductUnits,
   type State,
   type Product,
 } from "./domain/inventory";
@@ -31,6 +32,7 @@ export default function App() {
   const [storageError, setStorageError] = useState("");
   const [notice, setNotice] = useState("");
   const [addProduct, setAddProduct] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [search, setSearch] = useState("");
   useEffect(() => {
     try {
@@ -60,6 +62,7 @@ export default function App() {
   function navigate(next: Page) {
     setPage(next);
     setAddProduct(false);
+    setEditingProduct(null);
     setNotice("");
   }
   function saveProduct(product: Product) {
@@ -82,6 +85,15 @@ export default function App() {
         product={product}
         state={state}
         showUnits={page === "inventory"}
+        onEditUnits={
+          page === "inventory"
+            ? () => {
+                setAddProduct(false);
+                setEditingProduct(product);
+                setNotice("");
+              }
+            : undefined
+        }
       />
     ));
   return (
@@ -115,7 +127,12 @@ export default function App() {
         <div className="page-heading">
           <h1>{title}</h1>
           {page === "inventory" && (
-            <Button onClick={() => setAddProduct(!addProduct)}>
+            <Button
+              onClick={() => {
+                setEditingProduct(null);
+                setAddProduct(!addProduct);
+              }}
+            >
               ＋ 食材を追加
             </Button>
           )}
@@ -136,6 +153,21 @@ export default function App() {
           </p>
         ) : (
           <>
+            {editingProduct && (
+              <ProductForm
+                key={editingProduct.id}
+                product={editingProduct}
+                onSave={saveProduct}
+                onSaveUnits={(units) => {
+                  persist(
+                    updateProductUnits(state, editingProduct.id, units),
+                    `${editingProduct.name}の単位を更新しました`,
+                  );
+                  setEditingProduct(null);
+                }}
+                onCancel={() => setEditingProduct(null)}
+              />
+            )}
             {addProduct && (
               <ProductForm
                 onSave={saveProduct}

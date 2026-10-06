@@ -9,6 +9,7 @@ import {
   stock,
   dailyCosts,
   toBase,
+  updateProductUnits,
 } from "./inventory.ts";
 import { parseState } from "./storage.ts";
 const date = "2026-10-06";
@@ -16,6 +17,51 @@ function rice() {
   const product = createProduct("白米", "g", [{ name: "合", factor: 150 }]);
   return { product, state: { ...emptyState(), products: [product] } };
 }
+test("単位を変更・削除しても履歴と在庫原価を維持し、新しい記録だけ新換算を使う", () => {
+  const { product, state } = rice();
+  let next = recordPurchase(state, product.id, 10, "合", 1500, date);
+  next = recordMeal(next, date, "昼食", [
+    { productId: product.id, quantity: 1, unit: "合" },
+  ]);
+  const before = next;
+  next = updateProductUnits(next, product.id, [
+    { name: "合", factor: 160 },
+    { name: "カップ", factor: 200 },
+  ]);
+  assert.deepEqual(next.purchases, before.purchases);
+  assert.deepEqual(next.meals, before.meals);
+  assert.deepEqual(stock(next, product.id), stock(before, product.id));
+  next = recordMeal(next, date, "夕食", [
+    { productId: product.id, quantity: 1, unit: "合" },
+  ]);
+  assert.equal(next.meals[1].usages[0].baseQuantity, 160000);
+  assert.equal(mealCost(next.meals[1]), 160);
+  next = updateProductUnits(next, product.id, [
+    { name: "計量カップ", factor: 200 },
+  ]);
+  assert.deepEqual(parseState(JSON.stringify(next)), next);
+  assert.throws(() => recordPurchase(next, product.id, 1, "合", 100, date));
+  assert.equal(before.products[0].units[0].factor, 150);
+});
+test("単位編集は重複・標準単位との衝突・不正換算を拒否する", () => {
+  const { product, state } = rice();
+  for (const units of [
+    [{ name: "g", factor: 2 }],
+    [
+      { name: "合", factor: 150 },
+      { name: " 合 ", factor: 160 },
+    ],
+    [{ name: "", factor: 150 }],
+    [{ name: "合", factor: 0 }],
+    [{ name: "合", factor: NaN }],
+  ])
+    assert.throws(() => updateProductUnits(state, product.id, units));
+  assert.throws(() => updateProductUnits(state, "missing", []));
+  assert.deepEqual(
+    updateProductUnits(state, product.id, []).products[0].units,
+    [],
+  );
+});
 test("kgで購入した米を合で使い、金額・在庫・入力単位を保持する", () => {
   const { product, state } = rice();
   const purchased = recordPurchase(state, product.id, 5, "kg", 4000, date);

@@ -106,6 +106,14 @@ export function createProduct(
     "食材名を100文字以内で入力してください",
   );
   requireValue(baseUnits.includes(baseUnit), "基準単位を選択してください");
+  return {
+    id: crypto.randomUUID(),
+    name: name.trim(),
+    baseUnit,
+    units: validateUnits(baseUnit, units),
+  };
+}
+function validateUnits(baseUnit: BaseUnit, units: Unit[]): Unit[] {
   const names = new Set(standardUnits(baseUnit).map((u) => u.name));
   for (const unit of units) {
     requireValue(
@@ -117,11 +125,22 @@ export function createProduct(
     toBase(1, unit.factor);
     names.add(unit.name.trim());
   }
+  return units.map((u) => ({ ...u, name: u.name.trim() }));
+}
+export function updateProductUnits(
+  state: State,
+  productId: string,
+  units: Unit[],
+): State {
+  const product = state.products.find((p) => p.id === productId);
+  requireValue(!!product, "食材が見つかりません");
+  const validated = validateUnits(product!.baseUnit, units);
+  // Historical quantities, factors, and allocations remain snapshots of the original input.
   return {
-    id: crypto.randomUUID(),
-    name: name.trim(),
-    baseUnit,
-    units: units.map((u) => ({ ...u, name: u.name.trim() })),
+    ...state,
+    products: state.products.map((p) =>
+      p.id === productId ? { ...p, units: validated } : p,
+    ),
   };
 }
 function amount(

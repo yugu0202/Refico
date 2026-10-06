@@ -6,21 +6,35 @@ import {
   createProduct,
   type BaseUnit,
   type Product,
+  type Unit,
 } from "../domain/inventory";
 export function ProductForm({
   onSave,
   onCancel,
+  product,
+  onSaveUnits,
 }: {
   onSave: (product: Product) => void;
   onCancel: () => void;
+  product?: Product;
+  onSaveUnits?: (units: Unit[]) => void;
 }) {
-  const [name, setName] = useState("");
-  const [base, setBase] = useState<BaseUnit>("g");
-  const [units, setUnits] = useState<{ name: string; factor: string }[]>([]);
+  const [name, setName] = useState(product?.name ?? "");
+  const [base, setBase] = useState<BaseUnit>(product?.baseUnit ?? "g");
+  const [units, setUnits] = useState<{ name: string; factor: string }[]>(
+    product?.units.map((u) => ({ name: u.name, factor: String(u.factor) })) ??
+      [],
+  );
   const [error, setError] = useState("");
   function submit(event: FormEvent) {
     event.preventDefault();
     try {
+      if (product && onSaveUnits) {
+        onSaveUnits(
+          units.map((u) => ({ name: u.name, factor: Number(u.factor) })),
+        );
+        return;
+      }
       onSave(
         createProduct(
           name,
@@ -34,12 +48,15 @@ export function ProductForm({
   }
   return (
     <section className="inset" aria-labelledby="product-title">
-      <h2 id="product-title">食材を追加</h2>
+      <h2 id="product-title">
+        {product ? `${product.name}の単位を編集` : "食材を追加"}
+      </h2>
       <form onSubmit={submit}>
         <TextField
           className="field"
           label="食材名"
-          autoFocus
+          autoFocus={!product}
+          disabled={!!product}
           required
           slotProps={{ htmlInput: { maxLength: 100 } }}
           value={name}
@@ -50,6 +67,7 @@ export function ProductForm({
           className="field"
           label="在庫の基準単位"
           select
+          disabled={!!product}
           value={base}
           slotProps={{ select: { native: true } }}
           onChange={(e) => setBase(e.target.value as BaseUnit)}
@@ -59,6 +77,11 @@ export function ProductForm({
           ))}
         </TextField>
         <p className="hint">kg ↔ g、L ↔ ml は自動で換算します。</p>
+        {product && (
+          <p className="hint">
+            変更は今後の記録に適用します。過去の記録・在庫量・食費は変わりません。
+          </p>
+        )}
         <h3>この食材で使う単位</h3>
         {units.map((u, index) => (
           <div className="unit-row" key={index}>
@@ -128,7 +151,7 @@ export function ProductForm({
         )}
         <div className="actions">
           <Button variant="contained" type="submit">
-            食材を保存
+            {product ? "単位を保存" : "食材を保存"}
           </Button>
           <Button type="button" onClick={onCancel}>
             キャンセル

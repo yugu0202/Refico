@@ -1,3 +1,4 @@
+import Button from "@mui/material/Button";
 import { stock, type Product, type State } from "../domain/inventory";
 import { money, number } from "../format";
 
@@ -5,10 +6,12 @@ export function InventoryRow({
   product,
   state,
   showUnits = false,
+  onEditUnits,
 }: {
   product: Product;
   state: State;
   showUnits?: boolean;
+  onEditUnits?: () => void;
 }) {
   const balance = stock(state, product.id);
   const last = [...state.purchases]
@@ -35,6 +38,16 @@ export function InventoryRow({
               .map((u) => `1${u.name} = ${number(u.factor)}${product.baseUnit}`)
               .join(" / ")}
           </p>
+        )}
+        {onEditUnits && (
+          <Button
+            type="button"
+            variant="text"
+            onClick={onEditUnits}
+            aria-label={`${product.name}の単位を編集`}
+          >
+            単位を編集
+          </Button>
         )}
       </div>
       <div className="numeric">
