@@ -20,6 +20,7 @@ export interface Purchase extends InputAmount {
   date: string;
   baseQuantity: number;
   price: number;
+  adjustmentId?: string;
 }
 export interface Allocation {
   purchaseId: string;
@@ -39,11 +40,26 @@ export interface Meal {
   batch?: { name: string; servings: number; eatenServings: number };
   prepared?: { batchId: string; quantity: number; cost: number }[];
 }
+export interface StockAdjustment {
+  id: string;
+  productId: string;
+  date: string;
+  reason: string;
+  beforeQuantity: number;
+  targetQuantity: number;
+  allocations: Allocation[];
+  addedPurchaseId?: string;
+  sourcePurchaseId?: string;
+  // Positions preserve recording order, even for backdated meals and purchases.
+  mealCount: number;
+  purchaseCount: number;
+}
 export interface State {
   version: 1;
   products: Product[];
   purchases: Purchase[];
   meals: Meal[];
+  adjustments?: StockAdjustment[];
 }
 export const emptyState = (): State => ({
   version: 1,
@@ -207,9 +223,10 @@ export function recordPurchase(
   return next;
 }
 export function consumed(state: State, purchaseId: string): number {
-  return state.meals
-    .flatMap((m) => m.usages)
-    .flatMap((u) => u.allocations)
+  return [
+    ...state.meals.flatMap((m) => m.usages).flatMap((u) => u.allocations),
+    ...(state.adjustments ?? []).flatMap((a) => a.allocations),
+  ]
     .filter((a) => a.purchaseId === purchaseId)
     .reduce((sum, a) => sum + a.quantity, 0);
 }
@@ -386,4 +403,100 @@ export function dailyCosts(state: State) {
     days.set(meal.date, (days.get(meal.date) ?? 0) + mealCost(meal));
   }
   return [...days].sort(([a], [b]) => b.localeCompare(a));
+}
+
+// Synthetic adjustment lots participate in FIFO, but never represent purchases.
+export function latestPurchase(state: State, productId: string, date?: string) {
+  return [...state.purchases]
+    .reverse()
+    .filter(
+      (p) =>
+        p.productId === productId &&
+        !p.adjustmentId &&
+        (!date || p.date <= date),
+    )
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .at(0);
+}
+export function recordStockAdjustment(
+  state: State,
+  productId: string,
+  quantity: number,
+  date: string,
+  reason = "",
+): State {
+  const product = state.products.find((p) => p.id === productId);
+  requireValue(!!product, "食材が見つかりません");
+  requireValue(validDate(date), "調整日を入力してください");
+  requireValue(
+    typeof reason === "string" && reason.trim().length <= 200,
+    "理由は200文字以内で入力してください",
+  );
+  requireValue(
+    Number.isFinite(quantity) && quantity >= 0,
+    "残量は0以上で入力してください",
+  );
+  const targetQuantity = quantity === 0 ? 0 : toBase(quantity, 1);
+  const beforeQuantity = stock(state, productId).quantity;
+  const difference = targetQuantity - beforeQuantity;
+  requireValue(difference !== 0, "残量を変更してください");
+  const adjustment: StockAdjustment = {
+    id: crypto.randomUUID(),
+    productId,
+    date,
+    reason: reason.trim(),
+    beforeQuantity,
+    targetQuantity,
+    allocations: [],
+    mealCount: state.meals.length,
+    purchaseCount: state.purchases.length,
+  };
+  let purchases = state.purchases;
+  if (difference > 0) {
+    const source = latestPurchase(state, productId, date);
+    requireValue(!!source, "単価を計算できません。先に購入を記録してください");
+    const price = cumulativeCost(source!, difference);
+    requireValue(
+      Number.isSafeInteger(price) && price <= 100000000,
+      "調整金額が上限を超えています",
+    );
+    const lot: Purchase = {
+      id: crypto.randomUUID(),
+      productId,
+      date,
+      quantity: difference / 1000,
+      unit: product!.baseUnit,
+      factor: 1,
+      baseQuantity: difference,
+      price,
+      adjustmentId: adjustment.id,
+    };
+    purchases = [...purchases, lot];
+    adjustment.addedPurchaseId = lot.id;
+    adjustment.sourcePurchaseId = source!.id;
+  } else {
+    let needed = -difference;
+    const lots = state.purchases
+      .filter((p) => p.productId === productId && p.date <= date)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    for (const lot of lots) {
+      const used = consumed(state, lot.id);
+      const take = Math.min(needed, lot.baseQuantity - used);
+      if (take > 0)
+        adjustment.allocations.push({
+          purchaseId: lot.id,
+          quantity: take,
+          cost: cumulativeCost(lot, used + take) - cumulativeCost(lot, used),
+        });
+      needed -= take;
+      if (needed === 0) break;
+    }
+    requireValue(needed === 0, "調整日までの在庫が不足しています");
+  }
+  // Past meal allocations and costs are immutable; adjustments carry their own cost.
+  return {
+    ...state,
+    purchases,
+    adjustments: [...(state.adjustments ?? []), adjustment],
+  };
 }

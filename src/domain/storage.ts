@@ -8,6 +8,7 @@ import {
   mealKinds,
   cumulativeCost,
   portionCost,
+  recordStockAdjustment,
 } from "./inventory.ts";
 const KEY = "refico:v1";
 // Validate stored data before allowing edits. Malformed data is preserved for recovery.
@@ -59,6 +60,41 @@ export function parseState(raw: string): State {
     );
     check(toBase(p.quantity, p.factor) === p.baseQuantity);
   }
+  check(state.adjustments === undefined || Array.isArray(state.adjustments));
+  const adjustments = state.adjustments ?? [];
+  let mealPosition = 0;
+  let purchasePosition = 0;
+  for (const a of adjustments) {
+    id(a.id);
+    check(
+      state.products.some((p) => p.id === a.productId) &&
+        validDate(a.date) &&
+        typeof a.reason === "string" &&
+        a.reason.length <= 200 &&
+        Number.isSafeInteger(a.beforeQuantity) &&
+        a.beforeQuantity >= 0 &&
+        Number.isSafeInteger(a.targetQuantity) &&
+        a.targetQuantity >= 0 &&
+        a.beforeQuantity !== a.targetQuantity &&
+        Array.isArray(a.allocations) &&
+        Number.isSafeInteger(a.mealCount) &&
+        a.mealCount >= mealPosition &&
+        a.mealCount <= state.meals.length &&
+        Number.isSafeInteger(a.purchaseCount) &&
+        a.purchaseCount >= purchasePosition &&
+        a.purchaseCount <= state.purchases.length,
+    );
+    mealPosition = a.mealCount;
+    purchasePosition = a.purchaseCount + (a.addedPurchaseId ? 1 : 0);
+  }
+  for (const p of state.purchases) {
+    check(
+      p.adjustmentId === undefined ||
+        adjustments.some(
+          (a) => a.id === p.adjustmentId && a.addedPurchaseId === p.id,
+        ),
+    );
+  }
   const totals = new Map<string, { quantity: number; cost: number }>();
   for (const meal of state.meals) {
     id(meal.id);
@@ -69,6 +105,34 @@ export function parseState(raw: string): State {
         (meal.usages.length > 0 ||
           (Array.isArray(meal.prepared) && meal.prepared.length > 0)),
     );
+  }
+  // Replay consumption in recording order, including reductions between meals.
+  const events = [
+    ...state.meals.map((meal, index) => ({
+      date: meal.date,
+      usages: meal.usages,
+      order: index * 2 + 1,
+      mealIndex: index,
+    })),
+    ...adjustments
+      .filter((a) => a.targetQuantity < a.beforeQuantity)
+      .map((a) => ({
+        date: a.date,
+        order: a.mealCount * 2,
+        mealIndex: a.mealCount,
+        usages: [
+          {
+            productId: a.productId,
+            quantity: (a.beforeQuantity - a.targetQuantity) / 1000,
+            unit: state.products.find((p) => p.id === a.productId)!.baseUnit,
+            factor: 1,
+            baseQuantity: a.beforeQuantity - a.targetQuantity,
+            allocations: a.allocations,
+          },
+        ],
+      })),
+  ].sort((a, b) => a.order - b.order);
+  for (const meal of events) {
     for (const usage of meal.usages) {
       check(
         state.products.some((p) => p.id === usage.productId) &&
@@ -83,6 +147,12 @@ export function parseState(raw: string): State {
           !!purchase &&
             purchase.productId === usage.productId &&
             purchase.date <= meal.date &&
+            (!purchase.adjustmentId ||
+              adjustments.some(
+                (a) =>
+                  a.id === purchase.adjustmentId &&
+                  a.mealCount <= meal.mealIndex,
+              )) &&
             Number.isSafeInteger(a.quantity) &&
             a.quantity > 0 &&
             Number.isSafeInteger(a.cost) &&
@@ -103,6 +173,57 @@ export function parseState(raw: string): State {
         allocated += a.quantity;
       }
       check(allocated === usage.baseQuantity);
+    }
+  }
+  // Validate the target, FIFO allocation and inferred price against the saved snapshot.
+  for (const [index, a] of adjustments.entries()) {
+    const prior: State = {
+      ...state,
+      meals: state.meals.slice(0, a.mealCount),
+      purchases: state.purchases.slice(0, a.purchaseCount),
+      adjustments: adjustments.slice(0, index),
+    };
+    const expected = recordStockAdjustment(
+      prior,
+      a.productId,
+      a.targetQuantity / 1000,
+      a.date,
+      a.reason,
+    );
+    const adjustment = expected.adjustments!.at(-1)!;
+    check(
+      a.beforeQuantity === adjustment.beforeQuantity &&
+        a.allocations.length === adjustment.allocations.length &&
+        a.allocations.every((allocation, index) => {
+          const expected = adjustment.allocations[index];
+          return (
+            allocation.purchaseId === expected.purchaseId &&
+            allocation.quantity === expected.quantity &&
+            allocation.cost === expected.cost
+          );
+        }) &&
+        a.sourcePurchaseId === adjustment.sourcePurchaseId,
+    );
+    if (a.targetQuantity > a.beforeQuantity) {
+      const actual = state.purchases[a.purchaseCount];
+      const added = expected.purchases.at(-1)!;
+      check(
+        a.allocations.length === 0 &&
+          !!actual &&
+          actual.id === a.addedPurchaseId &&
+          actual.adjustmentId === a.id &&
+          actual.productId === added.productId &&
+          actual.date === added.date &&
+          actual.baseQuantity === added.baseQuantity &&
+          actual.price === added.price &&
+          actual.quantity === added.quantity &&
+          actual.factor === 1 &&
+          actual.unit === added.unit,
+      );
+    } else {
+      check(
+        a.addedPurchaseId === undefined && a.sourcePurchaseId === undefined,
+      );
     }
   }
   const portions = new Map<string, number>();

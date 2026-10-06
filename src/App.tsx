@@ -20,6 +20,7 @@ import { sampleState } from "./domain/sample";
 import { ProductForm } from "./components/ProductForm";
 import { PurchaseForm } from "./components/PurchaseForm";
 import { MealForm } from "./components/MealForm";
+import { StockAdjustmentForm } from "./components/StockAdjustmentForm";
 import { InventoryRow } from "./components/InventoryRow";
 import { money, number, localDate, dateLabel } from "./format";
 const navigation = [
@@ -57,6 +58,9 @@ export default function App() {
   const [storageError, setStorageError] = useState("");
   const [notice, setNotice] = useState("");
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(
+    null,
+  );
   const [search, setSearch] = useState("");
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -89,6 +93,7 @@ export default function App() {
   function navigate(next: Page) {
     setPage(next);
     setEditingProduct(null);
+    setAdjustingProduct(null);
     setNotice("");
   }
   function saveProduct(product: Product) {
@@ -144,6 +149,14 @@ export default function App() {
         product={product}
         state={state}
         showValue={page === "home"}
+        onAdjust={
+          page === "inventory"
+            ? () => {
+                setAdjustingProduct(product);
+                setNotice("");
+              }
+            : undefined
+        }
         onEdit={
           page === "inventory"
             ? () => {
@@ -209,6 +222,19 @@ export default function App() {
           </p>
         ) : (
           <>
+            {adjustingProduct && (
+              <StockAdjustmentForm
+                key={adjustingProduct.id}
+                state={state}
+                product={adjustingProduct}
+                today={today}
+                onCancel={() => setAdjustingProduct(null)}
+                onSave={(next) => {
+                  persist(next, "在庫を調整しました");
+                  setAdjustingProduct(null);
+                }}
+              />
+            )}
             {editingProduct && (
               <ProductForm
                 key={editingProduct.id}
@@ -452,12 +478,39 @@ export default function App() {
                     </p>
                   )}
                 </div>
+                {(state.adjustments ?? []).length > 0 && (
+                  <section>
+                    <h2>在庫調整履歴</h2>
+                    {[...(state.adjustments ?? [])].reverse().map((a) => {
+                      const product = state.products.find(
+                        (p) => p.id === a.productId,
+                      )!;
+                      return (
+                        <div className="purchase-row" key={a.id}>
+                          <div>
+                            <strong>{product.name}</strong>
+                            <p className="hint">
+                              {dateLabel(a.date)}
+                              {a.reason ? ` · ${a.reason}` : ""}
+                            </p>
+                          </div>
+                          <span className="numeric">
+                            {number(a.beforeQuantity / 1000)} →{" "}
+                            {number(a.targetQuantity / 1000)} {product.baseUnit}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </section>
+                )}
                 <section>
                   <h2>購入履歴</h2>
-                  {state.purchases.length === 0 ? (
+                  {state.purchases.filter((p) => !p.adjustmentId).length ===
+                  0 ? (
                     <p className="empty">まだ購入の記録がありません。</p>
                   ) : (
-                    [...state.purchases]
+                    state.purchases
+                      .filter((p) => !p.adjustmentId)
                       .sort((a, b) => b.date.localeCompare(a.date))
                       .map((p) => (
                         <div className="purchase-row" key={p.id}>
