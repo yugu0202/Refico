@@ -58,6 +58,7 @@ export default function App() {
   const [today, setToday] = useState(localDate);
   const [state, setState] = useState<State>(emptyState);
   const [ready, setReady] = useState(false);
+  const [authMode, setAuthMode] = useState<"google" | "access" | null>(null);
   const [user, setUser] = useState<{ name: string; email: string } | null>(
     null,
   );
@@ -71,6 +72,7 @@ export default function App() {
     const generation = ++loadGeneration.current;
     try {
       const data = await bootstrap();
+      if (generation === loadGeneration.current) setAuthMode(data.authMode);
       if (generation !== loadGeneration.current) return;
       if (
         identityRef.current !== data.householdId ||
@@ -85,6 +87,7 @@ export default function App() {
       }
     } catch (e) {
       if (generation !== loadGeneration.current) return;
+      if (e instanceof ApiError && e.authMode) setAuthMode(e.authMode);
       if (e instanceof ApiError && e.status === 401) {
         identityRef.current = "";
         revisionRef.current = 0;
@@ -113,6 +116,10 @@ export default function App() {
   }
   async function logout() {
     if (busyRef.current) return;
+    if (authMode === "access") {
+      window.location.assign("/cdn-cgi/access/logout");
+      return;
+    }
     try {
       const response = await authClient.signOut();
       if (response.error) throw new Error(response.error.message);
@@ -301,9 +308,9 @@ export default function App() {
                 ログアウト
               </Button>
             </>
-          ) : (
+          ) : authMode === "google" ? (
             <Button onClick={() => void login()}>Googleでログイン</Button>
-          )}
+          ) : null}
         </Stack>
       </header>
       <nav className="navigation" aria-label="メインメニュー">
@@ -353,8 +360,12 @@ export default function App() {
           <p className="hint">
             {storageError ? (
               <Button onClick={() => void reload()}>再読み込み</Button>
-            ) : (
+            ) : authMode === "access" ? (
+              "Cloudflare Accessで認証してください。"
+            ) : authMode === "google" ? (
               "Googleでログインしてください。"
+            ) : (
+              "読み込み中…"
             )}
           </p>
         ) : (

@@ -52,8 +52,8 @@ pnpm exec wrangler d1 create refico-preview
 ```
 
 2. `wrangler.jsonc`のトップレベルと`previews.d1_databases`の仮IDをそれぞれのIDに置き換えます。DBバインディング名は両方`DB`です。仮IDは本番リソースを指していません。
-3. 公開URLを`BETTER_AUTH_URL`に設定します。トップレベルの`vars`と`previews.vars`に、それぞれの実際の公開URLを設定してください。Google OAuthのコールバックURLと一致させます。
-4. Google Cloud ConsoleでOAuthクライアント（ウェブアプリケーション）を作ります。Authorized redirect URIsに`<公開URL>/api/auth/callback/google`を登録します。ローカルは`http://localhost:8787/api/auth/callback/google`。本番とプレビューは別のOAuthクライアント・Secretsを使用します。プレビューのURLは固定して登録し、任意のOriginやワイルドカードを認証許可しません。
+3. 本番公開URLをトップレベルの`vars.BETTER_AUTH_URL`に設定します。Google OAuthのコールバックURLと一致させます。プレビューはCloudflare Accessを使用するので`BETTER_AUTH_URL`とGoogle設定は不要です。
+4. Google Cloud ConsoleでOAuthクライアント（ウェブアプリケーション）を作ります。Authorized redirect URIsに`<公開URL>/api/auth/callback/google`を登録します。ローカルは`http://localhost:8787/api/auth/callback/google`。プレビューではGoogle OAuthを使用しません。
 5. `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`BETTER_AUTH_SECRET`をWorkerのSecretsに登録します。認証secretは`openssl rand -hex 32`などで生成します。OAuthの秘密値はコミットしません。
 6. 接続先DBごとにマイグレーションを適用してからデプロイします。
 
@@ -66,7 +66,33 @@ pnpm exec wrangler secret put BETTER_AUTH_SECRET
 pnpm deploy
 ```
 
-プレビュー用Secretsも別途設定してください。本番とプレビューでDB・公開URL・Secretsを分離します。Worker Previewsは同じプレビューDBを指定したブランチ間でデータを共有します。
+### プレビューのCloudflare Access
+
+`previews.vars`は`APP_ENV=preview`、`AUTH_MODE=access`に設定済みです。本番の`AUTH_MODE=google`とは分離します。
+CloudflareのWorkers設定で対象Workerの**プレビュー全体をWorker単位でAccess保護**してください。認証済みの`ctx.access.getIdentity()`からユーザーを取得し、自動でアプリを開きます。Google OAuthクライアント、認証Secrets、固定コールバックURLはプレビューに不要です。
+
+Accessの認証情報がないリクエストは401で拒否します。メールアドレスのヘッダーだけを信用したり、固定のテストユーザーへフォールバックしたりしません。Accessモードを本番に設定した場合も拒否します。ホスト名単位のAccess保護だけでは`ctx.access`を使うこの構成に対応しません。
+
+プレビューD1は本番と別に作成・マイグレーションしてください。同じプレビューDBを指定したブランチ間では、同じAccessユーザーのデータを共有します。
+
+Access方式をローカルで確認する場合は、Wranglerの開発用設定で認証情報を模擬できます（本番・プレビューのAccessポリシーを変更するものではありません）。別のローカル設定ファイルに以下を指定します。
+
+```jsonc
+{
+  "vars": { "APP_ENV": "preview", "AUTH_MODE": "access" },
+  "access": {
+    "dev": {
+      "aud": "refico-local",
+      "identity": {
+        "user_uuid": "local-user",
+        "email": "developer@example.test",
+      },
+    },
+  },
+}
+```
+
+公式仕様: https://developers.cloudflare.com/workers/configuration/cloudflare-access/
 
 ### ローカル
 

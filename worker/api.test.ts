@@ -115,3 +115,104 @@ test("認証済みAPIは所有者を分離し、再送・古い更新・偽造�
     sqlite.close();
   }
 });
+
+test("AccessプレビューはGoogle設定なしで認証し、偽造ヘッダー・認証なし・本番利用を拒否する", async () => {
+  const { sqlite, db } = testDatabase();
+  const env: Env = {
+    DB: db,
+    ASSETS: { fetch: async () => new Response("assets") },
+    APP_ENV: "preview",
+    AUTH_MODE: "access",
+    BETTER_AUTH_URL: "",
+    BETTER_AUTH_SECRET: "",
+    GOOGLE_CLIENT_ID: "",
+    GOOGLE_CLIENT_SECRET: "",
+  };
+  const identity = (id: string) => ({
+    access: {
+      aud: "preview-policy",
+      getIdentity: async () => ({
+        user_uuid: id,
+        email: `${id}@example.test`,
+        name: id,
+      }),
+    },
+  });
+  const request = (body?: unknown, origin = "https://feature.refico.example") =>
+    new Request(
+      "https://feature.refico.example/api/" + (body ? "commands" : "bootstrap"),
+      {
+        method: body ? "POST" : "GET",
+        headers: {
+          "Cf-Access-Jwt-Assertion": "forged",
+          "Cf-Access-Authenticated-User-Email": "forged@example.test",
+          ...(body ? { origin, "Content-Type": "application/json" } : {}),
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      },
+    );
+  try {
+    assert.equal((await worker.fetch(request(), env)).status, 401);
+    assert.equal(
+      (
+        await worker.fetch(request(), env, {
+          access: { aud: "preview", getIdentity: async () => undefined },
+        })
+      ).status,
+      401,
+    );
+    const response = await worker.fetch(request(), env, identity("a"));
+    assert.equal(response.status, 200);
+    const baseline = (await response.json()) as {
+      authMode: string;
+      revision: number;
+      householdId: string;
+    };
+    assert.equal(baseline.authMode, "access");
+    assert.equal(baseline.householdId, "personal:access:a");
+    const body = {
+      requestId: crypto.randomUUID(),
+      revision: 0,
+      command: { type: "sample.create", date: "2026-10-01" },
+    };
+    assert.equal(
+      (
+        await worker.fetch(
+          request(body, "https://evil.example"),
+          env,
+          identity("a"),
+        )
+      ).status,
+      403,
+    );
+    assert.equal(
+      (await worker.fetch(request(body), env, identity("a"))).status,
+      200,
+    );
+    const other = (await (
+      await worker.fetch(request(), env, identity("b"))
+    ).json()) as { state: { products: unknown[] } };
+    assert.equal(other.state.products.length, 0);
+    assert.equal(
+      (
+        await worker.fetch(
+          request(),
+          { ...env, APP_ENV: "production" },
+          identity("a"),
+        )
+      ).status,
+      503,
+    );
+    const google = {
+      ...env,
+      AUTH_MODE: "google" as const,
+      APP_ENV: "production" as const,
+    };
+    assert.equal(
+      (await worker.fetch(request(), google, identity("a"))).status,
+      503,
+    );
+  } finally {
+    sqlite.close();
+  }
+});

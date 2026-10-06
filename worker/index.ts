@@ -1,3 +1,5 @@
+import type { CloudflareAccessContext } from "@cloudflare/workers-types";
+import { accessUser } from "./access.ts";
 import { getAuth } from "./auth.ts";
 import type { Env } from "./env.ts";
 import {
@@ -13,41 +15,72 @@ const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 export function sameOrigin(
   request: Request,
-  env: Pick<Env, "BETTER_AUTH_URL">,
+  env: Pick<Env, "BETTER_AUTH_URL" | "AUTH_MODE">,
 ) {
-  return request.headers.get("origin") === new URL(env.BETTER_AUTH_URL).origin;
+  return (
+    request.headers.get("origin") ===
+    (env.AUTH_MODE === "access"
+      ? new URL(request.url).origin
+      : new URL(env.BETTER_AUTH_URL).origin)
+  );
 }
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx?: { readonly access?: CloudflareAccessContext },
+  ): Promise<Response> {
     const path = new URL(request.url).pathname;
     if (!path.startsWith("/api/")) return env.ASSETS.fetch(request);
     if (path === "/api/health" && request.method === "GET")
       return json({ status: "ok", storage: "server" });
+    const mode = env.AUTH_MODE ?? "google";
+    if (mode === "access" && env.APP_ENV !== "preview")
+      return json({ error: "Access認証はプレビューでのみ利用できます" }, 503);
     if (
       !env.DB ||
-      !env.BETTER_AUTH_URL ||
-      !env.BETTER_AUTH_SECRET ||
-      !env.GOOGLE_CLIENT_ID ||
-      !env.GOOGLE_CLIENT_SECRET
+      (mode === "google" &&
+        (!env.BETTER_AUTH_URL ||
+          !env.BETTER_AUTH_SECRET ||
+          !env.GOOGLE_CLIENT_ID ||
+          !env.GOOGLE_CLIENT_SECRET))
     )
-      return json({ error: "サーバー設定が完了していません" }, 503);
+      return json(
+        { error: "サーバー設定が完了していません", authMode: mode },
+        503,
+      );
     try {
-      const auth = getAuth(env);
-      if (path.startsWith("/api/auth/")) return auth.handler(request);
+      const db = env.DB.withSession("first-primary");
+      let user: { id: string; name: string; email: string } | null;
+      if (mode === "access") {
+        user = await accessUser(ctx?.access, db);
+        if (!user)
+          return json(
+            { error: "Cloudflare Accessで認証してください", authMode: mode },
+            401,
+          );
+        if (path.startsWith("/api/auth/"))
+          return json({ error: "Not found" }, 404);
+      } else {
+        const auth = getAuth(env);
+        if (path.startsWith("/api/auth/")) return auth.handler(request);
+        const session = await auth.api.getSession({ headers: request.headers });
+        user = session?.user ?? null;
+        if (!user)
+          return json({ error: "ログインしてください", authMode: mode }, 401);
+      }
       if (request.method !== "GET" && !sameOrigin(request, env))
         return json({ error: "許可されていない送信元です" }, 403);
-      const session = await auth.api.getSession({ headers: request.headers });
-      if (!session) return json({ error: "ログインしてください" }, 401);
-      // Membership is resolved server-side. Client input cannot select another owner.
-      const db = env.DB.withSession("first-primary");
-      const householdId = await personalHousehold(db, session.user.id);
+      // Membership is resolved server-side from Google or verified Access identity.
+      const householdId = await personalHousehold(db, user.id);
       if (path === "/api/bootstrap" && request.method === "GET") {
         const snapshot = await loadSnapshot(db, householdId);
         return json({
           revision: snapshot.revision,
           householdId,
+          authMode: mode,
           state: toView(snapshot.model),
-          user: { name: session.user.name, email: session.user.email },
+          user: { name: user.name, email: user.email },
         });
       }
       if (path === "/api/commands" && request.method === "POST") {
@@ -109,7 +142,7 @@ export default {
           await saveSnapshot(
             db,
             householdId,
-            session.user.id,
+            user.id,
             revision,
             requestId,
             fingerprint,

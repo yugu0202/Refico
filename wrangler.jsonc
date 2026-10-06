@@ -4,6 +4,7 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-06",
   "preview_urls": true,
+  "vars": { "APP_ENV": "production", "AUTH_MODE": "google" },
   "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [
     {
@@ -28,6 +29,7 @@
     },
   },
   "previews": {
+    "vars": { "APP_ENV": "preview", "AUTH_MODE": "access" },
     "d1_databases": [
       {
         "binding": "DB",

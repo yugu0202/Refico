@@ -4,9 +4,11 @@ import type { State } from "./domain/inventory.ts";
 export const authClient = createAuthClient();
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  authMode?: "google" | "access";
+  constructor(message: string, status: number, authMode?: "google" | "access") {
     super(message);
     this.status = status;
+    this.authMode = authMode;
   }
 }
 export interface Snapshot {
@@ -14,13 +16,18 @@ export interface Snapshot {
   revision: number;
 }
 export interface Bootstrap extends Snapshot {
+  authMode: "google" | "access";
   householdId: string;
   user: { name: string; email: string };
 }
 async function result<T>(response: Response): Promise<T> {
   const body = await response.json();
   if (!response.ok)
-    throw new ApiError(body.error ?? "通信に失敗しました", response.status);
+    throw new ApiError(
+      body.error ?? "通信に失敗しました",
+      response.status,
+      body.authMode,
+    );
   return body;
 }
 export const bootstrap = () =>
