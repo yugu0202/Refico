@@ -40,10 +40,16 @@ a {
   gap: 12px;
 }
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 750;
   font-size: 24px;
   letter-spacing: -0.8px;
   text-decoration: none;
+}
+.brand img {
+  flex-shrink: 0;
 }
 .header-date {
   color: var(--muted);
