@@ -500,3 +500,26 @@ export function recordStockAdjustment(
     adjustments: [...(state.adjustments ?? []), adjustment],
   };
 }
+
+export function updatePreparedName(
+  state: State,
+  batchId: string,
+  name: string,
+): State {
+  const source = state.meals.find((meal) => meal.id === batchId);
+  requireValue(!!source?.batch, "作り置きが見つかりません");
+  requireValue(
+    typeof name === "string" &&
+      name.trim().length > 0 &&
+      name.trim().length <= 100,
+    "料理名を100文字以内で入力してください",
+  );
+  return {
+    ...state,
+    meals: state.meals.map((meal) =>
+      meal.id === batchId
+        ? { ...meal, batch: { ...meal.batch!, name: name.trim() } }
+        : meal,
+    ),
+  };
+}

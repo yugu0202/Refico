@@ -11,6 +11,8 @@ import {
   toBase,
   updateProductUnits,
   updateProduct,
+  updatePreparedName,
+  preparedRemaining,
 } from "./inventory.ts";
 import { parseState } from "./storage.ts";
 const date = "2026-10-06";
@@ -290,4 +292,49 @@ test("作り置きの不正入力を拒否して元の記録を保持する", ()
       ),
     );
   assert.equal(JSON.stringify(next), raw);
+});
+
+test("作り置きの名前変更で残量・原価・履歴の配分を保持する", () => {
+  const { product, state } = rice();
+  let before = recordPurchase(state, product.id, 300, "g", 100, date);
+  before = recordMeal(
+    before,
+    date,
+    "夕食",
+    [{ productId: product.id, quantity: 300, unit: "g" }],
+    { name: "ご飯", servings: 3, eatenServings: 1 },
+  );
+  const id = before.meals[0].id;
+  before = recordMeal(before, "2026-10-07", "昼食", [], undefined, [
+    { batchId: id, quantity: 1 },
+  ]);
+  const next = updatePreparedName(before, id, "  炊き込みご飯  ");
+  assert.equal(next.meals[0].batch?.name, "炊き込みご飯");
+  assert.equal(before.meals[0].batch?.name, "ご飯");
+  assert.deepEqual(next, {
+    ...before,
+    meals: [
+      {
+        ...before.meals[0],
+        batch: { ...before.meals[0].batch!, name: "炊き込みご飯" },
+      },
+      before.meals[1],
+    ],
+  });
+  assert.equal(
+    preparedRemaining(next, next.meals[0]),
+    preparedRemaining(before, before.meals[0]),
+  );
+  assert.deepEqual(dailyCosts(next), dailyCosts(before));
+  assert.deepEqual(parseState(JSON.stringify(next)), next);
+  for (const name of ["", "   ", "a".repeat(101)])
+    assert.throws(() => updatePreparedName(before, id, name), /100文字/);
+  assert.throws(
+    () => updatePreparedName(before, "missing", "料理"),
+    /見つかりません/,
+  );
+  assert.throws(
+    () => updatePreparedName(before, before.meals[1].id, "料理"),
+    /見つかりません/,
+  );
 });

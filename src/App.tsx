@@ -1,3 +1,6 @@
+import IconButton from "@mui/material/IconButton";
+import Stack from "@mui/material/Stack";
+import { PreparedNameForm } from "./components/PreparedNameForm";
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogContent from "@mui/material/DialogContent";
@@ -11,6 +14,8 @@ import {
   preparedRemaining,
   updateProductUnits,
   updateProduct,
+  updatePreparedName,
+  type Meal,
   type State,
   type Product,
 } from "./domain/inventory";
@@ -57,6 +62,7 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [storageError, setStorageError] = useState("");
   const [notice, setNotice] = useState("");
+  const [editingPrepared, setEditingPrepared] = useState<Meal | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(
     null,
@@ -94,6 +100,7 @@ export default function App() {
   }
   function navigate(next: Page) {
     setPage(next);
+    setEditingPrepared(null);
     setEditingProduct(null);
     setAdjustingProduct(null);
     setNotice("");
@@ -129,7 +136,23 @@ export default function App() {
       return (
         <div className="inventory-row" key={m.id}>
           <div>
-            <strong>{m.batch!.name}</strong>
+            <Stack direction="row" sx={{ alignItems: "center" }}>
+              <strong>{m.batch!.name}</strong>
+              <IconButton
+                type="button"
+                aria-label={`${m.batch!.name}を編集`}
+                title="作り置きを編集"
+                onClick={() => {
+                  setEditingPrepared(m);
+                  setNotice("");
+                }}
+                sx={{ width: 44, height: 44, flexShrink: 0 }}
+              >
+                <SvgIcon fontSize="small">
+                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                </SvgIcon>
+              </IconButton>
+            </Stack>
             <p className="hint">
               <span className="inventory-kind">作り置き</span> · 作った日{" "}
               {dateLabel(m.date)}
@@ -234,6 +257,41 @@ export default function App() {
                   setAdjustingProduct(null);
                 }}
               />
+            )}
+            {editingPrepared && (
+              <Dialog
+                open
+                onClose={() => setEditingPrepared(null)}
+                fullWidth
+                maxWidth="sm"
+                aria-labelledby="prepared-title"
+                slotProps={{
+                  paper: {
+                    sx: {
+                      margin: { xs: 2, sm: 4 },
+                      width: {
+                        xs: "calc(100% - 32px)",
+                        sm: "calc(100% - 64px)",
+                      },
+                    },
+                  },
+                }}
+              >
+                <DialogContent sx={{ paddingTop: 3 }}>
+                  <PreparedNameForm
+                    key={editingPrepared.id}
+                    name={editingPrepared.batch!.name}
+                    onCancel={() => setEditingPrepared(null)}
+                    onSave={(name) => {
+                      persist(
+                        updatePreparedName(state, editingPrepared.id, name),
+                        `${name.trim()}を更新しました`,
+                      );
+                      setEditingPrepared(null);
+                    }}
+                  />
+                </DialogContent>
+              </Dialog>
             )}
             {editingProduct && (
               <Dialog
