@@ -10,6 +10,7 @@ import {
   dailyCosts,
   toBase,
   updateProductUnits,
+  updateProduct,
 } from "./inventory.ts";
 import { parseState } from "./storage.ts";
 const date = "2026-10-06";
@@ -17,6 +18,35 @@ function rice() {
   const product = createProduct("白米", "g", [{ name: "合", factor: 150 }]);
   return { product, state: { ...emptyState(), products: [product] } };
 }
+test("食材名と単位を編集しても食材ID・基準単位・在庫・購入使用履歴を保持する", () => {
+  const { product, state } = rice();
+  const purchased = recordPurchase(state, product.id, 5, "kg", 4000, date);
+  const before = recordMeal(purchased, date, "夕食", [
+    { productId: product.id, quantity: 2, unit: "合" },
+  ]);
+  const next = updateProduct(before, product.id, " 無洗米 ", [
+    { name: "合", factor: 155 },
+  ]);
+  assert.equal(next.products[0].name, "無洗米");
+  assert.equal(next.products[0].id, product.id);
+  assert.equal(next.products[0].baseUnit, "g");
+  assert.deepEqual(stock(next, product.id), stock(before, product.id));
+  assert.deepEqual(next.purchases, before.purchases);
+  assert.deepEqual(next.meals, before.meals);
+  assert.deepEqual(parseState(JSON.stringify(next)), next);
+  assert.equal(before.products[0].name, "白米");
+});
+test("食材名編集は空白・文字数超過・他食材との重複を拒否し、自分の名前は維持できる", () => {
+  const { product, state } = rice();
+  state.products.push(createProduct("卵", "個"));
+  for (const name of [" ", "米".repeat(101), " 卵 "])
+    assert.throws(() => updateProduct(state, product.id, name, product.units));
+  assert.equal(
+    updateProduct(state, product.id, "白米", product.units).products[0].name,
+    "白米",
+  );
+  assert.throws(() => updateProduct(state, "missing", "白米", []));
+});
 test("単位を変更・削除しても履歴と在庫原価を維持し、新しい記録だけ新換算を使う", () => {
   const { product, state } = rice();
   let next = recordPurchase(state, product.id, 10, "合", 1500, date);

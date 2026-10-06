@@ -12,12 +12,12 @@ export function ProductForm({
   onSave,
   onCancel,
   product,
-  onSaveUnits,
+  onSaveChanges,
 }: {
   onSave: (product: Product) => void;
   onCancel: () => void;
   product?: Product;
-  onSaveUnits?: (units: Unit[]) => void;
+  onSaveChanges?: (name: string, units: Unit[]) => void;
 }) {
   const [name, setName] = useState(product?.name ?? "");
   const [base, setBase] = useState<BaseUnit>(product?.baseUnit ?? "g");
@@ -29,8 +29,9 @@ export function ProductForm({
   function submit(event: FormEvent) {
     event.preventDefault();
     try {
-      if (product && onSaveUnits) {
-        onSaveUnits(
+      if (product && onSaveChanges) {
+        onSaveChanges(
+          name,
           units.map((u) => ({ name: u.name, factor: Number(u.factor) })),
         );
         return;
@@ -49,14 +50,13 @@ export function ProductForm({
   return (
     <section className="inset" aria-labelledby="product-title">
       <h2 id="product-title">
-        {product ? `${product.name}の単位を編集` : "食材を追加"}
+        {product ? `${product.name}を編集` : "食材を追加"}
       </h2>
       <form onSubmit={submit}>
         <TextField
           className="field"
           label="食材名"
-          autoFocus={!product}
-          disabled={!!product}
+          autoFocus
           required
           slotProps={{ htmlInput: { maxLength: 100 } }}
           value={name}
@@ -79,7 +79,7 @@ export function ProductForm({
         <p className="hint">kg ↔ g、L ↔ ml は自動で換算します。</p>
         {product && (
           <p className="hint">
-            変更は今後の記録に適用します。過去の記録・在庫量・食費は変わりません。
+            食材名は履歴にも反映します。単位の換算値は今後の記録に適用し、過去の数量・原価は保持します。
           </p>
         )}
         <h3>この食材で使う単位</h3>
@@ -151,7 +151,7 @@ export function ProductForm({
         )}
         <div className="actions">
           <Button variant="contained" type="submit">
-            {product ? "単位を保存" : "食材を保存"}
+            {product ? "変更を保存" : "食材を保存"}
           </Button>
           <Button type="button" onClick={onCancel}>
             キャンセル

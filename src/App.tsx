@@ -7,6 +7,7 @@ import {
   mealCost,
   stock,
   updateProductUnits,
+  updateProduct,
   type State,
   type Product,
 } from "./domain/inventory";
@@ -82,7 +83,7 @@ export default function App() {
         product={product}
         state={state}
         showUnits={page === "inventory"}
-        onEditUnits={
+        onEdit={
           page === "inventory"
             ? () => {
                 setEditingProduct(product);
@@ -144,10 +145,10 @@ export default function App() {
                 key={editingProduct.id}
                 product={editingProduct}
                 onSave={saveProduct}
-                onSaveUnits={(units) => {
+                onSaveChanges={(name, units) => {
                   persist(
-                    updateProductUnits(state, editingProduct.id, units),
-                    `${editingProduct.name}の単位を更新しました`,
+                    updateProduct(state, editingProduct.id, name, units),
+                    `${name.trim()}を更新しました`,
                   );
                   setEditingProduct(null);
                 }}

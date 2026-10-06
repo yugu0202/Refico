@@ -6,12 +6,12 @@ export function InventoryRow({
   product,
   state,
   showUnits = false,
-  onEditUnits,
+  onEdit,
 }: {
   product: Product;
   state: State;
   showUnits?: boolean;
-  onEditUnits?: () => void;
+  onEdit?: () => void;
 }) {
   const balance = stock(state, product.id);
   const last = [...state.purchases]
@@ -39,14 +39,14 @@ export function InventoryRow({
               .join(" / ")}
           </p>
         )}
-        {onEditUnits && (
+        {onEdit && (
           <Button
             type="button"
             variant="text"
-            onClick={onEditUnits}
-            aria-label={`${product.name}の単位を編集`}
+            onClick={onEdit}
+            aria-label={`${product.name}を編集`}
           >
-            単位を編集
+            編集
           </Button>
         )}
       </div>

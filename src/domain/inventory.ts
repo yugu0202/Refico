@@ -101,10 +101,7 @@ export function createProduct(
   baseUnit: BaseUnit,
   units: Unit[] = [],
 ): Product {
-  requireValue(
-    name.trim().length > 0 && name.trim().length <= 100,
-    "食材名を100文字以内で入力してください",
-  );
+  validateProductName(name);
   requireValue(baseUnits.includes(baseUnit), "基準単位を選択してください");
   return {
     id: crypto.randomUUID(),
@@ -112,6 +109,12 @@ export function createProduct(
     baseUnit,
     units: validateUnits(baseUnit, units),
   };
+}
+function validateProductName(name: string) {
+  requireValue(
+    name.trim().length > 0 && name.trim().length <= 100,
+    "食材名を100文字以内で入力してください",
+  );
 }
 function validateUnits(baseUnit: BaseUnit, units: Unit[]): Unit[] {
   const names = new Set(standardUnits(baseUnit).map((u) => u.name));
@@ -134,12 +137,27 @@ export function updateProductUnits(
 ): State {
   const product = state.products.find((p) => p.id === productId);
   requireValue(!!product, "食材が見つかりません");
+  return updateProduct(state, productId, product!.name, units);
+}
+export function updateProduct(
+  state: State,
+  productId: string,
+  name: string,
+  units: Unit[],
+): State {
+  const product = state.products.find((p) => p.id === productId);
+  requireValue(!!product, "食材が見つかりません");
+  validateProductName(name);
+  requireValue(
+    !state.products.some((p) => p.id !== productId && p.name === name.trim()),
+    "同じ名前の食材が登録されています",
+  );
   const validated = validateUnits(product!.baseUnit, units);
   // Historical quantities, factors, and allocations remain snapshots of the original input.
   return {
     ...state,
     products: state.products.map((p) =>
-      p.id === productId ? { ...p, units: validated } : p,
+      p.id === productId ? { ...p, name: name.trim(), units: validated } : p,
     ),
   };
 }
