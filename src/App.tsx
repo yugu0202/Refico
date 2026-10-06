@@ -1,4 +1,6 @@
 import Button from "@mui/material/Button";
+import Dialog from "@mui/material/Dialog";
+import DialogContent from "@mui/material/DialogContent";
 import SvgIcon from "@mui/material/SvgIcon";
 import TextField from "@mui/material/TextField";
 import { useEffect, useState } from "react";
@@ -236,19 +238,41 @@ export default function App() {
               />
             )}
             {editingProduct && (
-              <ProductForm
-                key={editingProduct.id}
-                product={editingProduct}
-                onSave={saveProduct}
-                onSaveChanges={(name, units) => {
-                  persist(
-                    updateProduct(state, editingProduct.id, name, units),
-                    `${name.trim()}を更新しました`,
-                  );
-                  setEditingProduct(null);
+              <Dialog
+                open
+                onClose={() => setEditingProduct(null)}
+                fullWidth
+                maxWidth="sm"
+                aria-labelledby="product-title"
+                slotProps={{
+                  paper: {
+                    sx: {
+                      margin: { xs: 2, sm: 4 },
+                      width: {
+                        xs: "calc(100% - 32px)",
+                        sm: "calc(100% - 64px)",
+                      },
+                    },
+                  },
                 }}
-                onCancel={() => setEditingProduct(null)}
-              />
+              >
+                <DialogContent sx={{ paddingTop: 3 }}>
+                  <ProductForm
+                    embedded
+                    key={editingProduct.id}
+                    product={editingProduct}
+                    onSave={saveProduct}
+                    onSaveChanges={(name, units) => {
+                      persist(
+                        updateProduct(state, editingProduct.id, name, units),
+                        `${name.trim()}を更新しました`,
+                      );
+                      setEditingProduct(null);
+                    }}
+                    onCancel={() => setEditingProduct(null)}
+                  />
+                </DialogContent>
+              </Dialog>
             )}
             {page === "home" && (
               <>

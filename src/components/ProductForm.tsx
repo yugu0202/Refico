@@ -13,10 +13,12 @@ export function ProductForm({
   onCancel,
   product,
   onSaveChanges,
+  embedded = false,
 }: {
   onSave: (product: Product) => void;
   onCancel: () => void;
   product?: Product;
+  embedded?: boolean;
   onSaveChanges?: (name: string, units: Unit[]) => void;
 }) {
   const [name, setName] = useState(product?.name ?? "");
@@ -48,7 +50,10 @@ export function ProductForm({
     }
   }
   return (
-    <section className="inset" aria-labelledby="product-title">
+    <section
+      className={embedded ? undefined : "inset"}
+      aria-labelledby="product-title"
+    >
       <h2 id="product-title">
         {product ? `${product.name}を編集` : "食材を追加"}
       </h2>
