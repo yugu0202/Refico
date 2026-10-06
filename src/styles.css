@@ -6,13 +6,13 @@
     "Segoe UI",
     "Noto Sans JP",
     sans-serif;
-  color: #1c1917;
-  background: #fafaf9;
+  color: var(--mui-palette-text-primary);
+  background: var(--mui-palette-background-default);
   font-synthesis: none;
   font-variant-numeric: tabular-nums;
-  --border: #dedbd6;
-  --muted: #625d57;
-  --accent: #3f6212;
+  --border: var(--mui-palette-divider);
+  --muted: var(--mui-palette-text-secondary);
+  --accent: var(--mui-palette-primary-main);
 }
 * {
   box-sizing: border-box;
@@ -233,14 +233,14 @@ section {
 .notice {
   font-size: 13px;
   padding: 12px 14px;
-  background: #eef2e7;
-  color: #30480e;
+  background: var(--selected-background);
+  color: var(--notice-text);
   border-left: 2px solid var(--accent);
 }
 .error {
   font-size: 13px;
-  color: #9b2c20;
-  background: #fdf1ed;
+  color: var(--mui-palette-error-main);
+  background: var(--error-background);
   padding: 12px;
   line-height: 1.7;
 }
@@ -343,7 +343,7 @@ label .amount-input select {
   margin-left: 8px;
 }
 .inset {
-  background: #fff;
+  background: var(--mui-palette-background-paper);
   border: 1px solid var(--border);
   padding: 20px;
   border-radius: 6px;
@@ -433,7 +433,7 @@ label .amount-input select {
       env(safe-area-inset-left);
     border-top: 1px solid var(--border);
     border-bottom: 0;
-    background: #fff;
+    background: var(--mui-palette-background-paper);
   }
   .navigation button {
     min-width: 0;
@@ -560,7 +560,7 @@ label .amount-input select {
 }
 .cost-calendar .calendar-day[aria-pressed="true"] {
   border-color: var(--accent);
-  background: #eef2e7;
+  background: var(--selected-background);
   font-weight: 700;
 }
 .calendar-day[aria-current="date"] .calendar-date {

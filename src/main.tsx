@@ -7,7 +7,7 @@ import { theme } from "./theme";
 import "./styles.css";
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={theme} defaultMode="system" storageManager={null}>
       <CssBaseline />
       <App />
     </ThemeProvider>
