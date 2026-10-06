@@ -135,6 +135,7 @@ export function History({
                 )}
                 <Tooltip title="食事履歴を編集">
                   <IconButton
+                    className="meal-history-edit"
                     onClick={() => setEditingId(m.id)}
                     aria-label={`${dateLabel(m.date)} ${m.kind}の履歴を編集`}
                     sx={{ width: 44, height: 44, flexShrink: 0 }}
