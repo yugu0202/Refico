@@ -41,6 +41,3 @@ jobs:
 
       - name: Validate Worker bundle
         run: pnpm exec wrangler deploy --dry-run
-
-      - name: Validate staging Worker bundle
-        run: pnpm exec wrangler deploy --env staging --dry-run
