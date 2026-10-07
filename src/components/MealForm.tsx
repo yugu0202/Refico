@@ -3,9 +3,6 @@ import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
 import { PreparedForm } from "./PreparedForm";
 import { useState, useRef, useId, type FormEvent } from "react";
 import {
@@ -29,8 +26,12 @@ export function MealForm({
   editing,
   onCancel,
   onCreateCooking,
+  cookingOpen = false,
+  onCookingChange,
 }: {
   editing?: Meal;
+  cookingOpen?: boolean;
+  onCookingChange?: (open: boolean) => void;
   onCreateCooking?: (command: Command) => Promise<Cooking>;
   onCancel?: () => void;
   state: State;
@@ -77,11 +78,7 @@ export function MealForm({
         ].concat(editing.direct ? [draft()] : [])
       : [draft()],
   );
-  const [cookingOpen, setCookingOpen] = useState(false);
-  const [cookingSaving, setCookingSaving] = useState(false);
-  const cookingSavingRef = useRef(false);
   const [savedCookingId, setSavedCookingId] = useState<string | null>(null);
-  const cookingTitleId = useId();
   const savedCooking = state.cookings.find((c) => c.id === savedCookingId);
   const savedRemaining = savedCooking
     ? preparedRemaining(state, savedCooking)
@@ -195,10 +192,11 @@ export function MealForm({
   return (
     <>
       <form
+        hidden={cookingOpen}
         className={`entry-form wide${source === "direct" ? " direct-meal-form" : ""}`}
         onSubmit={submit}
       >
-        <fieldset className="form-fields" disabled={saving || cookingSaving}>
+        <fieldset className="form-fields" disabled={saving}>
           <Tabs
             value={source}
             aria-label="食事の記録方法"
@@ -221,14 +219,14 @@ export function MealForm({
             <Tab
               value="inventory"
               label="自炊"
-              disabled={saving || cookingSaving}
+              disabled={saving}
               id={`${sourceFieldsId}-inventory`}
               aria-controls={sourceFieldsId}
             />
             <Tab
               value="direct"
               label="外食など"
-              disabled={saving || cookingSaving}
+              disabled={saving}
               id={`${sourceFieldsId}-direct`}
               aria-controls={sourceFieldsId}
             />
@@ -305,8 +303,8 @@ export function MealForm({
                 {onCreateCooking && (
                   <Button
                     type="button"
-                    disabled={saving || cookingSaving}
-                    onClick={() => setCookingOpen(true)}
+                    disabled={saving}
+                    onClick={() => onCookingChange?.(true)}
                   >
                     料理を作る
                   </Button>
@@ -369,44 +367,18 @@ export function MealForm({
         </fieldset>
       </form>
       {cookingOpen && onCreateCooking && (
-        <Dialog
-          open
-          fullWidth
-          maxWidth="sm"
-          aria-labelledby={cookingTitleId}
-          onClose={() => {
-            if (!cookingSavingRef.current) setCookingOpen(false);
+        <PreparedForm
+          state={state}
+          today={date}
+          cancelLabel="食事入力に戻る"
+          autoFocus={false}
+          onCancel={() => onCookingChange?.(false)}
+          onSave={async (command) => {
+            const cooking = await onCreateCooking(command);
+            setSavedCookingId(cooking.id);
+            onCookingChange?.(false);
           }}
-          slotProps={{
-            paper: {
-              sx: {
-                margin: { xs: 2, sm: 4 },
-                width: { xs: "calc(100% - 32px)", sm: "calc(100% - 64px)" },
-              },
-            },
-          }}
-        >
-          <DialogTitle id={cookingTitleId}>料理を作る</DialogTitle>
-          <DialogContent sx={{ "&&": { paddingTop: 1.5 } }}>
-            <PreparedForm
-              state={state}
-              today={date}
-              onCancel={() => setCookingOpen(false)}
-              onSave={async (command) => {
-                cookingSavingRef.current = true;
-                setCookingSaving(true);
-                try {
-                  const cooking = await onCreateCooking(command);
-                  setSavedCookingId(cooking.id);
-                  setCookingOpen(false);
-                } finally {
-                  cookingSavingRef.current = false;
-                  setCookingSaving(false);
-                }
-              }}
-            />
-          </DialogContent>
-        </Dialog>
+        />
       )}
     </>
   );

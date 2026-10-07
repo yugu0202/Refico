@@ -76,6 +76,7 @@ function currentPage(): Page {
 export default function App() {
   const mainRef = useRef<HTMLElement>(null);
   const [page, setPage] = useState<Page>(currentPage);
+  const [creatingCooking, setCreatingCooking] = useState(false);
   const helpPage = helpPageFromPath(`/${page}`);
   const [reopenMenu, setReopenMenu] = useState(() =>
     Boolean(window.history.state?.reficoMenuOpen),
@@ -137,6 +138,7 @@ export default function App() {
         setEditingPrepared(null);
         setAdjustingPrepared(null);
         setSearch("");
+        setCreatingCooking(false);
       }
       if (
         identityRef.current !== data.spaceId ||
@@ -205,6 +207,7 @@ export default function App() {
     setLoginError("");
     setStorageError("");
     setState(emptyState());
+    setCreatingCooking(false);
     setEditingPrepared(null);
     navigate("home");
   }
@@ -225,6 +228,11 @@ export default function App() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
     mainRef.current?.scrollTo({ top: 0, behavior: "instant" });
+    if (page === "meal") {
+      mainRef.current
+        ?.querySelector<HTMLHeadingElement>("h1")
+        ?.focus({ preventScroll: true });
+    }
     if (helpPage) {
       document
         .querySelector<HTMLElement>(".help-page h1")
@@ -233,7 +241,7 @@ export default function App() {
         .querySelector<HTMLElement>(".help-page")
         ?.scrollTo({ top: 0, behavior: "instant" });
     }
-  }, [page]);
+  }, [page, creatingCooking]);
   useEffect(() => {
     const restore = () => selectPage(currentPage());
     window.addEventListener("popstate", restore);
@@ -341,6 +349,7 @@ export default function App() {
   }
   function selectPage(next: Page) {
     setPage(next);
+    setCreatingCooking(false);
     setReopenMenu(Boolean(window.history.state?.reficoMenuOpen));
     setAdjustingPrepared(null);
     setEditingPrepared(null);
@@ -582,7 +591,14 @@ export default function App() {
       </nav>
       <main ref={mainRef} key={spaceId}>
         <div className="page-heading">
-          <h1>{title}</h1>
+          <h1 tabIndex={-1}>
+            {page === "meal" && creatingCooking ? "料理を作る" : title}
+          </h1>
+          {page === "meal" && creatingCooking && (
+            <Button disabled={busy} onClick={() => setCreatingCooking(false)}>
+              食事入力に戻る
+            </Button>
+          )}
         </div>
         {storageError && (
           <p className="error" role="alert">
@@ -963,20 +979,26 @@ export default function App() {
                   today={today}
                   money={money}
                   onCreateCooking={createCooking}
+                  cookingOpen={creatingCooking}
+                  onCookingChange={(open) => {
+                    if (!busyRef.current) setCreatingCooking(open);
+                  }}
                   onSave={async (command) => {
                     await persist(command, "食事を記録しました");
                     setFormVersion((v) => v + 1);
                   }}
                 />
-                <History
-                  type="meal"
-                  state={state}
-                  today={today}
-                  onSave={async (command, message) => {
-                    await persist(command, message);
-                  }}
-                  saving={busy}
-                />
+                {!creatingCooking && (
+                  <History
+                    type="meal"
+                    state={state}
+                    today={today}
+                    onSave={async (command, message) => {
+                      await persist(command, message);
+                    }}
+                    saving={busy}
+                  />
+                )}
               </>
             )}
           </>

@@ -18,12 +18,16 @@ export function PreparedForm({
   editing,
   onSave,
   onCancel,
+  cancelLabel = "キャンセル",
+  autoFocus = true,
 }: {
   state: State;
   today: string;
   editing?: Cooking;
   onSave: (command: Command) => Promise<void>;
   onCancel: () => void;
+  cancelLabel?: string;
+  autoFocus?: boolean;
 }) {
   const [date, setDate] = useState(editing?.date ?? today);
   const [name, setName] = useState(editing?.name ?? "");
@@ -111,7 +115,7 @@ export function PreparedForm({
         <TextField
           className="field"
           label="料理名"
-          autoFocus
+          autoFocus={autoFocus}
           required
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -164,7 +168,7 @@ export function PreparedForm({
         )}
         <div className="actions">
           <Button type="button" onClick={onCancel} disabled={saving}>
-            キャンセル
+            {cancelLabel}
           </Button>
           <Button
             type="submit"
