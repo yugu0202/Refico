@@ -29,7 +29,9 @@ export function SpaceSettings({
   const [busy, setBusy] = useState(false);
   const guard = useRef(false);
   const [error, setError] = useState("");
-  const [link, setLink] = useState("");
+  const [invite, setInvite] = useState<{ id: string; link: string } | null>(
+    null,
+  );
   const [confirm, setConfirm] = useState<{
     type: string;
     userId?: string;
@@ -54,8 +56,22 @@ export function SpaceSettings({
         body,
         space.id,
       );
-      if (result.token)
-        setLink(`${window.location.origin}/invitations/${result.token}`);
+      if (result.token) {
+        const digest = await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(result.token),
+        );
+        const id = Array.from(new Uint8Array(digest), (b) =>
+          b.toString(16).padStart(2, "0"),
+        ).join("");
+        setInvite({
+          id,
+          link: `${window.location.origin}/invitations/${result.token}`,
+        });
+      }
+      const action = body as { type: string; invitationId?: string };
+      if (action.type === "revoke" && action.invitationId === invite?.id)
+        setInvite(null);
       await onChanged();
       if ((body as { type: string }).type === "leave") onClose();
       else await load();
@@ -146,11 +162,11 @@ export function SpaceSettings({
               >
                 メンバーを招待
               </Button>
-              {link && (
+              {invite && (
                 <>
                   <TextField
                     label="招待リンク"
-                    value={link}
+                    value={invite.link}
                     slotProps={{ htmlInput: { readOnly: true } }}
                   />
                   <Typography variant="body2" color="text.secondary">
@@ -159,7 +175,7 @@ export function SpaceSettings({
                   <Button
                     onClick={() =>
                       void navigator.clipboard
-                        .writeText(link)
+                        .writeText(invite.link)
                         .catch(() =>
                           setError("リンクを選択してコピーしてください"),
                         )

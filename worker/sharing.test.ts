@@ -32,7 +32,7 @@ test("招待は単一利用・既存記録保持・現在スペース切替、�
     );
     assert.equal(
       (await invitationInfo(db, invite.token, "b")).name,
-      "自分の在庫",
+      "マイスペース",
     );
     await acceptInvitation(db, invite.token, "a");
     assert.equal(

@@ -24,7 +24,7 @@ export async function personalSpace(
   await db.batch([
     db
       .prepare(
-        "INSERT OR IGNORE INTO spaces (id, owner_user_id, name) VALUES (?, ?, '自分の在庫')",
+        "INSERT OR IGNORE INTO spaces (id, owner_user_id, name) VALUES (?, ?, 'マイスペース')",
       )
       .bind(id, userId),
     db
