@@ -95,11 +95,24 @@ export function SpaceSettings({
         });
       }
       const action = body as { type: string; invitationId?: string };
-      if (action.type === "revoke" && action.invitationId === invite?.id)
-        setInvite(null);
-      await onChanged();
-      if ((body as { type: string }).type === "leave") onClose();
-      else await load();
+      if (action.type === "revoke") {
+        // Only invitation availability changes. Apply the confirmed result
+        // without refetching inventory, memberships, or the settings list.
+        setDetails((current) => ({
+          ...current,
+          invitations: current.invitations.filter(
+            (invitation) => invitation.id !== action.invitationId,
+          ),
+        }));
+        if (action.invitationId === invite?.id) {
+          setInvite(null);
+          setCopiedLink(null);
+        }
+      } else {
+        await onChanged();
+        if (action.type === "leave") onClose();
+        else await load();
+      }
       setConfirm(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存できませんでした");
