@@ -1,4 +1,4 @@
-import type { Database } from "./repository.ts";
+import { personalSpace, type Database } from "./repository.ts";
 export class SharingError extends Error {
   status: number;
   constructor(message: string, status = 400) {
@@ -37,6 +37,20 @@ export async function activeSpace(
     .bind(userId)
     .first<{ id: string }>();
   return row?.id ?? fallback;
+}
+export async function resolveSpace(db: Database, userId: string) {
+  // Resolve the valid selection and personal fallback in one round trip.
+  // Provision only when neither exists (the first request of a new user).
+  const row = await db
+    .prepare(
+      `SELECT space_id AS id FROM space_members WHERE user_id = ? AND
+       (space_id = (SELECT active_space_id FROM user_preferences WHERE user_id = ?) OR role = 'owner')
+       ORDER BY CASE WHEN space_id = (SELECT active_space_id FROM user_preferences WHERE user_id = ?) THEN 0 ELSE 1 END,
+       joined_at, space_id LIMIT 1`,
+    )
+    .bind(userId, userId, userId)
+    .first<{ id: string }>();
+  return row?.id ?? (await personalSpace(db, userId));
 }
 export async function switchSpace(db: Database, userId: string, id: string) {
   const result = await db
@@ -78,18 +92,19 @@ export async function createInvitation(
   userId: string,
   id: string,
 ) {
-  await owner(db, userId, id);
   const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
     b.toString(16).padStart(2, "0"),
   ).join("");
   const now = Math.floor(Date.now() / 1000);
   const hash = await tokenHash(token);
-  await db
+  const result = await db
     .prepare(
       `INSERT INTO space_invitations (token_hash, space_id, created_by, expires_at, created_at) SELECT ?, space_id, user_id, ?, ? FROM space_members WHERE space_id = ? AND user_id = ? AND role = 'owner'`,
     )
     .bind(hash, now + 7 * 86400, now, id, userId)
     .run();
+  if (!result.meta.changes)
+    throw new SharingError("オーナーだけが操作できます", 403);
   return { token, expiresAt: now + 7 * 86400 };
 }
 export async function invitationInfo(
@@ -152,6 +167,27 @@ export async function manageSpace(
     invitationId?: string;
   },
 ) {
+  if (action.type === "revoke") {
+    // Keep idempotent revocation and the explicit owner error while checking
+    // authorization and updating within one atomic database round trip.
+    const [membership] = await db.batch<{ role: string }>([
+      db
+        .prepare(
+          "SELECT role FROM space_members WHERE space_id = ? AND user_id = ?",
+        )
+        .bind(id, userId),
+      db
+        .prepare(
+          `UPDATE space_invitations SET revoked_at = unixepoch()
+        WHERE token_hash = ? AND space_id = ? AND accepted_by IS NULL
+        AND EXISTS (SELECT 1 FROM space_members WHERE space_id = ? AND user_id = ? AND role = 'owner')`,
+        )
+        .bind(action.invitationId!, id, id, userId),
+    ]);
+    if (membership.results[0]?.role !== "owner")
+      throw new SharingError("オーナーだけが操作できます", 403);
+    return;
+  }
   if (action.type === "leave") {
     const row = await db
       .prepare(
@@ -181,12 +217,5 @@ export async function manageSpace(
         `DELETE FROM space_members WHERE space_id = ? AND user_id = ? AND role = 'member'`,
       )
       .bind(id, action.userId!)
-      .run();
-  else if (action.type === "revoke")
-    await db
-      .prepare(
-        `UPDATE space_invitations SET revoked_at = unixepoch() WHERE token_hash = ? AND space_id = ? AND accepted_by IS NULL`,
-      )
-      .bind(action.invitationId!, id)
       .run();
 }

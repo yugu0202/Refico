@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  activeSpace,
+  resolveSpace,
   listSpaces,
   switchSpace,
   spaceDetails,
@@ -14,12 +14,7 @@ import { previewUser } from "./preview-user.ts";
 import { getAuth } from "./auth.ts";
 import type { Env } from "./env.ts";
 import { sampleDataEnabled } from "./env.ts";
-import {
-  personalSpace,
-  loadSnapshot,
-  receipt,
-  saveSnapshot,
-} from "./repository.ts";
+import { loadSnapshot, receipt, saveSnapshot } from "./repository.ts";
 import { applyCommand, mutationSchema } from "../src/domain/commands.ts";
 import { toModel, toView } from "../src/domain/model.ts";
 import { parseState } from "../src/domain/validation.ts";
@@ -91,8 +86,7 @@ export default {
       if (inviteMatch && request.method === "GET")
         return json(await invitationInfo(db, inviteMatch[1], user.id));
       // Membership is resolved server-side from Google session or the shared preview account.
-      const personalId = await personalSpace(db, user.id);
-      const spaceId = await activeSpace(db, user.id, personalId);
+      const spaceId = await resolveSpace(db, user.id);
       if (inviteMatch && request.method === "POST") {
         await acceptInvitation(db, inviteMatch[1], user.id);
         return json({ ok: true });

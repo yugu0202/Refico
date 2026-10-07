@@ -4,6 +4,7 @@ import { testDatabase, addUser } from "./test-db.ts";
 import { personalSpace, loadSnapshot, saveSnapshot } from "./repository.ts";
 import {
   activeSpace,
+  resolveSpace,
   createInvitation,
   acceptInvitation,
   invitationInfo,
@@ -15,6 +16,53 @@ import {
 import { emptyModel } from "../src/domain/model.ts";
 import worker from "./index.ts";
 import type { Env } from "./env.ts";
+
+test("スペース解決は所属を確認し、初回だけ作成し、未所属の選択は個人へ戻す", async () => {
+  const { db, sqlite, queries } = testDatabase();
+  try {
+    for (const id of ["a", "b", "c"]) addUser(sqlite, id);
+    const a = await resolveSpace(db, "a");
+    queries.length = 0;
+    assert.equal(await resolveSpace(db, "a"), a);
+    assert.equal(queries.length, 1);
+    const b = await resolveSpace(db, "b");
+    const invite = await createInvitation(db, "a", a);
+    await acceptInvitation(db, invite.token, "b");
+    assert.equal(await resolveSpace(db, "b"), a);
+    const hash = await tokenHash(invite.token);
+    await assert.rejects(
+      manageSpace(db, "b", a, { type: "revoke", invitationId: hash }),
+      /オーナー/,
+    );
+    assert.equal(
+      sqlite
+        .prepare(
+          "SELECT revoked_at FROM space_invitations WHERE token_hash = ?",
+        )
+        .get(hash)?.revoked_at,
+      null,
+    );
+    await assert.rejects(
+      manageSpace(db, "c", a, { type: "revoke", invitationId: hash }),
+      /オーナー/,
+    );
+    await manageSpace(db, "a", a, { type: "remove", userId: "b" });
+    assert.equal(await resolveSpace(db, "b"), b);
+    sqlite
+      .prepare(
+        "UPDATE user_preferences SET active_space_id = ? WHERE user_id = ?",
+      )
+      .run(a, "b");
+    assert.equal(await resolveSpace(db, "b"), b);
+    const live = await createInvitation(db, "a", a);
+    const liveId = await tokenHash(live.token);
+    await manageSpace(db, "a", a, { type: "revoke", invitationId: liveId });
+    await manageSpace(db, "a", a, { type: "revoke", invitationId: liveId });
+    await assert.rejects(invitationInfo(db, live.token, "c"), /無効/);
+  } finally {
+    sqlite.close();
+  }
+});
 
 test("招待は単一利用・既存記録保持・現在スペース切替、退出は記録を消さない", async () => {
   const { db, sqlite } = testDatabase();
@@ -157,6 +205,31 @@ test("APIはCSRF、スペース切替後の古いフォーム、未所属への�
       spaces: unknown[];
     };
     assert.equal(initial.spaces.length, 1);
+    queries.length = 0;
+    const created = await call(
+      "/api/spaces",
+      { type: "invite" },
+      initial.spaceId,
+    );
+    assert.equal(created.status, 200);
+    const createdBody = (await created.json()) as {
+      token: string;
+      expiresAt: number;
+    };
+    assert.equal(queries.length, 2);
+    assert.ok(createdBody.expiresAt > Date.now() / 1000);
+    queries.length = 0;
+    assert.equal(
+      (
+        await call(
+          "/api/spaces",
+          { type: "revoke", invitationId: await tokenHash(createdBody.token) },
+          initial.spaceId,
+        )
+      ).status,
+      200,
+    );
+    assert.equal(queries.length, 3); // One resolve + a two-statement atomic batch.
     const invite = await createInvitation(db, "a", a);
     queries.length = 0;
     const preview = await call(`/api/invitations/${invite.token}`);
@@ -265,6 +338,20 @@ test("D1ランタイムでも招待のclaim・所属・選択を一括保存し�
         .run();
     const a = await personalSpace(db, "a");
     const b = await personalSpace(db, "b");
+    assert.equal(await resolveSpace(db, "b"), b);
+    const revoked = await createInvitation(db, "a", a);
+    await assert.rejects(
+      manageSpace(db, "b", a, {
+        type: "revoke",
+        invitationId: await tokenHash(revoked.token),
+      }),
+      /オーナー/,
+    );
+    await manageSpace(db, "a", a, {
+      type: "revoke",
+      invitationId: await tokenHash(revoked.token),
+    });
+    await assert.rejects(invitationInfo(db, revoked.token, "b"), /無効/);
     const invite = await createInvitation(db, "a", a);
     await acceptInvitation(db, invite.token, "b");
     assert.equal(await activeSpace(db, "b", b), a);

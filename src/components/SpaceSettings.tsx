@@ -76,11 +76,10 @@ export function SpaceSettings({
     setBusy(true);
     setError("");
     try {
-      const result = await sharingRequest<{ token?: string }>(
-        "/api/spaces",
-        body,
-        space.id,
-      );
+      const result = await sharingRequest<{
+        token?: string;
+        expiresAt?: number;
+      }>("/api/spaces", body, space.id);
       if (result.token) {
         const digest = await crypto.subtle.digest(
           "SHA-256",
@@ -93,6 +92,14 @@ export function SpaceSettings({
           id,
           link: `${window.location.origin}/invitations/${result.token}`,
         });
+        setCopiedLink(null);
+        setDetails((current) => ({
+          ...current,
+          invitations: [
+            { id, expiresAt: result.expiresAt! },
+            ...current.invitations,
+          ],
+        }));
       }
       const action = body as { type: string; invitationId?: string };
       if (action.type === "revoke") {
@@ -108,7 +115,7 @@ export function SpaceSettings({
           setInvite(null);
           setCopiedLink(null);
         }
-      } else {
+      } else if (action.type !== "invite") {
         await onChanged();
         if (action.type === "leave") onClose();
         else await load();
