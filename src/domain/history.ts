@@ -80,6 +80,7 @@ function rebuild(source: State): State {
         meal.batch,
         meal.prepared,
         meal.usages,
+        meal.direct,
       );
       next.meals.at(-1)!.id = meal.id;
     } catch (error) {
@@ -149,6 +150,7 @@ export function updateMeal(
   inputs: MealInput[],
   batch?: Meal["batch"],
   prepared: { batchId: string; quantity: number }[] = [],
+  direct?: Meal["direct"],
 ): State {
   const old = state.meals.find((m) => m.id === id);
   if (!old) throw new Error("食事履歴が見つかりません");
@@ -178,6 +180,7 @@ export function updateMeal(
     batch,
     prepared,
     old.usages,
+    direct,
   ).meals.at(-1)!;
   return rebuild({
     ...state,

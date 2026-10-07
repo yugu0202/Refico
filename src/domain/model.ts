@@ -45,7 +45,12 @@ export interface Model {
     quantity: number;
     value: number;
   }[];
-  meals: (Ordered & { date: string; kind: string; cookingId?: string })[];
+  meals: (Ordered & {
+    date: string;
+    kind: string;
+    cookingId?: string;
+    direct?: Meal["direct"];
+  })[];
   usages: (Amount & {
     id: string;
     ownerType: "meal" | "cooking";
@@ -211,6 +216,7 @@ export function toModel(state: State, prior = emptyModel()): Model {
         date: m.date,
         kind: m.kind,
         ...(m.batch ? { cookingId: m.id } : {}),
+        ...(m.direct ? { direct: m.direct } : {}),
       });
       if (m.batch)
         model.portions.push({
@@ -327,6 +333,7 @@ export function toView(model: Model): State {
         kind: m.kind,
         sequence: m.sequence,
         usages: usages("meal", m.id),
+        ...(m.direct ? { direct: m.direct } : {}),
         prepared: model.portions
           .filter((p) => p.mealId === m.id)
           .map((p) => ({

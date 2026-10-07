@@ -58,7 +58,16 @@ export const theme = createTheme({
           backgroundColor: "var(--mui-palette-background-paper)",
           minHeight: 44,
         },
-        notchedOutline: { borderColor: "var(--mui-palette-text-secondary)" },
+        notchedOutline: {
+          borderColor: "var(--mui-palette-text-secondary)",
+          // WebKit can leave the legend's notch painted in the previous state.
+          // Keep its layout visible; MUI still hides the duplicate text with
+          // span opacity and controls the notch width from focus/value state.
+          // https://github.com/mui/material-ui/issues/46891
+          "@supports (-webkit-appearance: none)": {
+            "& legend": { visibility: "visible" },
+          },
+        },
       },
     },
     MuiPaper: {

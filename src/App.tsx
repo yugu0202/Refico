@@ -6,6 +6,7 @@ import type { Command } from "./domain/commands";
 import { ApiError, bootstrap, sendCommand, authClient } from "./api";
 import { createFocusRefresh } from "./refresh";
 import { History } from "./components/History";
+import { DirectMealDetail } from "./components/DirectMealDetail";
 import { LoginScreen } from "./components/LoginScreen";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
@@ -665,17 +666,22 @@ export default function App() {
                         <summary>
                           <strong>{meal.kind}</strong>
                           <span>
-                            {meal.batch
-                              ? meal.batch.name
-                              : meal.prepared?.length
-                                ? "作り置き"
-                                : `${meal.usages.length}食材`}
+                            {meal.direct
+                              ? "外食など"
+                              : meal.batch
+                                ? meal.batch.name
+                                : meal.prepared?.length
+                                  ? "作り置き"
+                                  : `${meal.usages.length}食材`}
                           </span>
                           <strong className="numeric">
                             {money(mealCost(meal))}
                           </strong>
                         </summary>
                         <div className="meal-detail">
+                          {meal.direct && (
+                            <DirectMealDetail direct={meal.direct} />
+                          )}
                           {meal.batch && (
                             <div>
                               <span>
