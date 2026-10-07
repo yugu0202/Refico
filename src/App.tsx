@@ -1,4 +1,8 @@
-import { SpaceSettings, Invitation } from "./components/SpaceSettings";
+import {
+  SpaceSettings,
+  Invitation,
+  type SpaceDetails,
+} from "./components/SpaceSettings";
 import { sharingRequest, type Space } from "./api";
 import { AccountMenu } from "./components/AccountMenu";
 import { BrandLogo } from "./components/BrandLogo";
@@ -77,7 +81,7 @@ export default function App() {
   );
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [spaceId, setSpaceId] = useState("");
-  const [spaceSettings, setSpaceSettings] = useState(false);
+  const [spaceSettings, setSpaceSettings] = useState<SpaceDetails | null>(null);
   const [invitation, setInvitation] = useState(
     () =>
       window.location.pathname.match(/^\/invitations\/([a-f0-9]{64})$/)?.[1] ??
@@ -125,6 +129,7 @@ export default function App() {
       setSpaceId(data.spaceId);
       setSampleDataEnabled(data.sampleDataEnabled === true);
       if (identityRef.current && identityRef.current !== data.spaceId) {
+        setSpaceSettings(null);
         setFormVersion((v) => v + 1);
         setEditingProduct(null);
         setAdjustingProduct(null);
@@ -475,7 +480,8 @@ export default function App() {
         <SpaceSettings
           key={`space-settings:${spaceId}`}
           space={spaces.find((s) => s.id === spaceId)!}
-          onClose={() => setSpaceSettings(false)}
+          initialDetails={spaceSettings}
+          onClose={() => setSpaceSettings(null)}
           onChanged={() => reload(true, true)}
         />
       )}
@@ -524,7 +530,19 @@ export default function App() {
               setBusy(false);
             }
           }}
-          onSettings={() => setSpaceSettings(true)}
+          onPrepareSettings={async () => {
+            const details = await sharingRequest<SpaceDetails>(
+              "/api/spaces/details",
+              undefined,
+              spaceId,
+            );
+            if (identityRef.current !== spaceId)
+              throw new Error(
+                "スペースが変更されました。もう一度お試しください。",
+              );
+            return details;
+          }}
+          onSettings={setSpaceSettings}
           user={user}
           canLogout={authMode === "google"}
           busy={busy}

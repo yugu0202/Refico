@@ -1,4 +1,5 @@
 import type { Space } from "../api";
+import type { SpaceDetails } from "./SpaceSettings";
 import { useEffect, useId, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -17,7 +18,8 @@ interface Props {
   spaces: Space[];
   spaceId: string;
   onSwitch: (id: string) => Promise<void>;
-  onSettings: () => void;
+  onPrepareSettings: () => Promise<SpaceDetails>;
+  onSettings: (details: SpaceDetails) => void;
   user: { name: string; email: string } | null;
   canLogout: boolean;
   busy: boolean;
@@ -32,6 +34,7 @@ export function AccountMenu({
   spaceId,
   onSwitch,
   onSettings,
+  onPrepareSettings,
   user,
   canLogout,
   busy,
@@ -48,16 +51,49 @@ export function AccountMenu({
   const [loggingOut, setLoggingOut] = useState(false);
   const loggingOutRef = useRef(false);
   const [error, setError] = useState("");
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const settingsPending = useRef(false);
+  const settingsGeneration = useRef(0);
+  useEffect(
+    () => () => {
+      ++settingsGeneration.current;
+    },
+    [],
+  );
   const open = Boolean(anchor);
   useEffect(() => {
     if (reopen) setAnchor(triggerRef.current);
   }, [reopen]);
   function close() {
+    ++settingsGeneration.current;
+    settingsPending.current = false;
+    setSettingsLoading(false);
     setAnchor(null);
     onClosed();
   }
+  async function openSettings() {
+    if (busy || loggingOutRef.current || settingsPending.current) return;
+    settingsPending.current = true;
+    const generation = ++settingsGeneration.current;
+    setSettingsLoading(true);
+    setError("");
+    try {
+      const details = await onPrepareSettings();
+      if (generation !== settingsGeneration.current) return;
+      close();
+      onSettings(details);
+    } catch (e) {
+      if (generation === settingsGeneration.current)
+        setError(e instanceof Error ? e.message : "設定を読み込めませんでした");
+    } finally {
+      if (generation === settingsGeneration.current) {
+        settingsPending.current = false;
+        setSettingsLoading(false);
+      }
+    }
+  }
   async function logout() {
-    if (busy || loggingOutRef.current) return;
+    if (busy || loggingOutRef.current || settingsPending.current) return;
     loggingOutRef.current = true;
     setLoggingOut(true);
     setError("");
@@ -132,7 +168,7 @@ export function AccountMenu({
             key={space.id}
             fullWidth
             variant="text"
-            disabled={busy || loggingOut}
+            disabled={busy || loggingOut || settingsLoading}
             aria-pressed={space.id === spaceId}
             sx={{
               justifyContent: "space-between",
@@ -158,14 +194,12 @@ export function AccountMenu({
         ))}
         <Button
           fullWidth
-          disabled={busy || loggingOut}
+          disabled={busy || loggingOut || settingsLoading}
           sx={{ justifyContent: "flex-start" }}
-          onClick={() => {
-            close();
-            onSettings();
-          }}
+          onClick={() => void openSettings()}
+          aria-busy={settingsLoading}
         >
-          共有・スペースの設定
+          {settingsLoading ? "読み込み中…" : "共有・スペースの設定"}
         </Button>
         {error && (
           <p className="error" role="alert">
@@ -187,7 +221,7 @@ export function AccountMenu({
           href="/help"
           variant="text"
           fullWidth
-          disabled={busy || loggingOut}
+          disabled={busy || loggingOut || settingsLoading}
           onClick={(event) => {
             if (
               event.button !== 0 ||
@@ -237,7 +271,7 @@ export function AccountMenu({
             fullWidth
             color="error"
             variant="text"
-            disabled={busy || loggingOut}
+            disabled={busy || loggingOut || settingsLoading}
             onClick={() => void logout()}
           >
             {loggingOut ? "ログアウト中…" : "ログアウト"}

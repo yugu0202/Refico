@@ -11,20 +11,22 @@ import {
   Typography,
 } from "@mui/material";
 import { sharingRequest, type Space } from "../api";
-interface Details {
+export interface SpaceDetails {
   members: { id: string; name: string; role: string }[];
   invitations: { id: string; expiresAt: number }[];
 }
 export function SpaceSettings({
   space,
+  initialDetails,
   onClose,
   onChanged,
 }: {
   space: Space;
+  initialDetails: SpaceDetails;
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
-  const [details, setDetails] = useState<Details>();
+  const [details, setDetails] = useState(initialDetails);
   const [name, setName] = useState(space.name);
   const [busy, setBusy] = useState(false);
   const guard = useRef(false);
@@ -39,12 +41,13 @@ export function SpaceSettings({
   } | null>(null);
   async function load() {
     setDetails(
-      await sharingRequest<Details>("/api/spaces/details", undefined, space.id),
+      await sharingRequest<SpaceDetails>(
+        "/api/spaces/details",
+        undefined,
+        space.id,
+      ),
     );
   }
-  useEffect(() => {
-    void load().catch((e) => setError(e.message));
-  }, []);
   async function act(body: unknown) {
     if (guard.current) return;
     guard.current = true;
