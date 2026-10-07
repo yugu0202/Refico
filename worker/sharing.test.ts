@@ -115,7 +115,7 @@ test("期限切れ・無効化・メンバー削除後の招待と更新を拒�
 });
 
 test("APIはCSRF、スペース切替後の古いフォーム、未所属への切替を拒否する", async () => {
-  const { db, sqlite } = testDatabase();
+  const { db, sqlite, queries } = testDatabase();
   try {
     addUser(sqlite, "a");
     const a = await personalSpace(db, "a");
@@ -158,6 +158,15 @@ test("APIはCSRF、スペース切替後の古いフォーム、未所属への�
     };
     assert.equal(initial.spaces.length, 1);
     const invite = await createInvitation(db, "a", a);
+    queries.length = 0;
+    const preview = await call(`/api/invitations/${invite.token}`);
+    assert.equal(preview.status, 200);
+    assert.equal(
+      ((await preview.json()) as { name: string }).name,
+      "マイスペース",
+    );
+    assert.equal(queries.length, 1);
+    assert.match(queries[0], /FROM space_invitations/);
     assert.equal(
       (
         await call(

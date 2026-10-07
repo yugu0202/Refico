@@ -85,12 +85,14 @@ export default {
       }
       if (request.method !== "GET" && !sameOrigin(request, env))
         return json({ error: "許可されていない送信元です" }, 403);
+      const inviteMatch = path.match(/^\/api\/invitations\/([a-f0-9]{64})$/);
+      // Previewing an invitation needs its token and authenticated user, not
+      // the user's personal/active space. Keep provisioning for acceptance.
+      if (inviteMatch && request.method === "GET")
+        return json(await invitationInfo(db, inviteMatch[1], user.id));
       // Membership is resolved server-side from Google session or the shared preview account.
       const personalId = await personalSpace(db, user.id);
       const spaceId = await activeSpace(db, user.id, personalId);
-      const inviteMatch = path.match(/^\/api\/invitations\/([a-f0-9]{64})$/);
-      if (inviteMatch && request.method === "GET")
-        return json(await invitationInfo(db, inviteMatch[1], user.id));
       if (inviteMatch && request.method === "POST") {
         await acceptInvitation(db, inviteMatch[1], user.id);
         return json({ ok: true });

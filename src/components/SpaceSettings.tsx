@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  CircularProgress,
   Button,
   Dialog,
   DialogActions,
@@ -330,19 +331,52 @@ export function Invitation({
   onCancel: () => void;
 }) {
   const [info, setInfo] = useState<{ name: string }>();
+  const [loading, setLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const guard = useRef(false);
   useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setInfo(undefined);
+    setError("");
     void sharingRequest<{ name: string }>(`/api/invitations/${token}`)
-      .then(setInfo)
-      .catch((e) => setError(e.message));
-  }, [token]);
+      .then((value) => {
+        if (active) setInfo(value);
+      })
+      .catch((e) => {
+        if (active)
+          setError(
+            e instanceof Error ? e.message : "招待を確認できませんでした",
+          );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [token, retry]);
   return (
     <Dialog open fullWidth maxWidth="sm" aria-labelledby="invite-title">
       <DialogTitle id="invite-title">スペースへの招待</DialogTitle>
       <DialogContent>
+        {loading && (
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{ alignItems: "center", minHeight: 48 }}
+            role="status"
+          >
+            <CircularProgress size={20} aria-hidden="true" />
+            <Typography>招待を確認しています…</Typography>
+          </Stack>
+        )}
         {error && <Alert severity="error">{error}</Alert>}
+        {!loading && !info && error && (
+          <Button onClick={() => setRetry((value) => value + 1)}>再試行</Button>
+        )}
         {info && <Typography>「{info.name}」に参加しますか？</Typography>}
       </DialogContent>
       <DialogActions>
@@ -351,7 +385,7 @@ export function Invitation({
         </Button>
         <Button
           variant="contained"
-          disabled={busy || !info}
+          disabled={busy || loading || !info}
           onClick={async () => {
             if (guard.current) return;
             guard.current = true;
