@@ -20,8 +20,7 @@
     "auth:schema": "node scripts/generate-auth-schema.mjs",
     "deploy:worker": "node scripts/deploy.mjs production",
     "deploy:preview": "node scripts/deploy.mjs preview",
-    "deploy:staging": "pnpm build && pnpm deploy:staging:worker",
-    "deploy:staging:worker": "node scripts/deploy.mjs staging"
+    "deploy:staging": "node scripts/deploy.mjs staging"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

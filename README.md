@@ -75,12 +75,13 @@ staging用OAuthクライアントのリダイレクトURIを`https://dev-refico.
 pnpm exec wrangler secret put GOOGLE_CLIENT_ID --env staging
 pnpm exec wrangler secret put GOOGLE_CLIENT_SECRET --env staging
 pnpm exec wrangler secret put BETTER_AUTH_SECRET --env staging
+pnpm build
 pnpm deploy:staging
 ```
 
-`pnpm deploy:staging`はビルド → staging D1のマイグレーション → `wrangler deploy --env staging`を実行します。先に`pnpm build`を実行するCloudflare Buildsでは、デプロイコマンドを`pnpm deploy:staging:worker`にします。
+`pnpm deploy:staging`はstaging D1のマイグレーション → `wrangler deploy --env staging`を実行します。ビルドは事前に`pnpm build`で行います。
 
-dev用WorkerのBuilds設定では、接続リポジトリを共通にし、本番ブランチを`dev`、ビルドコマンドを`pnpm build`、デプロイコマンドを`pnpm deploy:staging:worker`にします。dev用WorkerではPreview Buildsを無効にし、featureブランチのプレビューは既存のrefico Workerから配信します。既存Workerの通常プレビューとしてdevをビルドするだけではstagingは選択されません。
+dev用WorkerのBuilds設定では、接続リポジトリを共通にし、本番ブランチを`dev`、ビルドコマンドを`pnpm build`、デプロイコマンドを`pnpm deploy:staging`にします。dev用WorkerではPreview Buildsを無効にし、featureブランチのプレビューは既存のrefico Workerから配信します。既存Workerの通常プレビューとしてdevをビルドするだけではstagingは選択されません。
 
 ### プレビューの共通テストアカウント
 
