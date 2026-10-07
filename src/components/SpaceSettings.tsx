@@ -16,10 +16,12 @@ interface Details {
   invitations: { id: string; expiresAt: number }[];
 }
 export function SpaceSettings({
+  open,
   space,
   onClose,
   onChanged,
 }: {
+  open: boolean;
   space: Space;
   onClose: () => void;
   onChanged: () => Promise<void>;
@@ -43,8 +45,13 @@ export function SpaceSettings({
     );
   }
   useEffect(() => {
+    if (!open) return;
+    setName(space.name);
+    setError("");
+    setConfirm(null);
+    setInvite(null);
     void load().catch((e) => setError(e.message));
-  }, []);
+  }, [open, space.id]);
   async function act(body: unknown) {
     if (guard.current) return;
     guard.current = true;
@@ -85,7 +92,8 @@ export function SpaceSettings({
   }
   return (
     <Dialog
-      open
+      open={open}
+      keepMounted
       fullWidth
       maxWidth="sm"
       onClose={() => {
