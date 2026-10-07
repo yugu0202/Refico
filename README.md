@@ -67,21 +67,21 @@ pnpm deploy
 
 ### staging（devブランチ）
 
-`env.staging`はWorker名`dev-refico`、公開URL`https://dev-refico.yugu0202.workers.dev`、専用D1に設定しています。`APP_ENV=staging`・`AUTH_MODE=google`で実際のGoogleログインを検証します。サンプルデータ追加は本番と同様に無効です。
+`dev`は既存Worker `refico`のブランチプレビューです。公開URLは`https://dev-refico.yugu0202.workers.dev`で、`wrangler.staging.jsonc`の設定を通常の`previews`へ重ね、専用D1・`APP_ENV=staging`・`AUTH_MODE=google`を使います。サンプルデータ追加は本番と同様に無効です。
 
-staging用OAuthクライアントのリダイレクトURIを`https://dev-refico.yugu0202.workers.dev/api/auth/callback/google`に設定し、Secretsをstagingへ登録します。本番とは別のOAuthクライアントと認証secretを使います。
+Cloudflare Buildsは既存のrefico Workerで、本番ブランチ`main`、ビルドコマンド`pnpm build`、本番デプロイコマンド`pnpm deploy:worker`、プレビューデプロイコマンド`pnpm deploy:preview`にします。`WORKERS_CI_BRANCH=dev`の場合だけstaging設定を選び、それ以外のプレビューは共通テストアカウント・preview D1を使います。
+
+手動でdevプレビューへ配信する場合は、ビルド後に`pnpm deploy:staging`を実行します。staging D1へのマイグレーション後、`wrangler preview --name dev`で配信します。別Workerの作成や`--env staging`は不要です。
+
+staging用OAuthクライアントのリダイレクトURIは`https://dev-refico.yugu0202.workers.dev/api/auth/callback/google`です。初回配信後、Secretsをdevプレビューだけに登録します。本番とは別のOAuthクライアントと認証secretを使います。
 
 ```bash
-pnpm exec wrangler secret put GOOGLE_CLIENT_ID --env staging
-pnpm exec wrangler secret put GOOGLE_CLIENT_SECRET --env staging
-pnpm exec wrangler secret put BETTER_AUTH_SECRET --env staging
 pnpm build
 pnpm deploy:staging
+pnpm exec wrangler preview secret put GOOGLE_CLIENT_ID --name dev
+pnpm exec wrangler preview secret put GOOGLE_CLIENT_SECRET --name dev
+pnpm exec wrangler preview secret put BETTER_AUTH_SECRET --name dev
 ```
-
-`pnpm deploy:staging`はstaging D1のマイグレーション → `wrangler deploy --env staging`を実行します。ビルドは事前に`pnpm build`で行います。
-
-dev用WorkerのBuilds設定では、接続リポジトリを共通にし、本番ブランチを`dev`、ビルドコマンドを`pnpm build`、デプロイコマンドを`pnpm deploy:staging`にします。dev用WorkerではPreview Buildsを無効にし、featureブランチのプレビューは既存のrefico Workerから配信します。既存Workerの通常プレビューとしてdevをビルドするだけではstagingは選択されません。
 
 ### プレビューの共通テストアカウント
 
@@ -109,7 +109,7 @@ pnpm dev:worker
 
 ### 自動マイグレーション
 
-デプロイ用スクリプトは`wrangler.jsonc`を唯一の設定元として、本番はトップレベル、プレビューは`previews.d1_databases`、stagingは`env.staging.d1_databases`を選択します。CLI用の一時設定を生成し、未適用マイグレーションをすべて適用してから配信します。失敗時は配信を中止し、一時設定は削除します。プレビュー・stagingのDBが本番DBと同じIDの場合も拒否します。
+デプロイ用スクリプトは本番は`wrangler.jsonc`のトップレベル、通常プレビューは`previews.d1_databases`、devプレビューは`wrangler.staging.jsonc`の`previews.d1_databases`を選択します。CLI用の一時設定を生成し、未適用マイグレーションをすべて適用してから配信します。失敗時は配信を中止し、一時設定は削除します。プレビュー・stagingのDBが本番DBと同じIDの場合も拒否します。
 
 `pnpm deploy`はビルド・本番マイグレーション・本番配信を行います。Cloudflare Buildsではビルドコマンドを`pnpm build`、本番デプロイコマンドを`pnpm deploy:worker`、プレビューデプロイコマンドを`pnpm deploy:preview`にします。ビルド用APIトークンには対象DBのD1編集権限が必要です。DashboardでSQLを手動適用せず、Wranglerの`d1_migrations`で適用履歴を管理してください。
 

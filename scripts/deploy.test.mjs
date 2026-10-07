@@ -3,7 +3,12 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { migrationConfig, deploy } from "./deploy.mjs";
+import {
+  migrationConfig,
+  deploy,
+  deploymentTarget,
+  stagingPreviewConfig,
+} from "./deploy.mjs";
 const db = (id) => ({
   binding: "DB",
   database_name: id,
@@ -13,7 +18,9 @@ const db = (id) => ({
 const config = {
   d1_databases: [db("production")],
   previews: { d1_databases: [db("preview")] },
-  env: { staging: { d1_databases: [db("staging")] } },
+  name: "refico",
+  main: "worker/index.ts",
+  assets: { directory: "dist", binding: "ASSETS" },
 };
 test("環境ごとのDBを選び、本番と同じプレビューDBや未設定を拒否する", () => {
   assert.equal(
@@ -45,7 +52,11 @@ test("マイグレーション後に配信し、失敗時は配信せず一時�
       const calls = [];
       deploy(
         target,
-        config,
+        target === "staging"
+          ? stagingPreviewConfig(config, {
+              previews: { d1_databases: [db("staging")] },
+            })
+          : config,
         (args) => {
           calls.push(args);
           if (args[0] === "d1") {
@@ -55,19 +66,30 @@ test("マイグレーション後に配信し、失敗時は配信せず一時�
               generated.d1_databases[0].migrations_dir,
               join(directory, "migrations"),
             );
+          } else if (target === "staging") {
+            const generated = JSON.parse(readFileSync(args[2], "utf8"));
+            assert.equal(generated.name, "refico");
+            assert.equal(generated.env, undefined);
+            assert.equal(
+              generated.previews.d1_databases[0].database_id,
+              "staging",
+            );
+            assert.equal(generated.main, join(directory, "worker/index.ts"));
+            assert.equal(generated.assets.directory, join(directory, "dist"));
           }
         },
         directory,
       );
       assert.equal(calls.length, 2);
-      assert.deepEqual(calls[1], [
-        target === "preview" ? "preview" : "deploy",
-        "--config",
-        join(directory, "wrangler.jsonc"),
-        ...(target === "preview"
-          ? []
-          : ["--env", target === "staging" ? "staging" : ""]),
+      assert.equal(calls[1][0], target === "production" ? "deploy" : "preview");
+      assert.deepEqual(calls[1].slice(3), [
+        "--env",
+        "",
+        ...(target === "staging" ? ["--name", "dev"] : []),
       ]);
+      if (target !== "staging")
+        assert.equal(calls[1][2], join(directory, "wrangler.jsonc"));
+      assert.deepEqual(readdirSync(join(directory, ".wrangler")), []);
     }
     let count = 0;
     assert.throws(
@@ -90,21 +112,33 @@ test("マイグレーション後に配信し、失敗時は配信せず一時�
   }
 });
 
-test("stagingは専用DBを使い、本番DBと設定の欠落を拒否する", () => {
+test("devだけstagingのプレビュー設定を使い、本番DBへの接続を拒否する", () => {
+  assert.equal(deploymentTarget("preview", "dev"), "staging");
+  assert.equal(deploymentTarget("preview", "feature/dev"), "preview");
+  assert.equal(deploymentTarget("preview", undefined), "preview");
+  assert.equal(deploymentTarget("production", "dev"), "production");
+  const staging = stagingPreviewConfig(config, {
+    previews: {
+      d1_databases: [db("staging")],
+      vars: { APP_ENV: "staging", AUTH_MODE: "google" },
+    },
+  });
   assert.equal(
-    migrationConfig(config, "staging").d1_databases[0].database_id,
+    migrationConfig(staging, "staging").d1_databases[0].database_id,
     "staging",
   );
+  assert.equal(staging.name, "refico");
+  assert.equal(staging.previews.vars.AUTH_MODE, "google");
+  assert.equal(config.previews.d1_databases[0].database_id, "preview");
   assert.throws(
     () =>
       migrationConfig(
-        { ...config, env: { staging: { d1_databases: [db("production")] } } },
+        stagingPreviewConfig(config, {
+          previews: { d1_databases: [db("production")] },
+        }),
         "staging",
       ),
     /production database/,
   );
-  assert.throws(
-    () => migrationConfig({ ...config, env: {} }, "staging"),
-    /No D1/,
-  );
+  assert.throws(() => stagingPreviewConfig(config, {}), /No D1/);
 });
