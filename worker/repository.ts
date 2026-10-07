@@ -8,6 +8,19 @@ export interface Snapshot {
   model: Model;
   revision: number;
 }
+function unionAll(statements: string[]): string {
+  // D1 restricts the number of SELECT terms in each compound, unlike the
+  // default SQLite build used by node:sqlite. Nest small compounds so the
+  // snapshot stays one statement without exceeding that runtime limit.
+  const maxTerms = 5;
+  if (statements.length <= maxTerms) return statements.join(" UNION ALL ");
+  const groups: string[] = [];
+  for (let i = 0; i < statements.length; i += maxTerms)
+    groups.push(
+      `SELECT * FROM (${unionAll(statements.slice(i, i + maxTerms))})`,
+    );
+  return unionAll(groups);
+}
 // Provisioning is atomic and repeatable, even across concurrent first requests.
 export async function personalHousehold(
   db: Database,
@@ -43,13 +56,13 @@ export async function loadSnapshot(
   // per record instead of aggregating the entire household into a large D1 row.
   // Table names come only from the server's modelTables allowlist.
   const query =
-    [
+    unionAll([
       "SELECT -1 AS table_index, 0 AS record_order, NULL AS data, revision FROM households WHERE id = ?",
       ...modelTables.map(
         (t, i) =>
           `SELECT ${i} AS table_index, rowid AS record_order, data, NULL AS revision FROM ${t} WHERE household_id = ?`,
       ),
-    ].join(" UNION ALL ") + " ORDER BY table_index, record_order";
+    ]) + " ORDER BY table_index, record_order";
   const result = await db
     .prepare(query)
     .bind(...Array(modelTables.length + 1).fill(householdId))
