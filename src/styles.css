@@ -672,6 +672,19 @@ label .amount-input select {
 .meal-history-row .meal-history-edit {
   margin-top: 3px;
 }
+.cooking-history-row {
+  grid-template-rows: auto auto;
+}
+.cooking-history-row .meal-row {
+  grid-row: 1 / span 2;
+  display: grid;
+  grid-template-rows: subgrid;
+}
+.cooking-history-row .meal-history-edit {
+  grid-row: 1;
+  align-self: center;
+  margin-top: 0;
+}
 .cooking-history-row .meal-row summary {
   display: grid;
   grid-template-columns: 12px minmax(0, 1fr) auto;
