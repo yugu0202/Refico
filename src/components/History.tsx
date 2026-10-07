@@ -9,6 +9,7 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import { PurchaseForm } from "./PurchaseForm";
 import { MealForm } from "./MealForm";
+import { DirectMealDetail } from "./DirectMealDetail";
 import { mealCost, type State } from "../domain/inventory";
 import { money, number, dateLabel } from "../format";
 
@@ -105,12 +106,15 @@ export function History({
                     {dateLabel(m.date)} · {m.kind}
                   </strong>
                   <span>
-                    {m.batch?.name ??
-                      `${m.usages.length + (m.prepared?.length ?? 0)}品`}
+                    {m.direct
+                      ? "外食など"
+                      : (m.batch?.name ??
+                        `${m.usages.length + (m.prepared?.length ?? 0)}品`)}
                   </span>
                   <strong className="numeric">{money(mealCost(m))}</strong>
                 </summary>
                 <div className="meal-detail">
+                  {m.direct && <DirectMealDetail direct={m.direct} />}
                   {m.usages.map((u) => (
                     <div key={u.productId}>
                       <span>

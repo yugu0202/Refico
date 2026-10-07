@@ -37,6 +37,9 @@ export interface Meal {
   date: string;
   kind: string;
   usages: Usage[];
+  // Direct expenses cover dining out, takeaway and ready-made meals.
+  // Absence means the existing inventory-based meal; old records stay valid.
+  direct?: { cost: number; place: string; note: string };
   batch?: { name: string; servings: number; eatenServings: number };
   prepared?: { batchId: string; quantity: number; cost: number }[];
 }
@@ -275,9 +278,47 @@ export function recordMeal(
   batch?: Meal["batch"],
   preparedInputs: { batchId: string; quantity: number }[] = [],
   snapshots: Usage[] = [],
+  direct?: Meal["direct"],
 ): State {
   requireValue(validDate(date), "食事の日付を入力してください");
   requireValue(mealKinds.includes(kind), "食事の種類を選択してください");
+  if (direct !== undefined) {
+    requireValue(
+      inputs.length === 0 && preparedInputs.length === 0 && !batch,
+      "外食などには食材・作り置きを指定できません",
+    );
+    requireValue(
+      Number.isSafeInteger(direct.cost) &&
+        direct.cost >= 0 &&
+        direct.cost <= 100000000,
+      "金額を0〜100000000円の整数で入力してください",
+    );
+    requireValue(
+      typeof direct.place === "string" && direct.place.trim().length <= 100,
+      "店名を100文字以内で入力してください",
+    );
+    requireValue(
+      typeof direct.note === "string" && direct.note.trim().length <= 500,
+      "メモを500文字以内で入力してください",
+    );
+    return {
+      ...state,
+      meals: [
+        ...state.meals,
+        {
+          id: crypto.randomUUID(),
+          date,
+          kind,
+          usages: [],
+          direct: {
+            cost: direct.cost,
+            place: direct.place.trim(),
+            note: direct.note.trim(),
+          },
+        },
+      ],
+    };
+  }
   requireValue(
     inputs.length > 0 || preparedInputs.length > 0,
     "食材か作り置きを追加してください",
@@ -557,10 +598,12 @@ export function recordPreparedAdjustment(
   };
 }
 export const mealCost = (meal: Meal) =>
-  (meal.batch
-    ? portionCost(meal, Math.round(meal.batch.eatenServings * 1000))
-    : cookingCost(meal)) +
-  (meal.prepared ?? []).reduce((sum, p) => sum + p.cost, 0);
+  meal.direct
+    ? meal.direct.cost
+    : (meal.batch
+        ? portionCost(meal, Math.round(meal.batch.eatenServings * 1000))
+        : cookingCost(meal)) +
+      (meal.prepared ?? []).reduce((sum, p) => sum + p.cost, 0);
 export function dailyCosts(state: State) {
   const days = new Map<string, number>();
   for (const meal of state.meals) {

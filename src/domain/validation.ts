@@ -101,9 +101,26 @@ export function parseState(raw: string): State {
       validDate(meal.date) &&
         mealKinds.includes(meal.kind) &&
         Array.isArray(meal.usages) &&
-        (meal.usages.length > 0 ||
+        (meal.direct !== undefined ||
+          meal.usages.length > 0 ||
           (Array.isArray(meal.prepared) && meal.prepared.length > 0)),
     );
+    if (meal.direct !== undefined) {
+      const d = meal.direct;
+      check(
+        !!d &&
+          Number.isSafeInteger(d.cost) &&
+          d.cost >= 0 &&
+          d.cost <= 100000000 &&
+          typeof d.place === "string" &&
+          d.place.length <= 100 &&
+          typeof d.note === "string" &&
+          d.note.length <= 500 &&
+          meal.usages.length === 0 &&
+          !meal.batch &&
+          !meal.prepared?.length,
+      );
+    }
   }
   // Replay consumption in recording order, including reductions between meals.
   const events = [

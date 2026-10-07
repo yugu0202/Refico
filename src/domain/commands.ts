@@ -26,8 +26,9 @@ const purchase = z
     date,
   })
   .strict();
-const meal = z
+const inventoryMeal = z
   .object({
+    source: z.literal("inventory").optional(),
     date,
     kind: z.enum(["朝食", "昼食", "夕食", "その他"]),
     inputs: z
@@ -54,6 +55,19 @@ const meal = z
       .max(100),
   })
   .strict();
+const meal = z.union([
+  inventoryMeal,
+  z
+    .object({
+      source: z.literal("direct"),
+      date,
+      kind: z.enum(["朝食", "昼食", "夕食", "その他"]),
+      cost: z.number().int().min(0).max(100000000),
+      place: z.string().trim().max(100),
+      note: z.string().trim().max(500),
+    })
+    .strict(),
+]);
 export const commandSchema = z.discriminatedUnion("type", [
   z
     .object({
@@ -151,10 +165,27 @@ export function applyCommand(state: State, command: Command): State {
       return updatePurchase(state, command.id, command.input);
     case "meal.create": {
       const m = command.input;
-      return recordMeal(state, m.date, m.kind, m.inputs, m.batch, m.prepared);
+      return m.source === "direct"
+        ? recordMeal(state, m.date, m.kind, [], undefined, [], [], {
+            cost: m.cost,
+            place: m.place,
+            note: m.note,
+          })
+        : recordMeal(state, m.date, m.kind, m.inputs, m.batch, m.prepared);
     }
     case "meal.update": {
       const m = command.input;
+      if (m.source === "direct")
+        return updateMeal(
+          state,
+          command.id,
+          m.date,
+          m.kind,
+          [],
+          undefined,
+          [],
+          { cost: m.cost, place: m.place, note: m.note },
+        );
       return updateMeal(
         state,
         command.id,
