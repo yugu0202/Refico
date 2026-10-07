@@ -13,10 +13,15 @@ import { parse } from "jsonc-parser";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 export function migrationConfig(config, target, directory = root) {
-  if (!["production", "preview"].includes(target))
-    throw new Error("Target must be production or preview");
-  const databases = (target === "preview" ? config.previews : config)
-    ?.d1_databases;
+  if (!["production", "preview", "staging"].includes(target))
+    throw new Error("Target must be production, preview or staging");
+  const environment =
+    target === "preview"
+      ? config.previews
+      : target === "staging"
+        ? config.env?.staging
+        : config;
+  const databases = environment?.d1_databases;
   if (!Array.isArray(databases) || !databases.length)
     throw new Error(`No D1 databases configured for ${target}`);
   const productionIds = new Set(
@@ -26,8 +31,8 @@ export function migrationConfig(config, target, directory = root) {
     d1_databases: databases.map((db) => {
       if (!db.binding || !db.database_id || !db.database_name)
         throw new Error("D1 binding, name and ID are required");
-      if (target === "preview" && productionIds.has(db.database_id))
-        throw new Error("Preview must not migrate a production database");
+      if (target !== "production" && productionIds.has(db.database_id))
+        throw new Error(`${target} must not migrate a production database`);
       return {
         ...db,
         migrations_dir: resolve(directory, db.migrations_dir ?? "migrations"),
@@ -59,6 +64,9 @@ export function deploy(target, config, run, directory = root) {
       target === "preview" ? "preview" : "deploy",
       "--config",
       join(directory, "wrangler.jsonc"),
+      ...(target === "preview"
+        ? []
+        : ["--env", target === "staging" ? "staging" : ""]),
     ]);
   } finally {
     rmSync(temporary, { recursive: true, force: true });

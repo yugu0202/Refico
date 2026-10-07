@@ -3,7 +3,7 @@ name: Check
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, dev]
 
 permissions:
   contents: read
@@ -41,3 +41,6 @@ jobs:
 
       - name: Validate Worker bundle
         run: pnpm exec wrangler deploy --dry-run
+
+      - name: Validate staging Worker bundle
+        run: pnpm exec wrangler deploy --env staging --dry-run

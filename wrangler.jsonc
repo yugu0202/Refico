@@ -32,6 +32,25 @@
       "persist": true,
     },
   },
+  "env": {
+    "staging": {
+      "name": "dev-refico",
+      "workers_dev": true,
+      "vars": {
+        "APP_ENV": "staging",
+        "AUTH_MODE": "google",
+        "BETTER_AUTH_URL": "https://dev-refico.yugu0202.workers.dev",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "refico-staging",
+          "database_id": "26c05f49-4fa5-4f1a-a2c0-891d0ad333e4",
+          "migrations_dir": "migrations",
+        },
+      ],
+    },
+  },
   "previews": {
     "vars": {
       "APP_ENV": "preview",
