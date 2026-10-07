@@ -16,9 +16,9 @@ Cloudflare Workers上で動作する、食材の在庫管理と1日の食費計�
 - プレビュー・開発環境では空の状態からサンプルデータを追加
 
 React + MUI + TypeScript + Vite。Cloudflare Workersが静的アセットとAPIを配信します。
-GoogleログインとD1保存に対応し、ユーザー専用の家庭単位でデータを管理します。
+GoogleログインとD1保存に対応し、ユーザー専用のスペース単位でデータを管理します。
 購入・食事履歴の編集、在庫調整、作り置き・廃棄をサーバーで計算・保存します。
-家庭への招待・共有画面、記録削除、バーコードは未実装です。
+スペースへの招待・共有画面、記録削除、バーコードは未実装です。
 旧localStorageデータの移行は行いません。
 
 ## 開発
@@ -65,9 +65,27 @@ pnpm exec wrangler secret put BETTER_AUTH_SECRET
 pnpm deploy
 ```
 
+### staging（devブランチ）
+
+`dev`は既存Worker `refico`のブランチプレビューです。公開URLは`https://dev-refico.yugu0202.workers.dev`で、`wrangler.staging.jsonc`の設定を通常の`previews`へ重ね、専用D1・`APP_ENV=staging`・`AUTH_MODE=google`を使います。サンプルデータ追加は本番と同様に無効です。
+
+Cloudflare Buildsは既存のrefico Workerで、本番ブランチ`main`、ビルドコマンド`pnpm build`、本番デプロイコマンド`pnpm deploy:worker`、プレビューデプロイコマンド`pnpm deploy:preview`にします。`WORKERS_CI_BRANCH=dev`の場合だけstaging設定を選び、それ以外のプレビューは共通テストアカウント・preview D1を使います。
+
+手動でdevプレビューへ配信する場合は、ビルド後に`pnpm deploy:staging`を実行します。staging D1へのマイグレーション後、`wrangler preview --name dev`で配信します。別Workerの作成や`--env staging`は不要です。
+
+staging用OAuthクライアントのリダイレクトURIは`https://dev-refico.yugu0202.workers.dev/api/auth/callback/google`です。初回配信後、Secretsをdevプレビューだけに登録します。本番とは別のOAuthクライアントと認証secretを使います。
+
+```bash
+pnpm build
+pnpm deploy:staging
+pnpm exec wrangler preview secret put GOOGLE_CLIENT_ID --name dev
+pnpm exec wrangler preview secret put GOOGLE_CLIENT_SECRET --name dev
+pnpm exec wrangler preview secret put BETTER_AUTH_SECRET --name dev
+```
+
 ### プレビューの共通テストアカウント
 
-`previews.vars`は`APP_ENV=preview`、`AUTH_MODE=test`に設定済みです。アプリ内のログインを省略し、プレビューDBに固定IDの共通ユーザーを作成します。同じプレビューD1を使うブランチ・URL・ブラウザでは、全員が同じ家庭のデータを共有します。Cookieを削除しても保存済みデータを確認できます。Google設定・認証Secrets・AccessのAUD設定は不要です。
+`previews.vars`は`APP_ENV=preview`、`AUTH_MODE=test`に設定済みです。アプリ内のログインを省略し、プレビューDBに固定IDの共通ユーザーを作成します。同じプレビューD1を使うブランチ・URL・ブラウザでは、全員が同じスペースのデータを共有します。Cookieを削除しても保存済みデータを確認できます。Google設定・認証Secrets・AccessのAUD設定は不要です。
 
 Cloudflare Accessで対象プレビュー全体（静的アセットとAPI）を保護してください。Accessは入口の制限として利用し、アプリではAccess JWTやユーザー情報を検証しません。Access保護がないURLでは誰でも共通データを読み書きできます。本番で`AUTH_MODE=test`を指定した場合はAPIを拒否します。
 
@@ -91,7 +109,7 @@ pnpm dev:worker
 
 ### 自動マイグレーション
 
-デプロイ用スクリプトは`wrangler.jsonc`を唯一の設定元として、本番はトップレベル、プレビューは`previews.d1_databases`を選択します。CLI用の一時設定を生成し、未適用マイグレーションをすべて適用してから配信します。失敗時は配信を中止し、一時設定は削除します。プレビューDBが本番DBと同じIDの場合も拒否します。
+デプロイ用スクリプトは本番は`wrangler.jsonc`のトップレベル、通常プレビューは`previews.d1_databases`、devプレビューは`wrangler.staging.jsonc`の`previews.d1_databases`を選択します。CLI用の一時設定を生成し、未適用マイグレーションをすべて適用してから配信します。失敗時は配信を中止し、一時設定は削除します。プレビュー・stagingのDBが本番DBと同じIDの場合も拒否します。
 
 `pnpm deploy`はビルド・本番マイグレーション・本番配信を行います。Cloudflare Buildsではビルドコマンドを`pnpm build`、本番デプロイコマンドを`pnpm deploy:worker`、プレビューデプロイコマンドを`pnpm deploy:preview`にします。ビルド用APIトークンには対象DBのD1編集権限が必要です。DashboardでSQLを手動適用せず、Wranglerの`d1_migrations`で適用履歴を管理してください。
 
@@ -115,7 +133,7 @@ pnpm dev:worker
 
 フォーカス復帰時の再取得は、前回の取得開始または保存成功から5分以上経過した場合だけ行います。保存中・取得中は実行せず、日付表示は毎回更新します。初期取得・手動再読み込み・401/409の復旧はこの間隔に制限されません。同時に発生したbootstrapは1リクエストにまとめます。
 
-スナップショットはrevisionと12テーブルをそれぞれSELECTし、`db.batch()`で一括取得します。各テーブルのrowid順と取得時点の整合性を保ちます。同じ記録を読むSQLの集約では料金に直結するrows readを減らせないため、SQLは単純な形を維持し、不要な取得回数と認証DB参照の削減を優先します。家庭の所属確認は引き続きリクエストごとにD1で行います。
+スナップショットはrevisionと12テーブルをそれぞれSELECTし、`db.batch()`で一括取得します。各テーブルのrowid順と取得時点の整合性を保ちます。同じ記録を読むSQLの集約では料金に直結するrows readを減らせないため、SQLは単純な形を維持し、不要な取得回数と認証DB参照の削減を優先します。スペースの所属確認は引き続きリクエストごとにD1で行います。
 
 プレビューユーザーの作成はDBバインディングごと・Worker isolate内で初回のみ行い、同時リクエストでも初期化を共有します。初期化失敗時は再試行し、isolateが再起動した場合は冪等なINSERTを実行します。
 
@@ -130,7 +148,7 @@ Better Authの署名付きセッションCookieを5分間キャッシュしま�
 ## 検証
 
 `pnpm check`、`pnpm test`、`pnpm build`、`pnpm exec wrangler deploy --dry-run`。
-テストは原価計算、サーバーモデルの投影、認証済みAPI、再送、リビジョン競合、家庭間の分離、D1と同じSQLによるロールバックを検証します。
+テストは原価計算、サーバーモデルの投影、認証済みAPI、再送、リビジョン競合、スペース間の分離、D1と同じSQLによるロールバックを検証します。
 認証テーブルはBetter Authのマイグレーション機能で生成済みです。ライブラリ更新時は`pnpm auth:schema`で生成内容を比較し、稼働DBには既存マイグレーションの上書きではなく新規マイグレーションを追加します。
 
 公式資料:

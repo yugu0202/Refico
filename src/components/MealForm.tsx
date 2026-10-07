@@ -4,6 +4,8 @@ import Tabs from "@mui/material/Tabs";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Button from "@mui/material/Button";
+import IconButton from "@mui/material/IconButton";
+import SvgIcon from "@mui/material/SvgIcon";
 import TextField from "@mui/material/TextField";
 import { useState, useRef, useId, type FormEvent } from "react";
 import {
@@ -458,18 +460,29 @@ export function MealForm({
                       }
                     />
                   )}
-                  <Button
+                  <IconButton
                     type="button"
-                    variant="text"
-                    className="text-button"
                     aria-label={`使ったもの${index + 1}を削除`}
+                    title="削除"
                     disabled={rows.length === 1}
                     onClick={() =>
                       setRows(rows.filter((r) => r.key !== row.key))
                     }
+                    sx={{ width: 44, height: 44 }}
                   >
-                    削除
-                  </Button>
+                    <SvgIcon
+                      fontSize="small"
+                      sx={{
+                        fill: "none",
+                        stroke: "currentColor",
+                        strokeWidth: 1.8,
+                        strokeLinecap: "round",
+                        strokeLinejoin: "round",
+                      }}
+                    >
+                      <path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7M14 10v7" />
+                    </SvgIcon>
+                  </IconButton>
                 </div>
               );
             })}

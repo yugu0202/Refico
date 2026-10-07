@@ -12,10 +12,23 @@ import { spawnSync } from "node:child_process";
 import { parse } from "jsonc-parser";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+export function deploymentTarget(target, branch) {
+  return target === "preview" && branch === "dev" ? "staging" : target;
+}
+
+export function stagingPreviewConfig(config, overrides) {
+  if (!overrides?.previews?.d1_databases?.length)
+    throw new Error("No D1 databases configured for staging");
+  return {
+    ...config,
+    previews: { ...config.previews, ...overrides.previews },
+  };
+}
+
 export function migrationConfig(config, target, directory = root) {
-  if (!["production", "preview"].includes(target))
-    throw new Error("Target must be production or preview");
-  const databases = (target === "preview" ? config.previews : config)
+  if (!["production", "preview", "staging"].includes(target))
+    throw new Error("Target must be production, preview or staging");
+  const databases = (target === "production" ? config : config.previews)
     ?.d1_databases;
   if (!Array.isArray(databases) || !databases.length)
     throw new Error(`No D1 databases configured for ${target}`);
@@ -26,8 +39,8 @@ export function migrationConfig(config, target, directory = root) {
     d1_databases: databases.map((db) => {
       if (!db.binding || !db.database_id || !db.database_name)
         throw new Error("D1 binding, name and ID are required");
-      if (target === "preview" && productionIds.has(db.database_id))
-        throw new Error("Preview must not migrate a production database");
+      if (target !== "production" && productionIds.has(db.database_id))
+        throw new Error(`${target} must not migrate a production database`);
       return {
         ...db,
         migrations_dir: resolve(directory, db.migrations_dir ?? "migrations"),
@@ -55,10 +68,34 @@ export function deploy(target, config, run, directory = root) {
         configPath,
       ]);
     }
+    let deploymentPath = join(directory, "wrangler.jsonc");
+    if (target === "staging") {
+      // This is a dev Preview of the existing Worker, not a Wrangler environment.
+      // Paths in the generated config must remain relative to the repository.
+      deploymentPath = join(temporary, "deployment.json");
+      writeFileSync(
+        deploymentPath,
+        JSON.stringify({
+          ...config,
+          main: resolve(directory, config.main),
+          assets: {
+            ...config.assets,
+            directory: resolve(directory, config.assets.directory),
+          },
+          previews: {
+            ...config.previews,
+            d1_databases: migrations.d1_databases,
+          },
+        }),
+      );
+    }
     run([
-      target === "preview" ? "preview" : "deploy",
+      target === "production" ? "deploy" : "preview",
       "--config",
-      join(directory, "wrangler.jsonc"),
+      deploymentPath,
+      "--env",
+      "",
+      ...(target === "staging" ? ["--name", "dev"] : []),
     ]);
   } finally {
     rmSync(temporary, { recursive: true, force: true });
@@ -71,18 +108,33 @@ if (
 ) {
   try {
     const errors = [];
-    const config = parse(
+    let config = parse(
       readFileSync(join(root, "wrangler.jsonc"), "utf8"),
       errors,
       { allowTrailingComma: true },
     );
     if (errors.length) throw new Error("Invalid wrangler.jsonc");
+    const target = deploymentTarget(
+      process.argv[2],
+      process.env.WORKERS_CI_BRANCH,
+    );
+    if (target === "staging") {
+      const stagingErrors = [];
+      const overrides = parse(
+        readFileSync(join(root, "wrangler.staging.jsonc"), "utf8"),
+        stagingErrors,
+        { allowTrailingComma: true },
+      );
+      if (stagingErrors.length)
+        throw new Error("Invalid wrangler.staging.jsonc");
+      config = stagingPreviewConfig(config, overrides);
+    }
     const require = createRequire(import.meta.url);
     const wrangler = resolve(
       dirname(require.resolve("wrangler/package.json")),
       require("wrangler/package.json").bin.wrangler,
     );
-    deploy(process.argv[2], config, (args) => {
+    deploy(target, config, (args) => {
       const result = spawnSync(process.execPath, [wrangler, ...args], {
         cwd: root,
         stdio: "inherit",

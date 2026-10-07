@@ -19,7 +19,8 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "auth:schema": "node scripts/generate-auth-schema.mjs",
     "deploy:worker": "node scripts/deploy.mjs production",
-    "deploy:preview": "node scripts/deploy.mjs preview"
+    "deploy:preview": "node scripts/deploy.mjs preview",
+    "deploy:staging": "node scripts/deploy.mjs staging"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

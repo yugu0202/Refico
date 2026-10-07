@@ -9,27 +9,27 @@ export interface Snapshot {
   revision: number;
 }
 // Provisioning is atomic and repeatable, even across concurrent first requests.
-export async function personalHousehold(
+export async function personalSpace(
   db: Database,
   userId: string,
 ): Promise<string> {
   const existing = await db
     .prepare(
-      "SELECT household_id FROM household_members WHERE user_id = ? ORDER BY joined_at, household_id LIMIT 1",
+      "SELECT space_id FROM space_members WHERE user_id = ? AND role = 'owner' ORDER BY joined_at, space_id LIMIT 1",
     )
     .bind(userId)
-    .first<{ household_id: string }>();
-  if (existing) return existing.household_id;
+    .first<{ space_id: string }>();
+  if (existing) return existing.space_id;
   const id = `personal:${userId}`;
   await db.batch([
     db
       .prepare(
-        "INSERT OR IGNORE INTO households (id, owner_user_id, name) VALUES (?, ?, '自分の在庫')",
+        "INSERT OR IGNORE INTO spaces (id, owner_user_id, name) VALUES (?, ?, 'マイスペース')",
       )
       .bind(id, userId),
     db
       .prepare(
-        "INSERT OR IGNORE INTO household_members (household_id, user_id, role) VALUES (?, ?, 'owner')",
+        "INSERT OR IGNORE INTO space_members (space_id, user_id, role) VALUES (?, ?, 'owner')",
       )
       .bind(id, userId),
   ]);
@@ -37,43 +37,41 @@ export async function personalHousehold(
 }
 export async function loadSnapshot(
   db: Database,
-  householdId: string,
+  spaceId: string,
 ): Promise<Snapshot> {
   const result = await db.batch([
-    db
-      .prepare("SELECT revision FROM households WHERE id = ?")
-      .bind(householdId),
+    db.prepare("SELECT revision FROM spaces WHERE id = ?").bind(spaceId),
     ...modelTables.map((t) =>
       db
-        .prepare(`SELECT data FROM ${t} WHERE household_id = ? ORDER BY rowid`)
-        .bind(householdId),
+        .prepare(`SELECT data FROM ${t} WHERE space_id = ? ORDER BY rowid`)
+        .bind(spaceId),
     ),
   ]);
-  const household = result[0].results[0] as { revision: number } | undefined;
-  if (!household) throw new Error("家庭が見つかりません");
+  const space = result[0].results[0] as { revision: number } | undefined;
+  if (!space) throw new Error("スペースが見つかりません");
   const model = emptyModel();
   modelTables.forEach((t, i) => {
     (model[t] as unknown[]) = result[i + 1].results.map((r) =>
       JSON.parse((r as { data: string }).data),
     );
   });
-  return { model, revision: household.revision };
+  return { model, revision: space.revision };
 }
 export async function receipt(
   db: Database,
-  householdId: string,
+  spaceId: string,
   requestId: string,
 ) {
   return db
     .prepare(
-      "SELECT fingerprint FROM mutation_receipts WHERE household_id = ? AND request_id = ?",
+      "SELECT fingerprint FROM mutation_receipts WHERE space_id = ? AND request_id = ?",
     )
-    .bind(householdId, requestId)
+    .bind(spaceId, requestId)
     .first<{ fingerprint: string }>();
 }
 export async function saveSnapshot(
   db: Database,
-  householdId: string,
+  spaceId: string,
   userId: string,
   expected: number,
   requestId: string,
@@ -86,9 +84,9 @@ export async function saveSnapshot(
   await db.batch([
     db
       .prepare(
-        "INSERT INTO mutation_receipts (household_id, request_id, user_id, expected_revision, fingerprint) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO mutation_receipts (space_id, request_id, user_id, expected_revision, fingerprint) VALUES (?, ?, ?, ?, ?)",
       )
-      .bind(householdId, requestId, userId, expected, fingerprint),
+      .bind(spaceId, requestId, userId, expected, fingerprint),
     ...modelTables.flatMap((t) => {
       const old = new Map(previous[t].map((r) => [r.id, JSON.stringify(r)]));
       const ids = new Set(model[t].map((r) => r.id));
@@ -103,18 +101,18 @@ export async function saveSnapshot(
           ? [
               db
                 .prepare(
-                  `DELETE FROM ${t} WHERE household_id = ? AND id IN (SELECT value FROM json_each(?))`,
+                  `DELETE FROM ${t} WHERE space_id = ? AND id IN (SELECT value FROM json_each(?))`,
                 )
-                .bind(householdId, JSON.stringify(removed)),
+                .bind(spaceId, JSON.stringify(removed)),
             ]
           : []),
         ...(changed.length
           ? [
               db
                 .prepare(
-                  `INSERT INTO ${t} (household_id, id, data) SELECT ?, json_extract(value, '$.id'), value FROM json_each(?) WHERE 1 ON CONFLICT(household_id, id) DO UPDATE SET data = excluded.data`,
+                  `INSERT INTO ${t} (space_id, id, data) SELECT ?, json_extract(value, '$.id'), value FROM json_each(?) WHERE 1 ON CONFLICT(space_id, id) DO UPDATE SET data = excluded.data`,
                 )
-                .bind(householdId, JSON.stringify(changed)),
+                .bind(spaceId, JSON.stringify(changed)),
             ]
           : []),
       ];
