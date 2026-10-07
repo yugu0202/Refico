@@ -3,6 +3,7 @@ import type { SpaceDetails } from "./SpaceSettings";
 import { useEffect, useId, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
@@ -194,12 +195,27 @@ export function AccountMenu({
         ))}
         <Button
           fullWidth
+          variant="text"
           disabled={busy || loggingOut || settingsLoading}
-          sx={{ justifyContent: "flex-start" }}
+          sx={{
+            justifyContent: "space-between",
+            minHeight: 44,
+            px: 0,
+            color: "text.primary",
+          }}
           onClick={() => void openSettings()}
           aria-busy={settingsLoading}
         >
-          {settingsLoading ? "読み込み中…" : "共有・スペースの設定"}
+          共有・スペースの設定
+          {settingsLoading ? (
+            <CircularProgress
+              size={16}
+              color="inherit"
+              aria-label="読み込み中"
+            />
+          ) : (
+            <span aria-hidden="true">›</span>
+          )}
         </Button>
         {error && (
           <p className="error" role="alert">
