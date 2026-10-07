@@ -8,19 +8,6 @@ export interface Snapshot {
   model: Model;
   revision: number;
 }
-function unionAll(statements: string[]): string {
-  // D1 restricts the number of SELECT terms in each compound, unlike the
-  // default SQLite build used by node:sqlite. Nest small compounds so the
-  // snapshot stays one statement without exceeding that runtime limit.
-  const maxTerms = 5;
-  if (statements.length <= maxTerms) return statements.join(" UNION ALL ");
-  const groups: string[] = [];
-  for (let i = 0; i < statements.length; i += maxTerms)
-    groups.push(
-      `SELECT * FROM (${unionAll(statements.slice(i, i + maxTerms))})`,
-    );
-  return unionAll(groups);
-}
 // Provisioning is atomic and repeatable, even across concurrent first requests.
 export async function personalHousehold(
   db: Database,
@@ -52,34 +39,24 @@ export async function loadSnapshot(
   db: Database,
   householdId: string,
 ): Promise<Snapshot> {
-  // One statement observes a consistent revision and all records. Keep one row
-  // per record instead of aggregating the entire household into a large D1 row.
-  // Table names come only from the server's modelTables allowlist.
-  const query =
-    unionAll([
-      "SELECT -1 AS table_index, 0 AS record_order, NULL AS data, revision FROM households WHERE id = ?",
-      ...modelTables.map(
-        (t, i) =>
-          `SELECT ${i} AS table_index, rowid AS record_order, data, NULL AS revision FROM ${t} WHERE household_id = ?`,
-      ),
-    ]) + " ORDER BY table_index, record_order";
-  const result = await db
-    .prepare(query)
-    .bind(...Array(modelTables.length + 1).fill(householdId))
-    .all<{
-      table_index: number;
-      data: string | null;
-      revision: number | null;
-    }>();
-  const household = result.results[0];
-  if (household?.table_index !== -1 || household.revision === null)
-    throw new Error("家庭が見つかりません");
+  const result = await db.batch([
+    db
+      .prepare("SELECT revision FROM households WHERE id = ?")
+      .bind(householdId),
+    ...modelTables.map((t) =>
+      db
+        .prepare(`SELECT data FROM ${t} WHERE household_id = ? ORDER BY rowid`)
+        .bind(householdId),
+    ),
+  ]);
+  const household = result[0].results[0] as { revision: number } | undefined;
+  if (!household) throw new Error("家庭が見つかりません");
   const model = emptyModel();
-  for (const row of result.results.slice(1)) {
-    (model[modelTables[row.table_index]] as unknown[]).push(
-      JSON.parse(row.data!),
+  modelTables.forEach((t, i) => {
+    (model[t] as unknown[]) = result[i + 1].results.map((r) =>
+      JSON.parse((r as { data: string }).data),
     );
-  }
+  });
   return { model, revision: household.revision };
 }
 export async function receipt(

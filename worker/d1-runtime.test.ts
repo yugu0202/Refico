@@ -2,11 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { emptyModel, modelTables } from "../src/domain/model.ts";
-import { loadSnapshot, type Database } from "./repository.ts";
+import { loadSnapshot } from "./repository.ts";
 import type { D1Database, Env } from "./env.ts";
 import worker from "./index.ts";
 
-test("D1ランタイムのcompound SELECT制限内で全テーブルを1クエリで取得する", async () => {
+test("D1ランタイムでsnapshotの一括取得とpreviewのbootstrapが成功する", async () => {
   const mf = new Miniflare(
     convertV4MiniflareOptions({
       host: "127.0.0.1",
@@ -48,36 +48,17 @@ test("D1ランタイムのcompound SELECT制限内で全テーブルを1クエ�
         .bind("b", `${table}-other`, JSON.stringify({ id: `${table}-other` }))
         .run();
     }
-    // node:sqlite accepts the old SQL; workerd/D1 must reject it, proving this
-    // test exercises the platform restriction that the previous suite missed.
-    const flat = [
-      "SELECT revision FROM households",
-      ...modelTables.map((t) => `SELECT rowid FROM ${t}`),
-    ].join(" UNION ALL ");
-    await assert.rejects(
-      db.prepare(flat).all(),
-      /too many terms in compound SELECT/,
-    );
-    const queries: string[] = [];
     const session = db.withSession("first-primary");
-    const tracked: Database = {
-      prepare(sql) {
-        queries.push(sql);
-        return session.prepare(sql);
-      },
-      batch: session.batch.bind(session),
-    };
-    assert.deepEqual(await loadSnapshot(tracked, "a"), {
+    assert.deepEqual(await loadSnapshot(session, "a"), {
       revision: 7,
       model: expected,
     });
-    assert.equal(queries.length, 1);
-    assert.deepEqual(await loadSnapshot(tracked, "empty"), {
+    assert.deepEqual(await loadSnapshot(session, "empty"), {
       revision: 0,
       model: emptyModel(),
     });
     await assert.rejects(
-      loadSnapshot(tracked, "missing"),
+      loadSnapshot(session, "missing"),
       /家庭が見つかりません/,
     );
     // Exercise the reported bootstrap failure through the actual API with a

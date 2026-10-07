@@ -84,8 +84,8 @@ test("D1のリビジョン競合・重複送信・家庭外参照は全体をロ
   }
 });
 
-test("snapshotは1 SELECTで全テーブル・行順・家庭分離・空状態を保持する", async () => {
-  const { db, sqlite, queries } = testDatabase();
+test("snapshotは全テーブル・行順・家庭分離・空状態を保持する", async () => {
+  const { db, sqlite } = testDatabase();
   try {
     addUser(sqlite, "a");
     addUser(sqlite, "b");
@@ -108,12 +108,10 @@ test("snapshotは1 SELECTで全テーブル・行順・家庭分離・空状態�
         .run(b, `${t}-other`, JSON.stringify({ id: `${t}-other` }));
     }
     sqlite.prepare("UPDATE households SET revision = 7 WHERE id = ?").run(a);
-    queries.length = 0;
     assert.deepEqual(await loadSnapshot(db, a), {
       revision: 7,
       model: expected,
     });
-    assert.equal(queries.length, 1);
     await assert.rejects(loadSnapshot(db, "missing"), /家庭が見つかりません/);
     addUser(sqlite, "empty");
     const empty = await personalHousehold(db, "empty");
