@@ -470,8 +470,17 @@ export function MealForm({
                     }
                     sx={{ width: 44, height: 44 }}
                   >
-                    <SvgIcon fontSize="small">
-                      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm3.46-7.88 1.41-1.41L12 10.83l1.12-1.12 1.41 1.41L13.41 12l1.12 1.12-1.41 1.41L12 13.41l-1.12 1.12-1.41-1.41L10.59 12l-1.13-1.12zM15.5 4l-1-1h-5l-1 1H5v2h14V4z" />
+                    <SvgIcon
+                      fontSize="small"
+                      sx={{
+                        fill: "none",
+                        stroke: "currentColor",
+                        strokeWidth: 1.8,
+                        strokeLinecap: "round",
+                        strokeLinejoin: "round",
+                      }}
+                    >
+                      <path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7M14 10v7" />
                     </SvgIcon>
                   </IconButton>
                 </div>
