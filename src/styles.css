@@ -304,9 +304,6 @@ label .amount-input select {
   gap: 16px;
   margin-top: 20px;
 }
-.direct-meal-fields .MuiInput-root {
-  min-height: 44px;
-}
 .direct-meal-form .form-footer {
   margin-top: 20px;
   padding-top: 0;

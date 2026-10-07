@@ -270,24 +270,34 @@ export function MealForm({
               required
               type="number"
               value={cost}
-              slotProps={{ htmlInput: { min: 0, max: 100000000, step: 1 } }}
+              slotProps={{
+                inputLabel: { shrink: true },
+                input: { notched: true },
+                htmlInput: { min: 0, max: 100000000, step: 1 },
+              }}
               onChange={(e) => setCost(e.target.value)}
             />
             <TextField
               label="店名（任意）"
-              variant="standard"
               value={place}
-              slotProps={{ htmlInput: { maxLength: 100 } }}
+              slotProps={{
+                inputLabel: { shrink: true },
+                input: { notched: true },
+                htmlInput: { maxLength: 100 },
+              }}
               onChange={(e) => setPlace(e.target.value)}
             />
             <TextField
               label="メモ（任意）"
-              variant="standard"
               value={note}
               multiline
               minRows={1}
               maxRows={4}
-              slotProps={{ htmlInput: { maxLength: 500 } }}
+              slotProps={{
+                inputLabel: { shrink: true },
+                input: { notched: true },
+                htmlInput: { maxLength: 500 },
+              }}
               onChange={(e) => setNote(e.target.value)}
             />
           </div>
