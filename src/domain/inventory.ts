@@ -1,784 +1,241 @@
-export type BaseUnit = "g" | "ml" | "個";
-export interface Unit {
+import * as ledger from "./ledger.ts";
+export {
+  baseUnits,
+  mealKinds,
+  standardUnits,
+  unitsFor,
+  validDate,
+  toBase,
+  createProduct,
+  cumulativeCost,
+} from "./ledger.ts";
+export type {
+  BaseUnit,
+  Unit,
+  Product,
+  InputAmount,
+  Purchase,
+  Allocation,
+  Usage,
+  MealInput,
+  StockAdjustment,
+  PreparedAdjustment,
+} from "./ledger.ts";
+
+export type Meal = Omit<ledger.Meal, "batch">;
+export interface Cooking {
+  id: string;
+  date: string;
   name: string;
-  factor: number;
+  servings: number;
+  usages: ledger.Usage[];
 }
-export interface Product {
-  id: string;
-  name: string;
-  baseUnit: BaseUnit;
-  units: Unit[];
-}
-export interface InputAmount {
-  quantity: number;
-  unit: string;
-  factor: number;
-}
-export interface Purchase extends InputAmount {
-  id: string;
-  productId: string;
-  date: string;
-  baseQuantity: number;
-  price: number;
-  adjustmentId?: string;
-}
-export interface Allocation {
-  purchaseId: string;
-  quantity: number;
-  cost: number;
-}
-export interface Usage extends InputAmount {
-  productId: string;
-  baseQuantity: number;
-  allocations: Allocation[];
-}
-export interface Meal {
-  id: string;
-  date: string;
-  kind: string;
-  usages: Usage[];
-  // Direct expenses cover dining out, takeaway and ready-made meals.
-  // Absence means the existing inventory-based meal; old records stay valid.
-  direct?: { cost: number; place: string; note: string };
-  batch?: { name: string; servings: number; eatenServings: number };
-  prepared?: { batchId: string; quantity: number; cost: number }[];
-}
-export interface StockAdjustment {
-  id: string;
-  productId: string;
-  date: string;
-  reason: string;
-  beforeQuantity: number;
-  targetQuantity: number;
-  allocations: Allocation[];
-  addedPurchaseId?: string;
-  sourcePurchaseId?: string;
-  // Positions preserve recording order, even for backdated meals and purchases.
-  mealCount: number;
-  purchaseCount: number;
-}
-export interface PreparedAdjustment {
-  id: string;
-  batchId: string;
-  date: string;
-  reason: string;
-  beforeQuantity: number;
-  targetQuantity: number;
-  beforeValue: number;
-  targetValue: number;
-  mealCount: number;
-}
-export interface State {
-  version: 1;
-  products: Product[];
-  purchases: Purchase[];
+export interface State extends Omit<ledger.State, "meals"> {
   meals: Meal[];
-  adjustments?: StockAdjustment[];
-  preparedAdjustments?: PreparedAdjustment[];
+  cookings: Cooking[];
+  // Both consumption types participate in allocation replay, independently of date.
+  // Adjustment mealCount refers to this recording order, not the meal-only list.
+  recordOrder: string[];
 }
 export const emptyState = (): State => ({
-  version: 1,
-  products: [],
-  purchases: [],
-  meals: [],
+  ...ledger.emptyState(),
+  cookings: [],
+  recordOrder: [],
 });
-export const baseUnits: BaseUnit[] = ["g", "ml", "個"];
-export const mealKinds = ["朝食", "昼食", "夕食", "その他"];
-export const standardUnits = (base: BaseUnit): Unit[] =>
-  base === "g"
-    ? [
-        { name: "g", factor: 1 },
-        { name: "kg", factor: 1000 },
-      ]
-    : base === "ml"
-      ? [
-          { name: "ml", factor: 1 },
-          { name: "L", factor: 1000 },
-        ]
-      : [{ name: "個", factor: 1 }];
-export const unitsFor = (product: Product) => [
-  ...standardUnits(product.baseUnit),
-  ...product.units,
-];
-const requireValue = (condition: boolean, message: string) => {
-  if (!condition) throw new Error(message);
-};
-export function validDate(date: string): boolean {
-  return (
-    /^\d{4}-\d{2}-\d{2}$/.test(date) &&
-    Number.isFinite(Date.parse(date)) &&
-    new Date(date).toISOString().slice(0, 10) === date
-  );
-}
-// Base quantities are stored in thousandths (1g = 1000). Never use floats for allocation.
-export function toBase(quantity: number, factor: number): number {
-  requireValue(
-    Number.isFinite(quantity) &&
-      quantity > 0 &&
-      Number.isFinite(factor) &&
-      factor > 0,
-    "数量と換算係数は正の数で入力してください",
-  );
-  const scaled = quantity * factor * 1000;
-  requireValue(
-    Number.isFinite(scaled) &&
-      scaled > 0 &&
-      Number.isSafeInteger(Math.round(scaled)) &&
-      Math.abs(scaled - Math.round(scaled)) < 0.00001,
-    "数量は基準単位の0.001以上、0.001刻みで入力してください",
-  );
-  return Math.round(scaled);
-}
-export function createProduct(
-  name: string,
-  baseUnit: BaseUnit,
-  units: Unit[] = [],
-): Product {
-  validateProductName(name);
-  requireValue(baseUnits.includes(baseUnit), "基準単位を選択してください");
-  return {
-    id: crypto.randomUUID(),
-    name: name.trim(),
-    baseUnit,
-    units: validateUnits(baseUnit, units),
-  };
-}
-function validateProductName(name: string) {
-  requireValue(
-    name.trim().length > 0 && name.trim().length <= 100,
-    "食材名を100文字以内で入力してください",
-  );
-}
-function validateUnits(baseUnit: BaseUnit, units: Unit[]): Unit[] {
-  const names = new Set(standardUnits(baseUnit).map((u) => u.name));
-  for (const unit of units) {
-    requireValue(
-      unit.name.trim().length > 0 &&
-        unit.name.trim().length <= 20 &&
-        !names.has(unit.name.trim()),
-      "単位名は重複しない20文字以内の名前にしてください",
-    );
-    toBase(1, unit.factor);
-    names.add(unit.name.trim());
+
+// Compatibility boundary for the allocation engine. No batch-shaped meals escape
+// this module. Old immediate portions become ordinary, independently editable meals.
+export function fromLedger(source: ledger.State): State {
+  const meals: Meal[] = [];
+  const cookings: Cooking[] = [];
+  const recordOrder: string[] = [];
+  const boundaries = [0];
+  for (const record of source.meals) {
+    recordOrder.push(record.id);
+    if (!record.batch) meals.push(record);
+    else {
+      const { name, servings, eatenServings } = record.batch;
+      cookings.push({
+        id: record.id,
+        date: record.date,
+        name,
+        servings,
+        usages: record.usages,
+      });
+      if (eatenServings > 0) {
+        const mealId = `${record.id}:meal`;
+        meals.push({
+          id: mealId,
+          date: record.date,
+          kind: record.kind,
+          usages: [],
+          prepared: [
+            {
+              batchId: record.id,
+              quantity: eatenServings,
+              cost: ledger.portionCost(
+                record,
+                Math.round(eatenServings * 1000),
+              ),
+            },
+          ],
+        });
+        recordOrder.push(mealId);
+      }
+    }
+    boundaries.push(recordOrder.length);
   }
-  return units.map((u) => ({ ...u, name: u.name.trim() }));
-}
-export function updateProductUnits(
-  state: State,
-  productId: string,
-  units: Unit[],
-): State {
-  const product = state.products.find((p) => p.id === productId);
-  requireValue(!!product, "食材が見つかりません");
-  return updateProduct(state, productId, product!.name, units);
-}
-export function updateProduct(
-  state: State,
-  productId: string,
-  name: string,
-  units: Unit[],
-): State {
-  const product = state.products.find((p) => p.id === productId);
-  requireValue(!!product, "食材が見つかりません");
-  validateProductName(name);
-  requireValue(
-    !state.products.some((p) => p.id !== productId && p.name === name.trim()),
-    "同じ名前の食材が登録されています",
-  );
-  const validated = validateUnits(product!.baseUnit, units);
-  // Historical quantities, factors, and allocations remain snapshots of the original input.
   return {
-    ...state,
-    products: state.products.map((p) =>
-      p.id === productId ? { ...p, name: name.trim(), units: validated } : p,
-    ),
+    ...source,
+    meals,
+    cookings,
+    recordOrder,
+    ...(source.adjustments
+      ? {
+          adjustments: source.adjustments.map((a) => ({
+            ...a,
+            mealCount: boundaries[a.mealCount],
+          })),
+        }
+      : {}),
+    ...(source.preparedAdjustments
+      ? {
+          preparedAdjustments: source.preparedAdjustments.map((a) => ({
+            ...a,
+            mealCount: boundaries[a.mealCount],
+          })),
+        }
+      : {}),
   };
 }
-function amount(
-  state: State,
-  productId: string,
-  quantity: number,
-  unitName: string,
-) {
-  const product = state.products.find((p) => p.id === productId);
-  const unit = product && unitsFor(product).find((u) => u.name === unitName);
-  requireValue(!!unit, "食材と単位を選択してください");
-  return {
-    productId,
-    quantity,
-    unit: unit!.name,
-    factor: unit!.factor,
-    baseQuantity: toBase(quantity, unit!.factor),
-  };
-}
-export function recordPurchase(
-  state: State,
-  productId: string,
-  quantity: number,
-  unit: string,
-  price: number,
-  date: string,
-): State {
-  requireValue(validDate(date), "購入日を入力してください");
-  requireValue(
-    Number.isSafeInteger(price) && price >= 0 && price <= 100000000,
-    "価格は0〜100,000,000円の整数で入力してください",
-  );
-  const purchase: Purchase = {
-    id: crypto.randomUUID(),
-    ...amount(state, productId, quantity, unit),
-    date,
-    price,
-  };
-  const next = { ...state, purchases: [...state.purchases, purchase] };
-  requireValue(
-    Number.isSafeInteger(stock(next, productId).quantity),
-    "在庫量が上限を超えています",
-  );
-  return next;
-}
-export function consumed(state: State, purchaseId: string): number {
-  return [
-    ...state.meals.flatMap((m) => m.usages).flatMap((u) => u.allocations),
-    ...(state.adjustments ?? []).flatMap((a) => a.allocations),
-  ]
-    .filter((a) => a.purchaseId === purchaseId)
-    .reduce((sum, a) => sum + a.quantity, 0);
-}
-// Cumulative rounding makes the cost of consuming an entire lot equal its purchase price.
-export function cumulativeCost(purchase: Purchase, used: number): number {
-  const numerator = BigInt(purchase.price) * BigInt(used);
-  const denominator = BigInt(purchase.baseQuantity);
-  return Number((numerator * 2n + denominator) / (denominator * 2n));
-}
-export function stock(state: State, productId: string) {
-  return state.purchases
-    .filter((p) => p.productId === productId)
-    .reduce(
-      (total, p) => {
-        const used = consumed(state, p.id);
-        return {
-          quantity: total.quantity + p.baseQuantity - used,
-          value: total.value + p.price - cumulativeCost(p, used),
-        };
+export function toLedger(state: State): ledger.State {
+  const records = new Map<string, ledger.Meal>();
+  for (const cooking of state.cookings)
+    records.set(cooking.id, {
+      id: cooking.id,
+      date: cooking.date,
+      kind: "その他",
+      usages: cooking.usages,
+      batch: {
+        name: cooking.name,
+        servings: cooking.servings,
+        eatenServings: 0,
       },
-      { quantity: 0, value: 0 },
-    );
+    });
+  for (const meal of state.meals) records.set(meal.id, meal);
+  const { cookings, recordOrder, ...source } = state;
+  if (
+    records.size !== state.cookings.length + state.meals.length ||
+    new Set(recordOrder).size !== records.size ||
+    recordOrder.length !== records.size ||
+    recordOrder.some((id) => !records.has(id))
+  )
+    throw new Error("保存データの記録順を確認してください");
+  return { ...source, meals: recordOrder.map((id) => records.get(id)!) };
 }
-export interface MealInput {
-  productId: string;
-  quantity: number;
-  unit: string;
-}
+const asCooking = (cooking: Cooking): ledger.Meal => ({
+  id: cooking.id,
+  date: cooking.date,
+  kind: "その他",
+  usages: cooking.usages,
+  batch: { name: cooking.name, servings: cooking.servings, eatenServings: 0 },
+});
+export const cookingCost = (cooking: Pick<Cooking, "usages">) =>
+  ledger.cookingCost({ usages: cooking.usages } as ledger.Meal);
+export const mealCost = (meal: Meal) => ledger.mealCost(meal);
+export const stock = (state: State, id: string) =>
+  ledger.stock(toLedger(state), id);
+export const consumed = (state: State, id: string) =>
+  ledger.consumed(toLedger(state), id);
+export const dailyCosts = (state: State) => ledger.dailyCosts(toLedger(state));
+export const preparedBalance = (state: State, cooking: Cooking) =>
+  ledger.preparedBalance(toLedger(state), asCooking(cooking));
+export const preparedRemaining = (state: State, cooking: Cooking) =>
+  preparedBalance(state, cooking).quantity / 1000;
+export const recordPurchase = (
+  state: State,
+  ...args: Parameters<typeof ledger.recordPurchase> extends [
+    unknown,
+    ...infer A,
+  ]
+    ? A
+    : never
+): State => fromLedger(ledger.recordPurchase(toLedger(state), ...args));
+export const updateProduct = (
+  state: State,
+  ...args: Parameters<typeof ledger.updateProduct> extends [unknown, ...infer A]
+    ? A
+    : never
+): State => fromLedger(ledger.updateProduct(toLedger(state), ...args));
+export const updateProductUnits = (
+  state: State,
+  ...args: Parameters<typeof ledger.updateProductUnits> extends [
+    unknown,
+    ...infer A,
+  ]
+    ? A
+    : never
+): State => fromLedger(ledger.updateProductUnits(toLedger(state), ...args));
+export const recordStockAdjustment = (
+  state: State,
+  ...args: Parameters<typeof ledger.recordStockAdjustment> extends [
+    unknown,
+    ...infer A,
+  ]
+    ? A
+    : never
+): State => fromLedger(ledger.recordStockAdjustment(toLedger(state), ...args));
+export const recordPreparedAdjustment = (
+  state: State,
+  ...args: Parameters<typeof ledger.recordPreparedAdjustment> extends [
+    unknown,
+    ...infer A,
+  ]
+    ? A
+    : never
+): State =>
+  fromLedger(ledger.recordPreparedAdjustment(toLedger(state), ...args));
+export const updatePreparedName = (
+  state: State,
+  id: string,
+  name: string,
+): State => fromLedger(ledger.updatePreparedName(toLedger(state), id, name));
 export function recordMeal(
   state: State,
   date: string,
   kind: string,
-  inputs: MealInput[],
-  batch?: Meal["batch"],
-  preparedInputs: { batchId: string; quantity: number }[] = [],
-  snapshots: Usage[] = [],
+  inputs: ledger.MealInput[],
+  prepared: { batchId: string; quantity: number }[] = [],
   direct?: Meal["direct"],
 ): State {
-  requireValue(validDate(date), "食事の日付を入力してください");
-  requireValue(mealKinds.includes(kind), "食事の種類を選択してください");
-  if (direct !== undefined) {
-    requireValue(
-      inputs.length === 0 && preparedInputs.length === 0 && !batch,
-      "外食などには食材・作り置きを指定できません",
-    );
-    requireValue(
-      Number.isSafeInteger(direct.cost) &&
-        direct.cost >= 0 &&
-        direct.cost <= 100000000,
-      "金額を0〜100000000円の整数で入力してください",
-    );
-    requireValue(
-      typeof direct.place === "string" && direct.place.trim().length <= 100,
-      "店名を100文字以内で入力してください",
-    );
-    requireValue(
-      typeof direct.note === "string" && direct.note.trim().length <= 500,
-      "メモを500文字以内で入力してください",
-    );
-    return {
-      ...state,
-      meals: [
-        ...state.meals,
-        {
-          id: crypto.randomUUID(),
-          date,
-          kind,
-          usages: [],
-          direct: {
-            cost: direct.cost,
-            place: direct.place.trim(),
-            note: direct.note.trim(),
-          },
-        },
-      ],
-    };
-  }
-  requireValue(
-    inputs.length > 0 || preparedInputs.length > 0,
-    "食材か作り置きを追加してください",
-  );
-  if (batch) {
-    requireValue(
-      inputs.length > 0 && preparedInputs.length === 0,
-      "作り置きには食材を追加してください",
-    );
-    requireValue(
-      typeof batch.name === "string" &&
-        batch.name.trim().length > 0 &&
-        batch.name.trim().length <= 100,
-      "料理名を100文字以内で入力してください",
-    );
-    toBase(batch.servings, 1);
-    requireValue(
-      Number.isFinite(batch.eatenServings) &&
-        batch.eatenServings >= 0 &&
-        batch.eatenServings < batch.servings,
-      "今回食べた量は0以上、作った量未満で入力してください",
-    );
-    if (batch.eatenServings > 0) toBase(batch.eatenServings, 1);
-  }
-  requireValue(
-    new Set(preparedInputs.map((i) => i.batchId)).size ===
-      preparedInputs.length,
-    "同じ作り置きは1行にまとめてください",
-  );
-  const prepared = preparedInputs.map((input) => {
-    const source = state.meals.find((m) => m.id === input.batchId);
-    requireValue(
-      !!source?.batch && source.date <= date,
-      "食事の日付までの作り置きを選択してください",
-    );
-    const quantity = toBase(input.quantity, 1);
-    return {
-      ...input,
-      cost: preparedUsageCost(state, source!, quantity, date),
-    };
-  });
-  requireValue(
-    new Set(inputs.map((i) => i.productId)).size === inputs.length,
-    "同じ食材は1行にまとめてください",
-  );
-  const usages = inputs.map((input) => {
-    const snapshot = snapshots.find(
-      (u) => u.productId === input.productId && u.unit === input.unit,
-    );
-    const normalized = snapshot
-      ? {
-          productId: input.productId,
-          quantity: input.quantity,
-          unit: input.unit,
-          factor: snapshot.factor,
-          baseQuantity: toBase(input.quantity, snapshot.factor),
-        }
-      : amount(state, input.productId, input.quantity, input.unit);
-    let needed = normalized.baseQuantity;
-    const allocations: Allocation[] = [];
-    // Same-day lots retain insertion order. Future purchases cannot fund a past meal.
-    const purchases = state.purchases
-      .filter((p) => p.productId === input.productId && p.date <= date)
-      .sort((a, b) => a.date.localeCompare(b.date));
-    // Keep existing lot assignments when possible so later backdated purchases
-    // do not silently change an unrelated meal's source lots during an edit.
-    const preserved =
-      snapshot?.baseQuantity === needed &&
-      snapshot.allocations.every((a) => {
-        const p = purchases.find((p) => p.id === a.purchaseId);
-        return !!p && p.baseQuantity - consumed(state, p.id) >= a.quantity;
-      });
-    if (preserved) {
-      for (const a of snapshot!.allocations) {
-        const p = purchases.find((p) => p.id === a.purchaseId)!;
-        const used = consumed(state, p.id);
-        allocations.push({
-          ...a,
-          cost: cumulativeCost(p, used + a.quantity) - cumulativeCost(p, used),
-        });
-      }
-      return { ...normalized, allocations };
-    }
-    for (const purchase of purchases) {
-      const used = consumed(state, purchase.id);
-      const take = Math.min(needed, purchase.baseQuantity - used);
-      if (take > 0)
-        allocations.push({
-          purchaseId: purchase.id,
-          quantity: take,
-          cost:
-            cumulativeCost(purchase, used + take) -
-            cumulativeCost(purchase, used),
-        });
-      needed -= take;
-      if (needed === 0) break;
-    }
-    requireValue(
-      needed === 0,
-      `${state.products.find((p) => p.id === input.productId)?.name ?? "食材"}の在庫が不足しています（食事の日付までの購入分）`,
-    );
-    return { ...normalized, allocations };
-  });
-  return {
-    ...state,
-    meals: [
-      ...state.meals,
-      {
-        id: crypto.randomUUID(),
-        date,
-        kind,
-        usages,
-        ...(batch ? { batch: { ...batch, name: batch.name.trim() } } : {}),
-        ...(prepared.length ? { prepared } : {}),
-      },
-    ],
-  };
-}
-export const cookingCost = (meal: Meal) =>
-  meal.usages.flatMap((u) => u.allocations).reduce((sum, a) => sum + a.cost, 0);
-// Allocate yen by cumulative rounding so all portions exactly match the cooking cost.
-export function portionCost(meal: Meal, quantity: number): number {
-  return cumulativeCost(
-    {
-      price: cookingCost(meal),
-      baseQuantity: toBase(meal.batch!.servings, 1),
-    } as Purchase,
-    quantity,
-  );
-}
-export function preparedConsumed(state: State, meal: Meal): number {
-  return (
-    (meal.batch!.eatenServings === 0
-      ? 0
-      : toBase(meal.batch!.eatenServings, 1)) +
-    state.meals
-      .flatMap((m) => m.prepared ?? [])
-      .filter((p) => p.batchId === meal.id)
-      .reduce((sum, p) => sum + toBase(p.quantity, 1), 0)
-  );
-}
-// A correction starts a new remaining-value snapshot. Historic meal costs stay fixed.
-function preparedSnapshot(state: State, meal: Meal) {
-  const adjustment = (state.preparedAdjustments ?? [])
-    .filter((a) => a.batchId === meal.id)
-    .at(-1);
-  const quantity =
-    adjustment?.targetQuantity ?? toBase(meal.batch!.servings, 1);
-  const value = adjustment?.targetValue ?? cookingCost(meal);
-  const consumed =
-    (adjustment ? 0 : Math.round(meal.batch!.eatenServings * 1000)) +
-    state.meals
-      .slice(adjustment?.mealCount ?? 0)
-      .flatMap((m) => m.prepared ?? [])
-      .filter((p) => p.batchId === meal.id)
-      .reduce((sum, p) => sum + toBase(p.quantity, 1), 0);
-  const costAt = (used: number) =>
-    quantity === 0
-      ? 0
-      : cumulativeCost(
-          { baseQuantity: quantity, price: value } as Purchase,
-          used,
-        );
-  return { quantity, value, consumed, costAt };
-}
-export function preparedBalance(state: State, meal: Meal) {
-  const s = preparedSnapshot(state, meal);
-  return {
-    quantity: s.quantity - s.consumed,
-    value: s.value - s.costAt(s.consumed),
-  };
-}
-export function preparedUsageCost(
-  state: State,
-  meal: Meal,
-  quantity: number,
-  date: string,
-) {
-  const s = preparedSnapshot(state, meal);
-  requireValue(
-    s.consumed + quantity <= s.quantity,
-    "作り置きの残量が不足しています",
-  );
-  const latest = (state.preparedAdjustments ?? [])
-    .filter((a) => a.batchId === meal.id)
-    .at(-1);
-  requireValue(
-    !latest || latest.date <= date,
-    "在庫調整日以降の食事を入力してください",
-  );
-  return s.costAt(s.consumed + quantity) - s.costAt(s.consumed);
-}
-export function preparedRemaining(state: State, meal: Meal): number {
-  return preparedBalance(state, meal).quantity / 1000;
-}
-export function recordPreparedAdjustment(
-  state: State,
-  batchId: string,
-  quantity: number,
-  date: string,
-  reason = "",
-  allowUnchanged = false,
-  replayDiscard = false,
-): State {
-  const meal = state.meals.find((m) => m.id === batchId);
-  requireValue(!!meal?.batch, "作り置きが見つかりません");
-  requireValue(
-    validDate(date) && date >= meal!.date,
-    "作った日以降の調整日を入力してください",
-  );
-  const latest = (state.preparedAdjustments ?? [])
-    .filter((a) => a.batchId === batchId)
-    .at(-1);
-  requireValue(
-    !latest || latest.date <= date,
-    "前回の調整日以降の日付を入力してください",
-  );
-  requireValue(
-    typeof reason === "string" && reason.trim().length <= 200,
-    "理由は200文字以内で入力してください",
-  );
-  requireValue(
-    Number.isFinite(quantity) && quantity >= 0,
-    "残量は0以上で入力してください",
-  );
-  const targetQuantity = quantity === 0 ? 0 : toBase(quantity, 1);
-  const balance = preparedBalance(state, meal!);
-  requireValue(
-    allowUnchanged || targetQuantity !== balance.quantity,
-    "残量を変更してください",
-  );
-  const delta = targetQuantity - balance.quantity;
-  requireValue(
-    !replayDiscard || delta <= 0,
-    "廃棄記録の残量が修正後の在庫を超えています",
-  );
-  if (delta > 0) {
-    // More portions correct the original yield, rather than creating new food.
-    const servings = toBase(meal!.batch!.servings, 1) + delta;
-    requireValue(Number.isSafeInteger(servings), "食数が上限を超えています");
-    return repricePrepared(
-      {
-        ...state,
-        meals: state.meals.map((m) =>
-          m.id === batchId
-            ? { ...m, batch: { ...m.batch!, servings: servings / 1000 } }
-            : m,
-        ),
-      },
-      batchId,
-    );
-  }
-  const targetValue =
-    delta < 0
-      ? balance.value - preparedUsageCost(state, meal!, -delta, date)
-      : balance.value;
-  requireValue(
-    Number.isSafeInteger(targetValue) && targetValue >= 0,
-    "原価が大きすぎます",
-  );
-  return {
-    ...state,
-    preparedAdjustments: [
-      ...(state.preparedAdjustments ?? []),
-      {
-        id: crypto.randomUUID(),
-        batchId,
-        date,
-        reason: reason.trim(),
-        beforeQuantity: balance.quantity,
-        targetQuantity,
-        beforeValue: balance.value,
-        targetValue,
-        mealCount: state.meals.length,
-      },
-    ],
-  };
-}
-export const mealCost = (meal: Meal) =>
-  meal.direct
-    ? meal.direct.cost
-    : (meal.batch
-        ? portionCost(meal, Math.round(meal.batch.eatenServings * 1000))
-        : cookingCost(meal)) +
-      (meal.prepared ?? []).reduce((sum, p) => sum + p.cost, 0);
-export function dailyCosts(state: State) {
-  const days = new Map<string, number>();
-  for (const meal of state.meals) {
-    if (meal.batch && meal.batch.eatenServings === 0) continue;
-    days.set(meal.date, (days.get(meal.date) ?? 0) + mealCost(meal));
-  }
-  return [...days].sort(([a], [b]) => b.localeCompare(a));
-}
-
-// Synthetic adjustment lots participate in FIFO, but never represent purchases.
-export function latestPurchase(state: State, productId: string, date?: string) {
-  return [...state.purchases]
-    .reverse()
-    .filter(
-      (p) =>
-        p.productId === productId &&
-        !p.adjustmentId &&
-        (!date || p.date <= date),
-    )
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .at(0);
-}
-export function recordStockAdjustment(
-  state: State,
-  productId: string,
-  quantity: number,
-  date: string,
-  reason = "",
-  allowUnchanged = false,
-): State {
-  const product = state.products.find((p) => p.id === productId);
-  requireValue(!!product, "食材が見つかりません");
-  requireValue(validDate(date), "調整日を入力してください");
-  requireValue(
-    typeof reason === "string" && reason.trim().length <= 200,
-    "理由は200文字以内で入力してください",
-  );
-  requireValue(
-    Number.isFinite(quantity) && quantity >= 0,
-    "残量は0以上で入力してください",
-  );
-  const targetQuantity = quantity === 0 ? 0 : toBase(quantity, 1);
-  const beforeQuantity = stock(state, productId).quantity;
-  const difference = targetQuantity - beforeQuantity;
-  requireValue(allowUnchanged || difference !== 0, "残量を変更してください");
-  const adjustment: StockAdjustment = {
-    id: crypto.randomUUID(),
-    productId,
-    date,
-    reason: reason.trim(),
-    beforeQuantity,
-    targetQuantity,
-    allocations: [],
-    mealCount: state.meals.length,
-    purchaseCount: state.purchases.length,
-  };
-  let purchases = state.purchases;
-  if (difference > 0) {
-    const source = latestPurchase(state, productId, date);
-    requireValue(!!source, "単価を計算できません。先に購入を記録してください");
-    const price = cumulativeCost(source!, difference);
-    requireValue(
-      Number.isSafeInteger(price) && price <= 100000000,
-      "調整金額が上限を超えています",
-    );
-    const lot: Purchase = {
-      id: crypto.randomUUID(),
-      productId,
+  return fromLedger(
+    ledger.recordMeal(
+      toLedger(state),
       date,
-      quantity: difference / 1000,
-      unit: product!.baseUnit,
-      factor: 1,
-      baseQuantity: difference,
-      price,
-      adjustmentId: adjustment.id,
-    };
-    purchases = [...purchases, lot];
-    adjustment.addedPurchaseId = lot.id;
-    adjustment.sourcePurchaseId = source!.id;
-  } else {
-    let needed = -difference;
-    const lots = state.purchases
-      .filter((p) => p.productId === productId && p.date <= date)
-      .sort((a, b) => a.date.localeCompare(b.date));
-    for (const lot of lots) {
-      const used = consumed(state, lot.id);
-      const take = Math.min(needed, lot.baseQuantity - used);
-      if (take > 0)
-        adjustment.allocations.push({
-          purchaseId: lot.id,
-          quantity: take,
-          cost: cumulativeCost(lot, used + take) - cumulativeCost(lot, used),
-        });
-      needed -= take;
-      if (needed === 0) break;
-    }
-    requireValue(needed === 0, "調整日までの在庫が不足しています");
-  }
-  // Past meal allocations and costs are immutable; adjustments carry their own cost.
-  return {
-    ...state,
-    purchases,
-    adjustments: [...(state.adjustments ?? []), adjustment],
-  };
-}
-
-export function updatePreparedName(
-  state: State,
-  batchId: string,
-  name: string,
-): State {
-  const source = state.meals.find((meal) => meal.id === batchId);
-  requireValue(!!source?.batch, "作り置きが見つかりません");
-  requireValue(
-    typeof name === "string" &&
-      name.trim().length > 0 &&
-      name.trim().length <= 100,
-    "料理名を100文字以内で入力してください",
-  );
-  return {
-    ...state,
-    meals: state.meals.map((meal) =>
-      meal.id === batchId
-        ? { ...meal, batch: { ...meal.batch!, name: name.trim() } }
-        : meal,
+      kind,
+      inputs,
+      undefined,
+      prepared,
+      [],
+      direct,
     ),
-  };
+  );
+}
+export function recordCooking(
+  state: State,
+  date: string,
+  name: string,
+  servings: number,
+  inputs: ledger.MealInput[],
+): State {
+  return fromLedger(
+    ledger.recordMeal(toLedger(state), date, "その他", inputs, {
+      name,
+      servings,
+      eatenServings: 0,
+    }),
+  );
 }
 
-// Reprice the batch from cooking time. Discarded quantities remain discarded;
-// unrelated ingredients and batches retain their stored allocations and costs.
-function repricePrepared(source: State, batchId: string): State {
-  let next: State = { ...source, meals: [], preparedAdjustments: [] };
-  const adjustments = source.preparedAdjustments ?? [];
-  let cursor = 0;
-  for (let index = 0; index <= source.meals.length; index++) {
-    while (adjustments[cursor]?.mealCount === index) {
-      const old = adjustments[cursor++];
-      if (old.batchId !== batchId) {
-        next.preparedAdjustments!.push(old);
-        continue;
-      }
-      const meal = next.meals.find((m) => m.id === batchId)!;
-      // Keep each correction's quantity delta when revising the original yield.
-      const target =
-        preparedBalance(next, meal).quantity +
-        old.targetQuantity -
-        old.beforeQuantity;
-      next = recordPreparedAdjustment(
-        next,
-        batchId,
-        target / 1000,
-        old.date,
-        old.reason,
-        true,
-        true,
-      );
-      next.preparedAdjustments!.at(-1)!.id = old.id;
-    }
-    if (index === source.meals.length) break;
-    const meal = source.meals[index];
-    const prepared = meal.prepared?.map((p) =>
-      p.batchId !== batchId
-        ? p
-        : {
-            ...p,
-            cost: preparedUsageCost(
-              next,
-              next.meals.find((m) => m.id === batchId)!,
-              toBase(p.quantity, 1),
-              meal.date,
-            ),
-          },
-    );
-    next.meals.push({ ...meal, ...(prepared ? { prepared } : {}) });
-  }
-  return next;
-}
+export const latestPurchase = (state: State, id: string, date?: string) =>
+  ledger.latestPurchase(toLedger(state), id, date);

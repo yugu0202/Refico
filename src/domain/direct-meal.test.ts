@@ -7,6 +7,7 @@ import {
   mealCost,
   dailyCosts,
   recordMeal,
+  recordCooking,
 } from "./inventory.ts";
 import { toModel, toView } from "./model.ts";
 import { parseState } from "./validation.ts";
@@ -134,22 +135,16 @@ test("自炊と外食の切替で使用配分を追加・削除し、後続の�
   state = applyCommand(state, { type: "meal.update", id, input: direct });
   assert.equal(stock(state, "rice").quantity, 1000000);
   assert.equal(toModel(reload(state)).allocations.length, 0);
-  state = recordMeal(
-    state,
-    date,
-    "夕食",
-    [{ productId: "rice", quantity: 300, unit: "g" }],
-    { name: "ご飯", servings: 3, eatenServings: 1 },
-  );
-  const batchId = state.meals[1].id;
-  state = recordMeal(state, date, "その他", [], undefined, [
-    { batchId, quantity: 1 },
+  state = recordCooking(state, date, "ご飯", 3, [
+    { productId: "rice", quantity: 300, unit: "g" },
   ]);
+  const batchId = state.cookings[0].id;
+  state = recordMeal(state, date, "その他", [], [{ batchId, quantity: 1 }]);
   const before = structuredClone(state);
   assert.throws(
     () =>
       applyCommand(state, { type: "meal.update", id: batchId, input: direct }),
-    /作り置き/,
+    /食事履歴/,
   );
   assert.deepEqual(state, before);
 });
@@ -192,6 +187,10 @@ test("不正な金額・長い任意欄・在庫入力の混在を保存しな�
     assert.throws(() => parseState(JSON.stringify(invalid)), /保存データ/);
   }
   const mixed = structuredClone(state);
-  mixed.meals[0].batch = { name: "弁当", servings: 2, eatenServings: 1 };
+  (mixed.meals[0] as unknown as { batch: unknown }).batch = {
+    name: "弁当",
+    servings: 2,
+    eatenServings: 1,
+  };
   assert.throws(() => parseState(JSON.stringify(mixed)), /保存データ/);
 });

@@ -9,7 +9,6 @@ import {
   DialogTitle,
   IconButton,
   InputAdornment,
-  Snackbar,
   SvgIcon,
   Stack,
   TextField,
@@ -26,11 +25,13 @@ export function SpaceSettings({
   initialDetails,
   onClose,
   onChanged,
+  onNotify,
 }: {
   space: Space;
   initialDetails: SpaceDetails;
   onClose: () => void;
   onChanged: () => Promise<void>;
+  onNotify: (message: string) => void;
 }) {
   const [details, setDetails] = useState(initialDetails);
   const [name, setName] = useState(space.name);
@@ -52,9 +53,11 @@ export function SpaceSettings({
     const link = invite.link;
     setCopying(true);
     setCopiedLink(null);
+    onNotify("");
     try {
       await navigator.clipboard.writeText(link);
       setCopiedLink(link);
+      onNotify("コピーしました");
     } catch {
       setError("リンクを選択してコピーしてください");
     } finally {
@@ -75,6 +78,8 @@ export function SpaceSettings({
     guard.current = true;
     setBusy(true);
     setError("");
+    onNotify("");
+    setCopiedLink(null);
     try {
       const result = await sharingRequest<{
         token?: string;
@@ -121,6 +126,14 @@ export function SpaceSettings({
         else await load();
       }
       setConfirm(null);
+      const messages: Record<string, string> = {
+        rename: "スペース名を保存しました",
+        invite: "招待リンクを作成しました",
+        revoke: "招待を無効にしました",
+        remove: "メンバーを削除しました",
+        leave: "スペースから退出しました",
+      };
+      if (messages[action.type]) onNotify(messages[action.type]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存できませんでした");
     } finally {
@@ -330,14 +343,6 @@ export function SpaceSettings({
           閉じる
         </Button>
       </DialogActions>
-      <Snackbar
-        open={!!invite && copiedLink === invite.link}
-        message="コピーしました"
-        autoHideDuration={2500}
-        onClose={(_, reason) => {
-          if (reason !== "clickaway") setCopiedLink(null);
-        }}
-      />
     </Dialog>
   );
 }

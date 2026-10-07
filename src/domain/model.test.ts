@@ -18,11 +18,11 @@ test("サーバーモデルで購入・調理・食事・調整の原価と記�
     );
     for (const p of next.products)
       assert.deepEqual(stock(view, p.id), stock(next, p.id));
-    for (const m of next.meals.filter((m) => m.batch))
+    for (const m of next.cookings)
       assert.deepEqual(
         preparedBalance(
           view,
-          view.meals.find((v) => v.id === m.id)!,
+          view.cookings.find((v) => v.id === m.id)!,
         ),
         preparedBalance(next, m),
       );
@@ -48,17 +48,25 @@ test("サーバーモデルで購入・調理・食事・調整の原価と記�
     },
   });
   const cooking = run({
+    type: "prepared.create",
+    input: {
+      date: "2026-10-01",
+      name: "卵料理",
+      servings: 3,
+      inputs: [{ productId: "egg", quantity: 6, unit: "個" }],
+    },
+  }).cookings[0];
+  run({
     type: "meal.create",
     input: {
       date: "2026-10-01",
       kind: "夕食",
-      inputs: [{ productId: "egg", quantity: 6, unit: "個" }],
-      batch: { name: "卵料理", servings: 3, eatenServings: 1 },
-      prepared: [],
+      inputs: [],
+      prepared: [{ batchId: cooking.id, quantity: 1 }],
     },
-  }).meals[0];
+  });
   assert.equal(model.cookings.length, 1);
-  assert.equal(model.meals[0].cookingId, cooking.id);
+  assert.equal(model.meals[0].cookingId, undefined);
   assert.equal(model.batches[0].quantity, 3000);
   assert.equal(model.portions[0].quantity, 1000);
   run({
@@ -141,14 +149,13 @@ test("サーバーモデルで購入・調理・食事・調整の原価と記�
     },
   });
   run({
-    type: "meal.update",
+    type: "prepared.update",
     id: cooking.id,
     input: {
       date: "2026-10-01",
-      kind: "夕食",
+      name: "卵焼き",
+      servings: 5,
       inputs: [{ productId: "egg", quantity: 6, unit: "個" }],
-      batch: { name: "卵焼き", servings: 5, eatenServings: 1 },
-      prepared: [],
     },
   });
   assert.equal(JSON.stringify(model).includes("mealCount"), false);
@@ -162,22 +169,20 @@ test("全量作り置きは食事を作らず、元の履歴から編集でき�
     }),
   );
   const next = applyCommand(toView(model), {
-    type: "meal.create",
+    type: "prepared.create",
     input: {
       date: "2026-10-01",
-      kind: "夕食",
+      name: "ご飯",
+      servings: 2,
       inputs: [{ productId: model.products[0].id, quantity: 100, unit: "g" }],
-      batch: { name: "ご飯", servings: 2, eatenServings: 0 },
-      prepared: [],
     },
   });
   model = toModel(next, model);
   assert.equal(model.cookings.length, 1);
   assert.equal(model.meals.filter((m) => m.cookingId).length, 0);
   assert.equal(
-    parseState(JSON.stringify(toView(model))).meals.at(-1)!.batch!
-      .eatenServings,
-    0,
+    parseState(JSON.stringify(toView(model))).cookings.at(-1)!.servings,
+    2,
   );
 });
 test("クライアントが原価・配分・スペースIDを指定する入力を拒否する", () => {
