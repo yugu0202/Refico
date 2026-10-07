@@ -15,7 +15,13 @@ export interface Snapshot {
   state: State;
   revision: number;
 }
+export interface Space {
+  id: string;
+  name: string;
+  role: "owner" | "member";
+}
 export interface Bootstrap extends Snapshot {
+  spaces: Space[];
   authMode: "google" | "test";
   sampleDataEnabled: boolean;
   spaceId: string;
@@ -53,8 +59,12 @@ export const bootstrap = createBootstrapClient();
 export function createCommandClient(transport: typeof fetch = fetch) {
   // Retain the ID after an ambiguous failure so a manual retry cannot duplicate it.
   const pending = new Map<string, string>();
-  return async (command: Command, revision: number): Promise<Snapshot> => {
-    const fingerprint = JSON.stringify({ revision, command });
+  return async (
+    command: Command,
+    revision: number,
+    spaceId?: string,
+  ): Promise<Snapshot> => {
+    const fingerprint = JSON.stringify({ revision, command, spaceId });
     const requestId = pending.get(fingerprint) ?? crypto.randomUUID();
     pending.set(fingerprint, requestId);
     const body = JSON.stringify({ requestId, revision, command });
@@ -64,14 +74,20 @@ export function createCommandClient(transport: typeof fetch = fetch) {
         response = await transport("/api/commands", {
           method: "POST",
           credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(spaceId ? { "X-Refico-Space": spaceId } : {}),
+          },
           body,
         });
       } catch {
         response = await transport("/api/commands", {
           method: "POST",
           credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(spaceId ? { "X-Refico-Space": spaceId } : {}),
+          },
           body,
         });
       }
@@ -87,3 +103,25 @@ export function createCommandClient(transport: typeof fetch = fetch) {
   };
 }
 export const sendCommand = createCommandClient();
+
+export function sharingRequest<T>(
+  path: string,
+  body?: unknown,
+  spaceId?: string,
+): Promise<T> {
+  return fetch(path, {
+    ...(spaceId ? { headers: { "X-Refico-Space": spaceId } } : {}),
+    credentials: "same-origin",
+    cache: "no-store",
+    ...(body === undefined
+      ? {}
+      : {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(spaceId ? { "X-Refico-Space": spaceId } : {}),
+          },
+          body: JSON.stringify(body),
+        }),
+  }).then(result<T>);
+}

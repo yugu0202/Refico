@@ -1,0 +1,288 @@
+import { useEffect, useRef, useState } from "react";
+import {
+  Alert,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { sharingRequest, type Space } from "../api";
+interface Details {
+  members: { id: string; name: string; role: string }[];
+  invitations: { id: string; expiresAt: number }[];
+}
+export function SpaceSettings({
+  space,
+  onClose,
+  onChanged,
+}: {
+  space: Space;
+  onClose: () => void;
+  onChanged: () => Promise<void>;
+}) {
+  const [details, setDetails] = useState<Details>();
+  const [name, setName] = useState(space.name);
+  const [busy, setBusy] = useState(false);
+  const guard = useRef(false);
+  const [error, setError] = useState("");
+  const [link, setLink] = useState("");
+  const [confirm, setConfirm] = useState<{
+    type: string;
+    userId?: string;
+    label: string;
+  } | null>(null);
+  async function load() {
+    setDetails(
+      await sharingRequest<Details>("/api/spaces/details", undefined, space.id),
+    );
+  }
+  useEffect(() => {
+    void load().catch((e) => setError(e.message));
+  }, []);
+  async function act(body: unknown) {
+    if (guard.current) return;
+    guard.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await sharingRequest<{ token?: string }>(
+        "/api/spaces",
+        body,
+        space.id,
+      );
+      if (result.token)
+        setLink(`${window.location.origin}/invitations/${result.token}`);
+      await onChanged();
+      if ((body as { type: string }).type === "leave") onClose();
+      else await load();
+      setConfirm(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "保存できませんでした");
+    } finally {
+      guard.current = false;
+      setBusy(false);
+    }
+  }
+  return (
+    <Dialog
+      open
+      fullWidth
+      maxWidth="sm"
+      onClose={() => {
+        if (!busy) onClose();
+      }}
+      aria-labelledby="space-settings-title"
+    >
+      <DialogTitle id="space-settings-title">スペースの設定</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          {error && <Alert severity="error">{error}</Alert>}
+          {space.role === "owner" ? (
+            <Stack
+              component="form"
+              spacing={1}
+              onSubmit={(e) => {
+                e.preventDefault();
+                void act({ type: "rename", name });
+              }}
+            >
+              <TextField
+                label="スペース名"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={busy}
+                slotProps={{ htmlInput: { maxLength: 80 } }}
+              />
+              <Button
+                type="submit"
+                disabled={busy || !name.trim() || name.trim() === space.name}
+              >
+                名前を保存
+              </Button>
+            </Stack>
+          ) : (
+            <Typography>{space.name}</Typography>
+          )}
+          <Typography component="h3" variant="subtitle1">
+            メンバー
+          </Typography>
+          {details?.members.map((m) => (
+            <Stack
+              direction="row"
+              key={m.id}
+              sx={{ alignItems: "center", justifyContent: "space-between" }}
+            >
+              <Typography sx={{ overflowWrap: "anywhere" }}>
+                {m.name}
+                {m.role === "owner" ? "（オーナー）" : ""}
+              </Typography>
+              {space.role === "owner" && m.role === "member" && (
+                <Button
+                  color="error"
+                  disabled={busy}
+                  onClick={() =>
+                    setConfirm({
+                      type: "remove",
+                      userId: m.id,
+                      label: `${m.name}をメンバーから削除しますか？`,
+                    })
+                  }
+                >
+                  削除
+                </Button>
+              )}
+            </Stack>
+          ))}
+          {space.role === "owner" && (
+            <>
+              <Button
+                variant="contained"
+                disabled={busy}
+                onClick={() => void act({ type: "invite" })}
+              >
+                メンバーを招待
+              </Button>
+              {link && (
+                <>
+                  <TextField
+                    label="招待リンク"
+                    value={link}
+                    slotProps={{ htmlInput: { readOnly: true } }}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    7日間有効・1人だけ参加できます。
+                  </Typography>
+                  <Button
+                    onClick={() =>
+                      void navigator.clipboard
+                        .writeText(link)
+                        .catch(() =>
+                          setError("リンクを選択してコピーしてください"),
+                        )
+                    }
+                  >
+                    リンクをコピー
+                  </Button>
+                </>
+              )}
+              {details?.invitations.map((i) => (
+                <Stack
+                  key={i.id}
+                  direction="row"
+                  sx={{ alignItems: "center", justifyContent: "space-between" }}
+                >
+                  <Typography variant="body2">
+                    {new Date(i.expiresAt * 1000).toLocaleDateString("ja-JP")}
+                    までの招待
+                  </Typography>
+                  <Button
+                    disabled={busy}
+                    onClick={() =>
+                      void act({ type: "revoke", invitationId: i.id })
+                    }
+                  >
+                    無効にする
+                  </Button>
+                </Stack>
+              ))}
+            </>
+          )}
+          {space.role === "member" && (
+            <Button
+              color="error"
+              disabled={busy}
+              onClick={() =>
+                setConfirm({
+                  type: "leave",
+                  label: "このスペースから退出しますか？",
+                })
+              }
+            >
+              スペースから退出
+            </Button>
+          )}
+          {confirm && (
+            <Alert severity="warning">
+              <Typography>{confirm.label}</Typography>
+              <Button
+                color="error"
+                disabled={busy}
+                onClick={() =>
+                  void act({ type: confirm.type, userId: confirm.userId })
+                }
+              >
+                確定
+              </Button>
+              <Button disabled={busy} onClick={() => setConfirm(null)}>
+                キャンセル
+              </Button>
+            </Alert>
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button disabled={busy} onClick={onClose}>
+          閉じる
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+export function Invitation({
+  token,
+  onAccepted,
+  onCancel,
+}: {
+  token: string;
+  onAccepted: () => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [info, setInfo] = useState<{ name: string }>();
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const guard = useRef(false);
+  useEffect(() => {
+    void sharingRequest<{ name: string }>(`/api/invitations/${token}`)
+      .then(setInfo)
+      .catch((e) => setError(e.message));
+  }, [token]);
+  return (
+    <Dialog open fullWidth maxWidth="sm" aria-labelledby="invite-title">
+      <DialogTitle id="invite-title">スペースへの招待</DialogTitle>
+      <DialogContent>
+        {error && <Alert severity="error">{error}</Alert>}
+        {info && <Typography>「{info.name}」に参加しますか？</Typography>}
+      </DialogContent>
+      <DialogActions>
+        <Button disabled={busy} onClick={onCancel}>
+          キャンセル
+        </Button>
+        <Button
+          variant="contained"
+          disabled={busy || !info}
+          onClick={async () => {
+            if (guard.current) return;
+            guard.current = true;
+            setBusy(true);
+            setError("");
+            try {
+              await sharingRequest(`/api/invitations/${token}`, {});
+              await onAccepted();
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "参加できませんでした");
+            } finally {
+              guard.current = false;
+              setBusy(false);
+            }
+          }}
+        >
+          参加する
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}

@@ -1,3 +1,4 @@
+import type { Space } from "../api";
 import { useEffect, useId, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -13,6 +14,10 @@ import useMediaQuery from "@mui/material/useMediaQuery";
 import { ThemeControl } from "./ThemeControl";
 
 interface Props {
+  spaces: Space[];
+  spaceId: string;
+  onSwitch: (id: string) => Promise<void>;
+  onSettings: () => void;
   user: { name: string; email: string } | null;
   canLogout: boolean;
   busy: boolean;
@@ -23,6 +28,10 @@ interface Props {
 }
 
 export function AccountMenu({
+  spaces,
+  spaceId,
+  onSwitch,
+  onSettings,
   user,
   canLogout,
   busy,
@@ -109,7 +118,7 @@ export function AccountMenu({
         )}
       </Box>
       <Divider />
-      {/* Invitations and space sharing are not implemented yet. */}
+
       <Box component="section" sx={{ py: 2.5, mb: 0 }}>
         <Typography
           component="h3"
@@ -118,9 +127,51 @@ export function AccountMenu({
         >
           スペース
         </Typography>
-        <Typography variant="body2" color="text.secondary">
-          現在は共有に対応していません。
-        </Typography>
+        {spaces.map((space) => (
+          <Button
+            key={space.id}
+            fullWidth
+            variant="text"
+            disabled={busy || loggingOut}
+            aria-pressed={space.id === spaceId}
+            sx={{
+              justifyContent: "space-between",
+              minHeight: 44,
+              color: "text.primary",
+              fontWeight: space.id === spaceId ? 650 : 400,
+            }}
+            onClick={async () => {
+              setError("");
+              try {
+                await onSwitch(space.id);
+                close();
+              } catch (e) {
+                setError(
+                  e instanceof Error ? e.message : "切り替えできませんでした",
+                );
+              }
+            }}
+          >
+            {space.name}
+            <span aria-hidden="true">{space.id === spaceId ? "✓" : ""}</span>
+          </Button>
+        ))}
+        <Button
+          fullWidth
+          disabled={busy || loggingOut}
+          sx={{ justifyContent: "flex-start" }}
+          onClick={() => {
+            close();
+            onSettings();
+          }}
+        >
+          共有・スペースの設定
+        </Button>
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
       </Box>
       <Divider />
       <Box component="section" sx={{ py: 2.5, mb: 0 }}>

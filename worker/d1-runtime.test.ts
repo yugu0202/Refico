@@ -22,7 +22,7 @@ test("D1ランタイムでsnapshotの一括取得とpreviewのbootstrapが成功
     // Minimal storage fixtures isolate this regression from domain validation.
     await db.batch([
       db.prepare(
-        "CREATE TABLE spaces (id TEXT PRIMARY KEY, revision INTEGER)",
+        "CREATE TABLE spaces (id TEXT PRIMARY KEY, revision INTEGER, name TEXT)",
       ),
       ...modelTables.map((t) =>
         db.prepare(
@@ -31,7 +31,9 @@ test("D1ランタイムでsnapshotの一括取得とpreviewのbootstrapが成功
       ),
     ]);
     await db
-      .prepare("INSERT INTO spaces VALUES ('a', 7), ('b', 0), ('empty', 0)")
+      .prepare(
+        "INSERT INTO spaces VALUES ('a', 7, 'A'), ('b', 0, 'B'), ('empty', 0, 'Empty')",
+      )
       .run();
     const expected = emptyModel();
     for (const table of modelTables) {
@@ -68,12 +70,17 @@ test("D1ランタイムでsnapshotの一括取得とpreviewのbootstrapが成功
         "CREATE TABLE user (id TEXT PRIMARY KEY, name TEXT, email TEXT, emailVerified INTEGER, createdAt DATE, updatedAt DATE)",
       ),
       db.prepare(
-        "CREATE TABLE space_members (space_id TEXT, user_id TEXT, joined_at TEXT)",
+        "CREATE TABLE space_members (space_id TEXT, user_id TEXT, joined_at TEXT, role TEXT)",
       ),
       db.prepare(
-        "INSERT INTO space_members VALUES ('empty', 'preview:shared', '2026-10-07')",
+        "INSERT INTO space_members VALUES ('empty', 'preview:shared', '2026-10-07', 'owner')",
       ),
     ]);
+    await db
+      .prepare(
+        "CREATE TABLE user_preferences (user_id TEXT, active_space_id TEXT)",
+      )
+      .run();
     const env: Env = {
       DB: db,
       APP_ENV: "preview",
