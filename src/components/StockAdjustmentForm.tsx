@@ -10,7 +10,7 @@ import {
   recordPreparedAdjustment,
   preparedBalance,
   cookingCost,
-  type Meal,
+  type Cooking,
   stock,
   type Product,
   type State,
@@ -27,12 +27,12 @@ export function StockAdjustmentForm({
 }: {
   state: State;
   product?: Product;
-  prepared?: Meal;
+  prepared?: Cooking;
   today: string;
   onSave: (command: Command) => Promise<void>;
   onCancel: () => void;
 }) {
-  const name = prepared ? prepared.batch!.name : product!.name;
+  const name = prepared ? prepared.name : product!.name;
   const unit = prepared ? "食分" : product!.baseUnit;
   const balance = prepared
     ? preparedBalance(state, prepared)
@@ -125,13 +125,13 @@ export function StockAdjustmentForm({
                   <>
                     作った食数{" "}
                     {number(
-                      preview.meals.find((m) => m.id === prepared.id)!.batch!
+                      preview.cookings.find((m) => m.id === prepared.id)!
                         .servings,
                     )}
                     食分 · 1食分{" "}
                     {money(
                       cookingCost(prepared) /
-                        preview.meals.find((m) => m.id === prepared.id)!.batch!
+                        preview.cookings.find((m) => m.id === prepared.id)!
                           .servings,
                     )}
                   </>
@@ -151,7 +151,9 @@ export function StockAdjustmentForm({
                         (prepared
                           ? preparedBalance(
                               preview,
-                              preview.meals.find((m) => m.id === prepared.id)!,
+                              preview.cookings.find(
+                                (m) => m.id === prepared.id,
+                              )!,
                             )
                           : stock(preview, product!.id)
                         ).value - balance.value,

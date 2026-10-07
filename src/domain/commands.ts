@@ -3,13 +3,14 @@ import {
   createProduct,
   recordPurchase,
   recordMeal,
+  recordCooking,
   recordStockAdjustment,
   recordPreparedAdjustment,
   updateProduct,
   updatePreparedName,
   type State,
 } from "./inventory.ts";
-import { updateMeal, updatePurchase } from "./history.ts";
+import { updateMeal, updatePurchase, updateCooking } from "./history.ts";
 import { sampleState } from "./sample.ts";
 const id = z.string().min(1).max(100);
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -42,17 +43,17 @@ const inventoryMeal = z
           .strict(),
       )
       .max(100),
-    batch: z
-      .object({
-        name: z.string().trim().min(1).max(100),
-        servings: positive,
-        eatenServings: z.number().finite().min(0).max(1e9),
-      })
-      .strict()
-      .optional(),
     prepared: z
       .array(z.object({ batchId: id, quantity: positive }).strict())
       .max(100),
+  })
+  .strict();
+const cooking = z
+  .object({
+    date,
+    name: z.string().trim().min(1).max(100),
+    servings: positive,
+    inputs: inventoryMeal.shape.inputs,
   })
   .strict();
 const meal = z.union([
@@ -94,6 +95,8 @@ export const commandSchema = z.discriminatedUnion("type", [
   z
     .object({ type: z.literal("purchase.update"), id, input: purchase })
     .strict(),
+  z.object({ type: z.literal("prepared.create"), input: cooking }).strict(),
+  z.object({ type: z.literal("prepared.update"), id, input: cooking }).strict(),
   z.object({ type: z.literal("meal.create"), input: meal }).strict(),
   z.object({ type: z.literal("meal.update"), id, input: meal }).strict(),
   z
@@ -163,36 +166,45 @@ export function applyCommand(state: State, command: Command): State {
     }
     case "purchase.update":
       return updatePurchase(state, command.id, command.input);
+    case "prepared.create": {
+      const c = command.input;
+      return recordCooking(state, c.date, c.name, c.servings, c.inputs);
+    }
+    case "prepared.update": {
+      const c = command.input;
+      return updateCooking(
+        state,
+        command.id,
+        c.date,
+        c.name,
+        c.servings,
+        c.inputs,
+      );
+    }
     case "meal.create": {
       const m = command.input;
       return m.source === "direct"
-        ? recordMeal(state, m.date, m.kind, [], undefined, [], [], {
+        ? recordMeal(state, m.date, m.kind, [], [], {
             cost: m.cost,
             place: m.place,
             note: m.note,
           })
-        : recordMeal(state, m.date, m.kind, m.inputs, m.batch, m.prepared);
+        : recordMeal(state, m.date, m.kind, m.inputs, m.prepared);
     }
     case "meal.update": {
       const m = command.input;
       if (m.source === "direct")
-        return updateMeal(
-          state,
-          command.id,
-          m.date,
-          m.kind,
-          [],
-          undefined,
-          [],
-          { cost: m.cost, place: m.place, note: m.note },
-        );
+        return updateMeal(state, command.id, m.date, m.kind, [], [], {
+          cost: m.cost,
+          place: m.place,
+          note: m.note,
+        });
       return updateMeal(
         state,
         command.id,
         m.date,
         m.kind,
         m.inputs,
-        m.batch,
         m.prepared,
       );
     }
@@ -215,7 +227,12 @@ export function applyCommand(state: State, command: Command): State {
     case "prepared.rename":
       return updatePreparedName(state, command.id, command.name);
     case "sample.create":
-      if (state.products.length || state.meals.length || state.purchases.length)
+      if (
+        state.products.length ||
+        state.meals.length ||
+        state.cookings.length ||
+        state.purchases.length
+      )
         throw new Error("サンプルは空の状態でのみ追加できます");
       return sampleState(command.date);
   }

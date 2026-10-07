@@ -1,11 +1,7 @@
 import type { Command } from "../domain/commands";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
-import Checkbox from "@mui/material/Checkbox";
-import FormControlLabel from "@mui/material/FormControlLabel";
 import Button from "@mui/material/Button";
-import IconButton from "@mui/material/IconButton";
-import SvgIcon from "@mui/material/SvgIcon";
 import TextField from "@mui/material/TextField";
 import { useState, useRef, useId, type FormEvent } from "react";
 import {
@@ -17,17 +13,9 @@ import {
   type State,
   type Meal,
   type MealInput,
-  standardUnits,
 } from "../domain/inventory";
 import { updateMeal } from "../domain/history";
-import { AmountInput } from "./AmountInput";
-interface Draft {
-  productId: string;
-  batchId: string;
-  quantity: string;
-  unit: string;
-  key: string;
-}
+import { UsedItems, type Draft } from "./UsedItems";
 export function MealForm({
   state,
   today,
@@ -35,8 +23,10 @@ export function MealForm({
   money,
   editing,
   onCancel,
+  initialPrepared,
 }: {
   editing?: Meal;
+  initialPrepared?: { batchId: string; quantity: number };
   onCancel?: () => void;
   state: State;
   today: string;
@@ -80,22 +70,19 @@ export function MealForm({
             unit: "食分",
           })),
         ].concat(editing.direct ? [draft()] : [])
-      : [draft()],
+      : [
+          initialPrepared
+            ? {
+                ...draft(),
+                batchId: initialPrepared.batchId,
+                quantity: String(initialPrepared.quantity),
+                unit: "食分",
+              }
+            : draft(),
+        ],
   );
-  const [batchEnabled, setBatchEnabled] = useState(!!editing?.batch);
-  const [name, setName] = useState(editing?.batch?.name ?? "");
-  const [servings, setServings] = useState(
-    editing?.batch ? String(editing.batch.servings) : "",
-  );
-  const [eaten, setEaten] = useState(
-    String(editing?.batch?.eatenServings ?? 0),
-  );
-  const batches = state.meals.filter(
-    (m) =>
-      m.id !== editing?.id &&
-      m.batch &&
-      m.date <= date &&
-      (!!editing || preparedRemaining(state, m) > 0),
+  const batches = state.cookings.filter(
+    (c) => c.date <= date && (!!editing || preparedRemaining(state, c) > 0),
   );
   const buildInput = (): Extract<Command, { type: "meal.create" }>["input"] => {
     if (source === "direct")
@@ -114,19 +101,13 @@ export function MealForm({
         unit: r.unit,
         quantity: Number(r.quantity),
       }));
-    const batch = batchEnabled
-      ? { name, servings: Number(servings), eatenServings: Number(eaten) }
-      : undefined;
-    const prepared = batchEnabled
-      ? []
-      : rows
-          .filter((r) => r.batchId)
-          .map((r) => ({ batchId: r.batchId, quantity: Number(r.quantity) }));
+    const prepared = rows
+      .filter((r) => r.batchId)
+      .map((r) => ({ batchId: r.batchId, quantity: Number(r.quantity) }));
     return {
       date,
       kind: kind as "朝食" | "昼食" | "夕食" | "その他",
       inputs,
-      batch,
       prepared,
     };
   };
@@ -137,30 +118,18 @@ export function MealForm({
   const buildRecord = () => {
     const m = buildInput();
     const inputs = m.source === "direct" ? [] : m.inputs;
-    const batch = m.source === "direct" ? undefined : m.batch;
     const prepared = m.source === "direct" ? [] : m.prepared;
     const direct =
       m.source === "direct"
         ? { cost: m.cost, place: m.place, note: m.note }
         : undefined;
     return editing
-      ? updateMeal(
-          state,
-          editing.id,
-          m.date,
-          m.kind,
-          inputs,
-          batch,
-          prepared,
-          direct,
-        )
-      : recordMeal(state, m.date, m.kind, inputs, batch, prepared, [], direct);
+      ? updateMeal(state, editing.id, m.date, m.kind, inputs, prepared, direct)
+      : recordMeal(state, m.date, m.kind, inputs, prepared, direct);
   };
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
-  const update = (key: string, changes: Partial<Draft>) =>
-    setRows(rows.map((r) => (r.key === key ? { ...r, ...changes } : r)));
   let estimate: number | undefined;
   let estimateError = "";
   try {
@@ -304,200 +273,20 @@ export function MealForm({
             role="tabpanel"
             aria-labelledby={`${sourceFieldsId}-inventory`}
           >
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={batchEnabled}
-                  disabled={rows.some((r) => !!r.batchId)}
-                  onChange={(e) => setBatchEnabled(e.target.checked)}
-                />
-              }
-              label="残りを作り置きにする"
-            />
-            {batchEnabled && (
-              <div className="batch-fields">
-                <TextField
-                  label="料理名"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-                <div className="two-columns batch-amounts">
-                  <TextField
-                    label="作った量（食分）"
-                    required
-                    type="number"
-                    slotProps={{ htmlInput: { min: 0.001, step: 0.001 } }}
-                    value={servings}
-                    onChange={(e) => setServings(e.target.value)}
-                  />
-                  <TextField
-                    label="今回食べた量（食分）"
-                    required
-                    type="number"
-                    slotProps={{ htmlInput: { min: 0, step: 0.001 } }}
-                    value={eaten}
-                    onChange={(e) => setEaten(e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
             <h2>使ったもの</h2>
-            {available.length === 0 &&
-              (batchEnabled || batches.length === 0) && (
-                <p className="hint">
-                  在庫がありません。購入を記録すると食材を選べます。
-                </p>
-              )}
-            {rows.map((row, index) => {
-              const selectedProduct = state.products.find(
-                (p) => p.id === row.productId,
-              );
-              const old = editing?.usages.find(
-                (u) => u.productId === row.productId,
-              );
-              const product =
-                selectedProduct && old
-                  ? {
-                      ...selectedProduct,
-                      units: [
-                        ...selectedProduct.units.filter(
-                          (u) => u.name !== old.unit,
-                        ),
-                        ...(standardUnits(selectedProduct.baseUnit).some(
-                          (u) => u.name === old.unit,
-                        )
-                          ? []
-                          : [{ name: old.unit, factor: old.factor }]),
-                      ],
-                    }
-                  : selectedProduct;
-              return (
-                <div className="ingredient" key={row.key}>
-                  <TextField
-                    label={`使ったもの ${index + 1}`}
-                    select
-                    required
-                    value={
-                      row.batchId
-                        ? `batch:${row.batchId}`
-                        : row.productId
-                          ? `product:${row.productId}`
-                          : ""
-                    }
-                    slotProps={{
-                      select: { native: true },
-                      inputLabel: { shrink: true },
-                    }}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      const isBatch = value.startsWith("batch:");
-                      const id = value.slice(value.indexOf(":") + 1);
-                      update(row.key, {
-                        productId: isBatch ? "" : id,
-                        batchId: isBatch ? id : "",
-                        quantity: "",
-                        unit: isBatch
-                          ? "食分"
-                          : (state.products.find((p) => p.id === id)
-                              ?.baseUnit ?? "g"),
-                      });
-                    }}
-                  >
-                    <option value="" disabled>
-                      食材・作り置きを選択
-                    </option>
-                    <optgroup label="食材">
-                      {available
-                        .filter(
-                          (p) =>
-                            p.id === row.productId ||
-                            !rows.some((r) => r.productId === p.id),
-                        )
-                        .map((p) => (
-                          <option key={p.id} value={`product:${p.id}`}>
-                            {p.name}
-                          </option>
-                        ))}
-                    </optgroup>
-                    {!batchEnabled && batches.length > 0 && (
-                      <optgroup label="作り置き">
-                        {batches
-                          .filter(
-                            (m) =>
-                              m.id === row.batchId ||
-                              !rows.some((r) => r.batchId === m.id),
-                          )
-                          .map((m) => (
-                            <option key={m.id} value={`batch:${m.id}`}>
-                              {m.batch!.name}（残り{preparedRemaining(state, m)}
-                              食分）
-                            </option>
-                          ))}
-                      </optgroup>
-                    )}
-                  </TextField>
-                  {row.batchId && (
-                    <TextField
-                      label="食べた量（食分）"
-                      required
-                      type="number"
-                      value={row.quantity}
-                      slotProps={{ htmlInput: { min: 0.001, step: 0.001 } }}
-                      onChange={(e) =>
-                        update(row.key, { quantity: e.target.value })
-                      }
-                    />
-                  )}
-                  {product && (
-                    <AmountInput
-                      id={`amount-${row.key}`}
-                      product={product}
-                      quantity={row.quantity}
-                      unit={row.unit}
-                      onChange={(q, u) =>
-                        update(row.key, { quantity: q, unit: u })
-                      }
-                    />
-                  )}
-                  <IconButton
-                    type="button"
-                    aria-label={`使ったもの${index + 1}を削除`}
-                    title="削除"
-                    disabled={rows.length === 1}
-                    onClick={() =>
-                      setRows(rows.filter((r) => r.key !== row.key))
-                    }
-                    sx={{ width: 44, height: 44 }}
-                  >
-                    <SvgIcon
-                      fontSize="small"
-                      sx={{
-                        fill: "none",
-                        stroke: "currentColor",
-                        strokeWidth: 1.8,
-                        strokeLinecap: "round",
-                        strokeLinejoin: "round",
-                      }}
-                    >
-                      <path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7M14 10v7" />
-                    </SvgIcon>
-                  </IconButton>
-                </div>
-              );
-            })}
-            <Button
-              type="button"
-              variant="text"
-              className="text-button"
-              disabled={
-                rows.length >=
-                available.length + (batchEnabled ? 0 : batches.length)
-              }
-              onClick={() => setRows([...rows, draft()])}
-            >
-              ＋ 追加
-            </Button>
+            {available.length === 0 && batches.length === 0 && (
+              <p className="hint">
+                在庫がありません。購入を記録すると食材を選べます。
+              </p>
+            )}
+            <UsedItems
+              state={state}
+              rows={rows}
+              onChange={setRows}
+              available={available}
+              batches={batches}
+              editing={editing}
+            />
           </div>
         )}
         {source === "inventory" && (
@@ -518,11 +307,7 @@ export function MealForm({
             type="submit"
             disabled={saving || estimate === undefined}
           >
-            {editing
-              ? "変更を保存"
-              : source === "inventory" && batchEnabled && Number(eaten) === 0
-                ? "作り置きを保存"
-                : "食事を記録"}
+            {editing ? "変更を保存" : "食事を記録"}
           </Button>
         </div>
       </fieldset>

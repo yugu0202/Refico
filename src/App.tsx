@@ -16,7 +16,8 @@ import { DirectMealDetail } from "./components/DirectMealDetail";
 import { LoginScreen } from "./components/LoginScreen";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
-import { PreparedNameForm } from "./components/PreparedNameForm";
+import { PreparedForm } from "./components/PreparedForm";
+import DialogTitle from "@mui/material/DialogTitle";
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogContent from "@mui/material/DialogContent";
@@ -28,7 +29,7 @@ import {
   emptyState,
   mealCost,
   preparedRemaining,
-  type Meal,
+  type Cooking,
   type State,
   type Product,
 } from "./domain/inventory";
@@ -136,6 +137,9 @@ export default function App() {
         setEditingPrepared(null);
         setAdjustingPrepared(null);
         setSearch("");
+        setCreatingPrepared(false);
+        setSavedPreparedId(null);
+        setMealPreset(undefined);
       }
       if (
         identityRef.current !== data.spaceId ||
@@ -204,12 +208,24 @@ export default function App() {
     setLoginError("");
     setStorageError("");
     setState(emptyState());
+    setCreatingPrepared(false);
+    setEditingPrepared(null);
+    setSavedPreparedId(null);
+    setMealPreset(undefined);
     navigate("home");
   }
   const [storageError, setStorageError] = useState("");
   const [notice, setNotice] = useState("");
-  const [adjustingPrepared, setAdjustingPrepared] = useState<Meal | null>(null);
-  const [editingPrepared, setEditingPrepared] = useState<Meal | null>(null);
+  const [creatingPrepared, setCreatingPrepared] = useState(false);
+  const [savedPreparedId, setSavedPreparedId] = useState<string | null>(null);
+  const [mealPreset, setMealPreset] = useState<{
+    batchId: string;
+    quantity: number;
+  }>();
+  const [adjustingPrepared, setAdjustingPrepared] = useState<Cooking | null>(
+    null,
+  );
+  const [editingPrepared, setEditingPrepared] = useState<Cooking | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(
     null,
@@ -269,6 +285,7 @@ export default function App() {
       setState(next.state);
       setNotice(message);
       setStorageError("");
+      return next.state;
     } catch (e) {
       if (e instanceof ApiError && (e.status === 409 || e.status === 401))
         await reload(true);
@@ -330,6 +347,9 @@ export default function App() {
   }
   function selectPage(next: Page) {
     setPage(next);
+    setCreatingPrepared(false);
+    setSavedPreparedId(null);
+    setMealPreset(undefined);
     setReopenMenu(Boolean(window.history.state?.reficoMenuOpen));
     setAdjustingPrepared(null);
     setEditingPrepared(null);
@@ -369,9 +389,7 @@ export default function App() {
       `${product.name}を追加しました`,
     );
   }
-  const meals = state.meals.filter(
-    (m) => m.date === selectedDate && (!m.batch || m.batch.eatenServings > 0),
-  );
+  const meals = state.meals.filter((m) => m.date === selectedDate);
   const costs = new Map(dailyCosts(state));
   const total = costs.get(today) ?? 0;
   const monthTotal = [...costs].reduce(
@@ -380,10 +398,8 @@ export default function App() {
     0,
   );
   const filtered = state.products.filter((p) => p.name.includes(search));
-  const prepared = state.meals.filter((m) => m.batch);
-  const filteredPrepared = prepared.filter((m) =>
-    m.batch!.name.includes(search),
-  );
+  const prepared = state.cookings;
+  const filteredPrepared = prepared.filter((m) => m.name.includes(search));
   const preparedRows = (items: typeof prepared) =>
     items.map((m) => {
       const remaining = preparedRemaining(state, m);
@@ -391,11 +407,11 @@ export default function App() {
         <div className="inventory-row" key={m.id}>
           <div>
             <Stack direction="row" sx={{ alignItems: "center" }}>
-              <strong>{m.batch!.name}</strong>
+              <strong>{m.name}</strong>
               <IconButton
                 type="button"
                 disabled={busy}
-                aria-label={`${m.batch!.name}を編集`}
+                aria-label={`${m.name}を編集`}
                 title="作り置きを編集"
                 onClick={() => {
                   setEditingPrepared(m);
@@ -419,7 +435,7 @@ export default function App() {
               type="button"
               variant="text"
               disabled={busy}
-              aria-label={`${m.batch!.name}の在庫を調整`}
+              aria-label={`${m.name}の在庫を調整`}
               onClick={() => {
                 setAdjustingPrepared(m);
                 setNotice("");
@@ -595,6 +611,29 @@ export default function App() {
             {notice}
           </p>
         )}
+        {savedPreparedId &&
+          state.cookings.some(
+            (c) => c.id === savedPreparedId && preparedRemaining(state, c) > 0,
+          ) && (
+            <Button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                const cooking = state.cookings.find(
+                  (c) => c.id === savedPreparedId,
+                )!;
+                const preset = {
+                  batchId: cooking.id,
+                  quantity: Math.min(1, preparedRemaining(state, cooking)),
+                };
+                navigate("meal");
+                setMealPreset(preset);
+                setFormVersion((v) => v + 1);
+              }}
+            >
+              この作り置きを使って食事を記録
+            </Button>
+          )}
         {ready && (
           <>
             {adjustingPrepared && (
@@ -623,15 +662,18 @@ export default function App() {
                 }}
               />
             )}
-            {editingPrepared && (
+            {(creatingPrepared || editingPrepared) && (
               <Dialog
                 open
                 onClose={() => {
-                  if (!busyRef.current) setEditingPrepared(null);
+                  if (!busyRef.current) {
+                    setCreatingPrepared(false);
+                    setEditingPrepared(null);
+                  }
                 }}
                 fullWidth
                 maxWidth="sm"
-                aria-labelledby="prepared-title"
+                aria-labelledby="prepared-form-title"
                 slotProps={{
                   paper: {
                     sx: {
@@ -644,20 +686,28 @@ export default function App() {
                   },
                 }}
               >
-                <DialogContent sx={{ paddingTop: 3 }}>
-                  <PreparedNameForm
-                    key={editingPrepared.id}
-                    name={editingPrepared.batch!.name}
-                    onCancel={() => setEditingPrepared(null)}
-                    onSave={async (name) => {
-                      await persist(
-                        {
-                          type: "prepared.rename",
-                          id: editingPrepared.id,
-                          name,
-                        },
-                        `${name.trim()}を更新しました`,
+                <DialogTitle id="prepared-form-title">
+                  {editingPrepared ? "作り置きを編集" : "作り置きを作る"}
+                </DialogTitle>
+                <DialogContent sx={{ "&&": { paddingTop: 1.5 } }}>
+                  <PreparedForm
+                    state={state}
+                    today={today}
+                    editing={editingPrepared ?? undefined}
+                    onCancel={() => {
+                      setCreatingPrepared(false);
+                      setEditingPrepared(null);
+                    }}
+                    onSave={async (command) => {
+                      const next = await persist(
+                        command,
+                        editingPrepared
+                          ? "作り置きを更新しました"
+                          : "作り置きを保存しました",
                       );
+                      if (command.type === "prepared.create")
+                        setSavedPreparedId(next.cookings.at(-1)!.id);
+                      setCreatingPrepared(false);
                       setEditingPrepared(null);
                     }}
                   />
@@ -754,11 +804,9 @@ export default function App() {
                           <span>
                             {meal.direct
                               ? "外食など"
-                              : meal.batch
-                                ? meal.batch.name
-                                : meal.prepared?.length
-                                  ? "作り置き"
-                                  : `${meal.usages.length}食材`}
+                              : meal.prepared?.length
+                                ? "作り置き"
+                                : `${meal.usages.length}食材`}
                           </span>
                           <strong className="numeric">
                             {money(mealCost(meal))}
@@ -768,51 +816,38 @@ export default function App() {
                           {meal.direct && (
                             <DirectMealDetail direct={meal.direct} />
                           )}
-                          {meal.batch && (
-                            <div>
-                              <span>
-                                {meal.batch.name}{" "}
-                                {number(meal.batch.eatenServings)}食分
-                              </span>
-                              <span>{money(mealCost(meal))}</span>
-                            </div>
-                          )}
                           {(meal.prepared ?? []).map((p) => (
                             <div key={p.batchId}>
                               <span>
                                 {
-                                  state.meals.find((m) => m.id === p.batchId)
-                                    ?.batch?.name
+                                  state.cookings.find((c) => c.id === p.batchId)
+                                    ?.name
                                 }{" "}
                                 {number(p.quantity)}食分
                               </span>
                               <span>{money(p.cost)}</span>
                             </div>
                           ))}
-                          {!meal.batch &&
-                            meal.usages.map((u) => (
-                              <div key={u.productId}>
-                                <span>
-                                  {
-                                    state.products.find(
-                                      (p) => p.id === u.productId,
-                                    )?.name
-                                  }{" "}
-                                  <small>
-                                    {number(u.quantity)}
-                                    {u.unit}
-                                  </small>
-                                </span>
-                                <span>
-                                  {money(
-                                    u.allocations.reduce(
-                                      (s, a) => s + a.cost,
-                                      0,
-                                    ),
-                                  )}
-                                </span>
-                              </div>
-                            ))}
+                          {meal.usages.map((u) => (
+                            <div key={u.productId}>
+                              <span>
+                                {
+                                  state.products.find(
+                                    (p) => p.id === u.productId,
+                                  )?.name
+                                }{" "}
+                                <small>
+                                  {number(u.quantity)}
+                                  {u.unit}
+                                </small>
+                              </span>
+                              <span>
+                                {money(
+                                  u.allocations.reduce((s, a) => s + a.cost, 0),
+                                )}
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       </details>
                     ))
@@ -845,6 +880,18 @@ export default function App() {
             )}
             {page === "inventory" && (
               <>
+                <div className="actions">
+                  <Button
+                    disabled={busy}
+                    onClick={() => {
+                      setSavedPreparedId(null);
+                      setNotice("");
+                      setCreatingPrepared(true);
+                    }}
+                  >
+                    作り置きを作る
+                  </Button>
+                </div>
                 <TextField
                   className="search"
                   label="在庫を探す"
@@ -886,8 +933,8 @@ export default function App() {
                           <div>
                             <strong>
                               {
-                                state.meals.find((m) => m.id === a.batchId)
-                                  ?.batch?.name
+                                state.cookings.find((c) => c.id === a.batchId)
+                                  ?.name
                               }
                             </strong>
                             <p className="hint">
@@ -957,7 +1004,9 @@ export default function App() {
                   type="purchase"
                   state={state}
                   today={today}
-                  onSave={persist}
+                  onSave={async (command, message) => {
+                    await persist(command, message);
+                  }}
                   saving={busy}
                 />
               </>
@@ -969,8 +1018,10 @@ export default function App() {
                   state={state}
                   today={today}
                   money={money}
+                  initialPrepared={mealPreset}
                   onSave={async (command) => {
                     await persist(command, "食事を記録しました");
+                    setMealPreset(undefined);
                     setFormVersion((v) => v + 1);
                   }}
                 />
@@ -978,7 +1029,9 @@ export default function App() {
                   type="meal"
                   state={state}
                   today={today}
-                  onSave={persist}
+                  onSave={async (command, message) => {
+                    await persist(command, message);
+                  }}
                   saving={busy}
                 />
               </>

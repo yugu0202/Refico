@@ -108,8 +108,7 @@ export function History({
                   <span>
                     {m.direct
                       ? "外食など"
-                      : (m.batch?.name ??
-                        `${m.usages.length + (m.prepared?.length ?? 0)}品`)}
+                      : `${m.usages.length + (m.prepared?.length ?? 0)}品`}
                   </span>
                   <strong className="numeric">{money(mealCost(m))}</strong>
                 </summary>
@@ -132,21 +131,12 @@ export function History({
                   {(m.prepared ?? []).map((p) => (
                     <div key={p.batchId}>
                       <span>
-                        {
-                          state.meals.find((m) => m.id === p.batchId)?.batch
-                            ?.name
-                        }{" "}
+                        {state.cookings.find((c) => c.id === p.batchId)?.name}{" "}
                         {number(p.quantity)}食分
                       </span>
                       <span>{money(p.cost)}</span>
                     </div>
                   ))}
-                  {m.batch && (
-                    <p className="hint">
-                      作った量 {number(m.batch.servings)}食分 · 今回食べた量{" "}
-                      {number(m.batch.eatenServings)}食分
-                    </p>
-                  )}
                 </div>
               </details>
               <Tooltip title="食事履歴を編集">
