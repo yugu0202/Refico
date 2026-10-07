@@ -45,7 +45,6 @@ export function AccountMenu({
   const titleId = useId();
   const mobile = useMediaQuery("(max-width: 600px)");
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const settingsPending = useRef(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const loggingOutRef = useRef(false);
   const [error, setError] = useState("");
@@ -56,13 +55,6 @@ export function AccountMenu({
   function close() {
     setAnchor(null);
     onClosed();
-  }
-  function menuExited() {
-    // Open the next modal only after this modal releases focus and its backdrop.
-    if (settingsPending.current) {
-      settingsPending.current = false;
-      onSettings();
-    }
   }
   async function logout() {
     if (busy || loggingOutRef.current) return;
@@ -169,8 +161,8 @@ export function AccountMenu({
           disabled={busy || loggingOut}
           sx={{ justifyContent: "flex-start" }}
           onClick={() => {
-            settingsPending.current = true;
             close();
+            onSettings();
           }}
         >
           共有・スペースの設定
@@ -287,7 +279,6 @@ export function AccountMenu({
           open={open}
           onClose={close}
           slotProps={{
-            transition: { onExited: menuExited },
             paper: {
               id: panelId,
               role: "dialog",
@@ -316,7 +307,6 @@ export function AccountMenu({
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
           transformOrigin={{ vertical: "top", horizontal: "right" }}
           slotProps={{
-            transition: { onExited: menuExited },
             paper: {
               id: panelId,
               role: "dialog",

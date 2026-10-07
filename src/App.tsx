@@ -471,10 +471,9 @@ export default function App() {
     );
   return (
     <div className="app-shell">
-      {spaces.find((s) => s.id === spaceId) && (
+      {spaceSettings && spaces.find((s) => s.id === spaceId) && (
         <SpaceSettings
-          key={spaceId}
-          open={spaceSettings}
+          key={`space-settings:${spaceId}`}
           space={spaces.find((s) => s.id === spaceId)!}
           onClose={() => setSpaceSettings(false)}
           onChanged={() => reload(true, true)}
