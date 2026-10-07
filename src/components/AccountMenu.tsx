@@ -139,6 +139,7 @@ export function AccountMenu({
         <Button
           component="a"
           href="/help"
+          variant="text"
           fullWidth
           disabled={busy || loggingOut}
           onClick={(event) => {
@@ -154,7 +155,12 @@ export function AccountMenu({
             close();
             onHelp();
           }}
-          sx={{ justifyContent: "space-between", minHeight: 44, px: 0 }}
+          sx={{
+            justifyContent: "space-between",
+            minHeight: 44,
+            px: 0,
+            color: "text.primary",
+          }}
         >
           使い方 <span aria-hidden="true">›</span>
         </Button>
