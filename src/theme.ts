@@ -38,19 +38,6 @@ export const theme = createTheme({
   },
   shape: { borderRadius: 5 },
   components: {
-    MuiToggleButton: {
-      styleOverrides: {
-        root: {
-          minHeight: 44,
-          fontWeight: 400,
-          "&.Mui-selected": {
-            fontWeight: 700,
-            color: "var(--mui-palette-primary-main)",
-            backgroundColor: "var(--selected-background)",
-          },
-        },
-      },
-    },
     MuiButton: {
       defaultProps: {
         disableElevation: true,

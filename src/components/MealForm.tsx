@@ -1,11 +1,11 @@
 import type { Command } from "../domain/commands";
-import ToggleButton from "@mui/material/ToggleButton";
-import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+import Tab from "@mui/material/Tab";
+import Tabs from "@mui/material/Tabs";
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
-import { useState, useRef, type FormEvent } from "react";
+import { useState, useRef, useId, type FormEvent } from "react";
 import {
   mealKinds,
   recordMeal,
@@ -45,6 +45,7 @@ export function MealForm({
     (p) => !!editing || stock(state, p.id).quantity > 0,
   );
   const [date, setDate] = useState(editing?.date ?? today);
+  const sourceFieldsId = useId();
   const [kind, setKind] = useState(editing?.kind ?? "夕食");
   const [source, setSource] = useState<"inventory" | "direct">(
     editing?.direct ? "direct" : "inventory",
@@ -195,25 +196,45 @@ export function MealForm({
     }
   }
   return (
-    <form className="entry-form wide" onSubmit={submit}>
+    <form
+      className={`entry-form wide${source === "direct" ? " direct-meal-form" : ""}`}
+      onSubmit={submit}
+    >
       <fieldset className="form-fields" disabled={saving}>
-        <ToggleButtonGroup
+        <Tabs
           value={source}
-          exclusive
-          fullWidth
           aria-label="食事の記録方法"
-          disabled={saving}
-          onChange={(_, value: "inventory" | "direct" | null) => {
-            if (value) {
-              setSource(value);
-              setError("");
-            }
+          onChange={(_, value: "inventory" | "direct") => {
+            setSource(value);
+            setError("");
           }}
-          sx={{ mb: 2, "& .MuiToggleButton-root": { minHeight: 44 } }}
+          sx={{
+            mb: 2,
+            minHeight: 44,
+            "& .MuiTab-root": {
+              minHeight: 44,
+              minWidth: 88,
+              px: 2,
+              fontWeight: 400,
+            },
+            "& .Mui-selected": { fontWeight: 700 },
+          }}
         >
-          <ToggleButton value="inventory">自炊</ToggleButton>
-          <ToggleButton value="direct">外食など</ToggleButton>
-        </ToggleButtonGroup>
+          <Tab
+            value="inventory"
+            label="自炊"
+            disabled={saving}
+            id={`${sourceFieldsId}-inventory`}
+            aria-controls={sourceFieldsId}
+          />
+          <Tab
+            value="direct"
+            label="外食など"
+            disabled={saving}
+            id={`${sourceFieldsId}-direct`}
+            aria-controls={sourceFieldsId}
+          />
+        </Tabs>
         <div className="two-columns">
           <TextField
             className="field"
@@ -238,7 +259,12 @@ export function MealForm({
           </TextField>
         </div>
         {source === "direct" ? (
-          <div className="batch-fields">
+          <div
+            className="direct-meal-fields"
+            id={sourceFieldsId}
+            role="tabpanel"
+            aria-labelledby={`${sourceFieldsId}-direct`}
+          >
             <TextField
               label="金額（円）"
               required
@@ -249,21 +275,29 @@ export function MealForm({
             />
             <TextField
               label="店名（任意）"
+              variant="standard"
               value={place}
               slotProps={{ htmlInput: { maxLength: 100 } }}
               onChange={(e) => setPlace(e.target.value)}
             />
             <TextField
               label="メモ（任意）"
+              variant="standard"
               value={note}
               multiline
-              minRows={2}
+              minRows={1}
+              maxRows={4}
               slotProps={{ htmlInput: { maxLength: 500 } }}
               onChange={(e) => setNote(e.target.value)}
             />
           </div>
         ) : (
-          <>
+          <div
+            className="inventory-meal-fields"
+            id={sourceFieldsId}
+            role="tabpanel"
+            aria-labelledby={`${sourceFieldsId}-inventory`}
+          >
             <FormControlLabel
               control={
                 <Checkbox
@@ -447,12 +481,14 @@ export function MealForm({
             >
               ＋ 追加
             </Button>
-          </>
+          </div>
         )}
-        <div className="estimate">
-          <span>この食事の金額</span>
-          <strong>{estimate === undefined ? "—" : money(estimate)}</strong>
-        </div>
+        {source === "inventory" && (
+          <div className="estimate">
+            <span>この食事の金額</span>
+            <strong>{estimate === undefined ? "—" : money(estimate)}</strong>
+          </div>
+        )}
         {(error || estimateError) && (
           <p className="error" role="alert">
             {error || estimateError}
