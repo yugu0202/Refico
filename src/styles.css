@@ -528,7 +528,12 @@ label .amount-input select {
   .ingredient {
     grid-template-columns: minmax(0, 1fr) auto;
   }
-  .ingredient > .MuiFormControl-root:first-child {
+  .ingredient > .MuiIconButton-root {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .ingredient > .MuiFormControl-root:not(:first-child),
+  .ingredient > .amount-input {
     grid-column: 1 / -1;
   }
   .unit-row {
