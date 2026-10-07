@@ -109,14 +109,14 @@ export function AccountMenu({
         )}
       </Box>
       <Divider />
-      {/* Invitations and household sharing are not implemented yet. */}
+      {/* Invitations and space sharing are not implemented yet. */}
       <Box component="section" sx={{ py: 2.5, mb: 0 }}>
         <Typography
           component="h3"
           variant="body2"
           sx={{ fontWeight: 600, mb: 1 }}
         >
-          家庭
+          スペース
         </Typography>
         <Typography variant="body2" color="text.secondary">
           現在は共有に対応していません。

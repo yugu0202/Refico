@@ -1,11 +1,15 @@
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import type { D1Database, D1PreparedStatement } from "./env.ts";
-export function testDatabase() {
+export function testDatabase({
+  migrations = readdirSync(new URL("../migrations/", import.meta.url))
+    .filter((name) => name.endsWith(".sql"))
+    .sort(),
+}: { migrations?: string[] } = {}) {
   const queries: string[] = [];
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec("PRAGMA foreign_keys = ON");
-  for (const name of ["0001_auth.sql", "0002_inventory.sql"])
+  for (const name of migrations)
     sqlite.exec(
       readFileSync(new URL(`../migrations/${name}`, import.meta.url), "utf8"),
     );
