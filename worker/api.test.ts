@@ -105,7 +105,7 @@ test("認証済みAPIは所有者を分離し、再送・古い更新・偽造�
         await request("commands", "a", {
           ...body,
           revision: 1,
-          command: { ...body.command, householdId: "personal:b" },
+          command: { ...body.command, spaceId: "personal:b" },
         })
       ).status,
       400,
@@ -157,12 +157,12 @@ test("共通プレビューはURL・Cookieによらず保存を共有し、本�
     const baseline = (await response.json()) as {
       authMode: string;
       sampleDataEnabled: boolean;
-      householdId: string;
+      spaceId: string;
       revision: number;
     };
     assert.equal(baseline.authMode, "test");
     assert.equal(baseline.sampleDataEnabled, true);
-    assert.equal(baseline.householdId, "personal:preview:shared");
+    assert.equal(baseline.spaceId, "personal:preview:shared");
     const body = {
       requestId: crypto.randomUUID(),
       revision: 0,
@@ -187,11 +187,11 @@ test("共通プレビューはURL・Cookieによらず保存を共有し、本�
         env,
       )
     ).json()) as {
-      householdId: string;
+      spaceId: string;
       revision: number;
       state: { products: unknown[] };
     };
-    assert.equal(saved.householdId, baseline.householdId);
+    assert.equal(saved.spaceId, baseline.spaceId);
     assert.equal(saved.revision, 1);
     assert.ok(saved.state.products.length > 0);
     assert.equal(
@@ -199,7 +199,7 @@ test("共通プレビューはURL・Cookieによらず保存を共有し、本�
       1,
     );
     assert.equal(
-      sqlite.prepare("SELECT count(*) AS count FROM households").get()?.count,
+      sqlite.prepare("SELECT count(*) AS count FROM spaces").get()?.count,
       1,
     );
     assert.equal(

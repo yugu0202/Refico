@@ -3,7 +3,7 @@ import { getAuth } from "./auth.ts";
 import type { Env } from "./env.ts";
 import { sampleDataEnabled } from "./env.ts";
 import {
-  personalHousehold,
+  personalSpace,
   loadSnapshot,
   receipt,
   saveSnapshot,
@@ -74,12 +74,12 @@ export default {
       if (request.method !== "GET" && !sameOrigin(request, env))
         return json({ error: "許可されていない送信元です" }, 403);
       // Membership is resolved server-side from Google session or the shared preview account.
-      const householdId = await personalHousehold(db, user.id);
+      const spaceId = await personalSpace(db, user.id);
       if (path === "/api/bootstrap" && request.method === "GET") {
-        const snapshot = await loadSnapshot(db, householdId);
+        const snapshot = await loadSnapshot(db, spaceId);
         return json({
           revision: snapshot.revision,
-          householdId,
+          spaceId,
           authMode: mode,
           sampleDataEnabled: sampleDataEnabled(env),
           state: toView(snapshot.model),
@@ -113,10 +113,10 @@ export default {
             403,
           );
         const fingerprint = JSON.stringify({ revision, command });
-        const oldReceipt = await receipt(db, householdId, requestId);
+        const oldReceipt = await receipt(db, spaceId, requestId);
         if (oldReceipt && oldReceipt.fingerprint !== fingerprint)
           return json({ error: "同じ送信IDで異なる内容は保存できません" }, 409);
-        const snapshot = await loadSnapshot(db, householdId);
+        const snapshot = await loadSnapshot(db, spaceId);
         if (oldReceipt)
           return json({
             revision: snapshot.revision,
@@ -150,7 +150,7 @@ export default {
         try {
           await saveSnapshot(
             db,
-            householdId,
+            spaceId,
             user.id,
             revision,
             requestId,
@@ -159,15 +159,15 @@ export default {
             snapshot.model,
           );
         } catch (e) {
-          const saved = await receipt(db, householdId, requestId);
+          const saved = await receipt(db, spaceId, requestId);
           if (saved?.fingerprint === fingerprint) {
-            const current = await loadSnapshot(db, householdId);
+            const current = await loadSnapshot(db, spaceId);
             return json({
               revision: current.revision,
               state: toView(current.model),
             });
           }
-          const current = await loadSnapshot(db, householdId);
+          const current = await loadSnapshot(db, spaceId);
           if (current.revision !== revision || saved)
             return json(
               {

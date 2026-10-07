@@ -113,10 +113,10 @@ export default function App() {
       if (generation !== loadGeneration.current) return;
       setSampleDataEnabled(data.sampleDataEnabled === true);
       if (
-        identityRef.current !== data.householdId ||
+        identityRef.current !== data.spaceId ||
         data.revision >= revisionRef.current
       ) {
-        identityRef.current = data.householdId;
+        identityRef.current = data.spaceId;
         revisionRef.current = data.revision;
         setState(data.state);
         setUser(data.user);

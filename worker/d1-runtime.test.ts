@@ -22,16 +22,16 @@ test("D1ランタイムでsnapshotの一括取得とpreviewのbootstrapが成功
     // Minimal storage fixtures isolate this regression from domain validation.
     await db.batch([
       db.prepare(
-        "CREATE TABLE households (id TEXT PRIMARY KEY, revision INTEGER)",
+        "CREATE TABLE spaces (id TEXT PRIMARY KEY, revision INTEGER)",
       ),
       ...modelTables.map((t) =>
         db.prepare(
-          `CREATE TABLE ${t} (household_id TEXT, id TEXT, data TEXT, PRIMARY KEY(household_id, id))`,
+          `CREATE TABLE ${t} (space_id TEXT, id TEXT, data TEXT, PRIMARY KEY(space_id, id))`,
         ),
       ),
     ]);
     await db
-      .prepare("INSERT INTO households VALUES ('a', 7), ('b', 0), ('empty', 0)")
+      .prepare("INSERT INTO spaces VALUES ('a', 7), ('b', 0), ('empty', 0)")
       .run();
     const expected = emptyModel();
     for (const table of modelTables) {
@@ -59,7 +59,7 @@ test("D1ランタイムでsnapshotの一括取得とpreviewのbootstrapが成功
     });
     await assert.rejects(
       loadSnapshot(session, "missing"),
-      /家庭が見つかりません/,
+      /スペースが見つかりません/,
     );
     // Exercise the reported bootstrap failure through the actual API with a
     // workerd-backed D1 session, rather than only the repository function.
@@ -68,10 +68,10 @@ test("D1ランタイムでsnapshotの一括取得とpreviewのbootstrapが成功
         "CREATE TABLE user (id TEXT PRIMARY KEY, name TEXT, email TEXT, emailVerified INTEGER, createdAt DATE, updatedAt DATE)",
       ),
       db.prepare(
-        "CREATE TABLE household_members (household_id TEXT, user_id TEXT, joined_at TEXT)",
+        "CREATE TABLE space_members (space_id TEXT, user_id TEXT, joined_at TEXT)",
       ),
       db.prepare(
-        "INSERT INTO household_members VALUES ('empty', 'preview:shared', '2026-10-07')",
+        "INSERT INTO space_members VALUES ('empty', 'preview:shared', '2026-10-07')",
       ),
     ]);
     const env: Env = {

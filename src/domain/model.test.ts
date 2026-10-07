@@ -180,7 +180,7 @@ test("全量作り置きは食事を作らず、元の履歴から編集でき�
     0,
   );
 });
-test("クライアントが原価・配分・家庭IDを指定する入力を拒否する", () => {
+test("クライアントが原価・配分・スペースIDを指定する入力を拒否する", () => {
   assert.equal(
     commandSchema.safeParse({
       type: "purchase.create",
@@ -199,7 +199,7 @@ test("クライアントが原価・配分・家庭IDを指定する入力を拒
     commandSchema.safeParse({
       type: "sample.create",
       date: "2026-10-01",
-      householdId: "other",
+      spaceId: "other",
     }).success,
     false,
   );

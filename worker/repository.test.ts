@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { testDatabase, addUser } from "./test-db.ts";
 import {
-  personalHousehold,
+  personalSpace,
   loadSnapshot,
   saveSnapshot,
   receipt,
@@ -15,14 +15,14 @@ import {
 } from "../src/domain/model.ts";
 import { applyCommand } from "../src/domain/commands.ts";
 
-test("D1のリビジョン競合・重複送信・家庭外参照は全体をロールバックする", async () => {
+test("D1のリビジョン競合・重複送信・スペース外参照は全体をロールバックする", async () => {
   const { db, sqlite } = testDatabase();
   try {
     addUser(sqlite, "a");
     addUser(sqlite, "b");
-    const a = await personalHousehold(db, "a");
-    const b = await personalHousehold(db, "b");
-    assert.equal(await personalHousehold(db, "a"), a);
+    const a = await personalSpace(db, "a");
+    const b = await personalSpace(db, "b");
+    assert.equal(await personalSpace(db, "a"), a);
     const baseline = await loadSnapshot(db, a);
     const model = toModel(
       applyCommand(toView(baseline.model), {
@@ -69,7 +69,7 @@ test("D1のリビジョン競合・重複送信・家庭外参照は全体をロ
     invalid.portions.push({
       id: "invalid",
       mealId: model.meals[0].id,
-      batchId: "other-household-batch",
+      batchId: "other-space-batch",
       quantity: 1000,
       cost: 1,
     });
@@ -84,13 +84,13 @@ test("D1のリビジョン競合・重複送信・家庭外参照は全体をロ
   }
 });
 
-test("snapshotは全テーブル・行順・家庭分離・空状態を保持する", async () => {
+test("snapshotは全テーブル・行順・スペース分離・空状態を保持する", async () => {
   const { db, sqlite } = testDatabase();
   try {
     addUser(sqlite, "a");
     addUser(sqlite, "b");
-    const a = await personalHousehold(db, "a");
-    const b = await personalHousehold(db, "b");
+    const a = await personalSpace(db, "a");
+    const b = await personalSpace(db, "b");
     // This repository test covers storage decoding, independently of domain
     // validation. Disable relations to put distinct sentinels in every table.
     sqlite.exec("PRAGMA foreign_keys = OFF");
@@ -99,22 +99,22 @@ test("snapshotは全テーブル・行順・家庭分離・空状態を保持す
       for (const id of ["z", "a"]) {
         const data = { id: `${t}-${id}`, name: t };
         sqlite
-          .prepare(`INSERT INTO ${t} (household_id, id, data) VALUES (?, ?, ?)`)
+          .prepare(`INSERT INTO ${t} (space_id, id, data) VALUES (?, ?, ?)`)
           .run(a, data.id, JSON.stringify(data));
         (expected[t] as unknown[]).push(data);
       }
       sqlite
-        .prepare(`INSERT INTO ${t} (household_id, id, data) VALUES (?, ?, ?)`)
+        .prepare(`INSERT INTO ${t} (space_id, id, data) VALUES (?, ?, ?)`)
         .run(b, `${t}-other`, JSON.stringify({ id: `${t}-other` }));
     }
-    sqlite.prepare("UPDATE households SET revision = 7 WHERE id = ?").run(a);
+    sqlite.prepare("UPDATE spaces SET revision = 7 WHERE id = ?").run(a);
     assert.deepEqual(await loadSnapshot(db, a), {
       revision: 7,
       model: expected,
     });
-    await assert.rejects(loadSnapshot(db, "missing"), /家庭が見つかりません/);
+    await assert.rejects(loadSnapshot(db, "missing"), /スペースが見つかりません/);
     addUser(sqlite, "empty");
-    const empty = await personalHousehold(db, "empty");
+    const empty = await personalSpace(db, "empty");
     assert.deepEqual(await loadSnapshot(db, empty), {
       revision: 0,
       model: emptyModel(),
