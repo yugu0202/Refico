@@ -8,7 +8,7 @@ export function DirectMealDetail({
 }) {
   return (
     <>
-      <div>
+      <div className="direct-meal-detail">
         <span>{direct.place || "外食など"}</span>
         <span>{money(direct.cost)}</span>
       </div>
