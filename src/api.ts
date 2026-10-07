@@ -31,11 +31,25 @@ async function result<T>(response: Response): Promise<T> {
     );
   return body;
 }
-export const bootstrap = () =>
-  fetch("/api/bootstrap", {
-    credentials: "same-origin",
-    cache: "no-store",
-  }).then(result<Bootstrap>);
+export function createBootstrapClient(transport: typeof fetch = fetch) {
+  let pending: Promise<Bootstrap> | undefined;
+  const load = () =>
+    transport("/api/bootstrap", {
+      credentials: "same-origin",
+      cache: "no-store",
+    }).then(result<Bootstrap>);
+  return (force = false) => {
+    // Conflict/auth recovery must not reuse a request started before saving.
+    if (force) return load();
+    // Deduplicate overlapping loads (including React StrictMode setup) without
+    // caching completed responses or hiding subsequent authentication changes.
+    pending ??= load().finally(() => {
+      pending = undefined;
+    });
+    return pending;
+  };
+}
+export const bootstrap = createBootstrapClient();
 export function createCommandClient(transport: typeof fetch = fetch) {
   // Retain the ID after an ambiguous failure so a manual retry cannot duplicate it.
   const pending = new Map<string, string>();

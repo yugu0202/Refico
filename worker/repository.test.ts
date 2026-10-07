@@ -7,7 +7,12 @@ import {
   saveSnapshot,
   receipt,
 } from "./repository.ts";
-import { toModel, toView } from "../src/domain/model.ts";
+import {
+  emptyModel,
+  modelTables,
+  toModel,
+  toView,
+} from "../src/domain/model.ts";
 import { applyCommand } from "../src/domain/commands.ts";
 
 test("D1のリビジョン競合・重複送信・家庭外参照は全体をロールバックする", async () => {
@@ -74,6 +79,46 @@ test("D1のリビジョン競合・重複送信・家庭外参照は全体をロ
     );
     assert.equal((await loadSnapshot(db, a)).revision, 1);
     assert.deepEqual((await loadSnapshot(db, a)).model, model);
+  } finally {
+    sqlite.close();
+  }
+});
+
+test("snapshotは全テーブル・行順・家庭分離・空状態を保持する", async () => {
+  const { db, sqlite } = testDatabase();
+  try {
+    addUser(sqlite, "a");
+    addUser(sqlite, "b");
+    const a = await personalHousehold(db, "a");
+    const b = await personalHousehold(db, "b");
+    // This repository test covers storage decoding, independently of domain
+    // validation. Disable relations to put distinct sentinels in every table.
+    sqlite.exec("PRAGMA foreign_keys = OFF");
+    const expected = emptyModel();
+    for (const t of modelTables) {
+      for (const id of ["z", "a"]) {
+        const data = { id: `${t}-${id}`, name: t };
+        sqlite
+          .prepare(`INSERT INTO ${t} (household_id, id, data) VALUES (?, ?, ?)`)
+          .run(a, data.id, JSON.stringify(data));
+        (expected[t] as unknown[]).push(data);
+      }
+      sqlite
+        .prepare(`INSERT INTO ${t} (household_id, id, data) VALUES (?, ?, ?)`)
+        .run(b, `${t}-other`, JSON.stringify({ id: `${t}-other` }));
+    }
+    sqlite.prepare("UPDATE households SET revision = 7 WHERE id = ?").run(a);
+    assert.deepEqual(await loadSnapshot(db, a), {
+      revision: 7,
+      model: expected,
+    });
+    await assert.rejects(loadSnapshot(db, "missing"), /家庭が見つかりません/);
+    addUser(sqlite, "empty");
+    const empty = await personalHousehold(db, "empty");
+    assert.deepEqual(await loadSnapshot(db, empty), {
+      revision: 0,
+      model: emptyModel(),
+    });
   } finally {
     sqlite.close();
   }

@@ -4,6 +4,7 @@ import { HelpPage } from "./components/HelpPage";
 import { helpPageFromPath, helpBackAction, type HelpPageId } from "./help";
 import type { Command } from "./domain/commands";
 import { ApiError, bootstrap, sendCommand, authClient } from "./api";
+import { createFocusRefresh } from "./refresh";
 import { History } from "./components/History";
 import { LoginScreen } from "./components/LoginScreen";
 import IconButton from "@mui/material/IconButton";
@@ -92,12 +93,21 @@ export default function App() {
   const revisionRef = useRef(0);
   const identityRef = useRef("");
   const loadGeneration = useRef(0);
+  const loadsInFlight = useRef(0);
+  const [focusRefresh] = useState(() =>
+    createFocusRefresh(
+      () => reload(),
+      () => busyRef.current || loadsInFlight.current > 0,
+    ),
+  );
   async function reload(force = false) {
     if (busyRef.current && !force) return;
+    focusRefresh.markFresh();
+    ++loadsInFlight.current;
     const generation = ++loadGeneration.current;
     setAuthChecking(true);
     try {
-      const data = await bootstrap();
+      const data = await bootstrap(force);
       if (generation === loadGeneration.current) setAuthMode(data.authMode);
       if (generation !== loadGeneration.current) return;
       setSampleDataEnabled(data.sampleDataEnabled === true);
@@ -129,6 +139,7 @@ export default function App() {
           e instanceof Error ? e.message : "読み込めませんでした",
         );
     } finally {
+      --loadsInFlight.current;
       if (generation === loadGeneration.current) setAuthChecking(false);
     }
   }
@@ -204,7 +215,7 @@ export default function App() {
     void reload();
     const refresh = () => {
       setToday(localDate());
-      if (!busyRef.current) void reload();
+      void focusRefresh.refresh();
     };
     window.addEventListener("focus", refresh);
     return () => {
@@ -220,6 +231,7 @@ export default function App() {
     ++loadGeneration.current;
     try {
       const next = await sendCommand(command, revisionRef.current);
+      focusRefresh.markFresh();
       revisionRef.current = next.revision;
       setState(next.state);
       setNotice(message);

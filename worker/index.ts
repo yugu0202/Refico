@@ -11,8 +11,6 @@ import {
 import { applyCommand, mutationSchema } from "../src/domain/commands.ts";
 import { toModel, toView } from "../src/domain/model.ts";
 import { parseState } from "../src/domain/validation.ts";
-const json = (body: unknown, status = 200) =>
-  Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 export function sameOrigin(
   request: Request,
   env: Pick<Env, "BETTER_AUTH_URL" | "AUTH_MODE">,
@@ -26,6 +24,9 @@ export function sameOrigin(
 }
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const responseHeaders = new Headers({ "Cache-Control": "no-store" });
+    const json = (body: unknown, status = 200) =>
+      Response.json(body, { status, headers: responseHeaders });
     const path = new URL(request.url).pathname;
     if (!path.startsWith("/api/")) return env.ASSETS.fetch(request);
     if (path === "/api/health" && request.method === "GET")
@@ -52,13 +53,20 @@ export default {
       const db = env.DB.withSession("first-primary");
       let user: { id: string; name: string; email: string } | null;
       if (mode === "test") {
-        user = await previewUser(db);
+        user = await previewUser(db, env.DB);
         if (path.startsWith("/api/auth/"))
           return json({ error: "Not found" }, 404);
       } else {
         const auth = getAuth(env);
         if (path.startsWith("/api/auth/")) return auth.handler(request);
-        const session = await auth.api.getSession({ headers: request.headers });
+        const { response: session, headers } = await auth.api.getSession({
+          headers: request.headers,
+          returnHeaders: true,
+        });
+        // Forward every cookie separately, including cache refresh/expiry on
+        // API errors. Otherwise caching stops working after the first expiry.
+        for (const cookie of headers.getSetCookie())
+          responseHeaders.append("Set-Cookie", cookie);
         user = session?.user ?? null;
         if (!user)
           return json({ error: "ログインしてください", authMode: mode }, 401);
