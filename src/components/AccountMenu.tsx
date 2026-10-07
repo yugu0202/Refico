@@ -54,7 +54,7 @@ export function AccountMenu({
     }
   }
   const content = (
-    <Stack sx={{ minHeight: "100%" }}>
+    <Stack>
       <Stack
         direction="row"
         sx={{ alignItems: "center", justifyContent: "space-between", mb: 2 }}
@@ -118,20 +118,6 @@ export function AccountMenu({
         <Typography
           component="h3"
           variant="body2"
-          sx={{ fontWeight: 600, mb: 1.5 }}
-        >
-          表示
-        </Typography>
-        <Typography variant="body2" sx={{ mb: 1 }}>
-          テーマ
-        </Typography>
-        <ThemeControl inline />
-      </Box>
-      <Box component="section" sx={{ mt: "auto", pt: 3, mb: 0 }}>
-        <Divider sx={{ mb: 2.5 }} />
-        <Typography
-          component="h3"
-          variant="body2"
           sx={{ fontWeight: 600, mb: 1 }}
         >
           サポート
@@ -164,6 +150,20 @@ export function AccountMenu({
         >
           使い方 <span aria-hidden="true">›</span>
         </Button>
+      </Box>
+      <Divider />
+      <Box component="section" sx={{ py: 2.5, mb: 0 }}>
+        <Typography
+          component="h3"
+          variant="body2"
+          sx={{ fontWeight: 600, mb: 1.5 }}
+        >
+          表示
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          テーマ
+        </Typography>
+        <ThemeControl inline />
       </Box>
       {canLogout && (
         <Box sx={{ pt: 3 }}>
