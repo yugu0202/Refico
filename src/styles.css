@@ -662,3 +662,37 @@ label .amount-input select {
 .entry-form > .form-fields {
   grid-column: 1 / -1;
 }
+
+.help-page {
+  padding-bottom: 24px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.help-page section {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 24px;
+}
+.help-page section:last-child {
+  border-bottom: 0;
+}
+.help-page h2 {
+  scroll-margin-top: 16px;
+}
+.help-page ol {
+  padding-left: 1.5em;
+}
+.help-page li + li {
+  margin-top: 12px;
+}
+.help-topics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 0 20px;
+}
+.help-topics a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--accent);
+  text-underline-offset: 3px;
+}

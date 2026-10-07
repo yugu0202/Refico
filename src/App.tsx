@@ -1,5 +1,6 @@
 import { AccountMenu } from "./components/AccountMenu";
 import { BrandLogo } from "./components/BrandLogo";
+import { HelpPage } from "./components/HelpPage";
 import type { Command } from "./domain/commands";
 import { ApiError, bootstrap, sendCommand, authClient } from "./api";
 import { History } from "./components/History";
@@ -55,10 +56,15 @@ const navigation = [
     icon: "M5 3v5a3 3 0 0 0 6 0V3M8 3v18M19 3c-3 2-4 5-4 9h4M19 3v18",
   },
 ] as const;
-type Page = (typeof navigation)[number]["id"];
+type Page = (typeof navigation)[number]["id"] | "help";
+function currentPage(): Page {
+  if (window.location.pathname === "/help") return "help";
+  const saved = window.history.state?.reficoPage;
+  return navigation.some((item) => item.id === saved) ? saved : "home";
+}
 export default function App() {
   const mainRef = useRef<HTMLElement>(null);
-  const [page, setPage] = useState<Page>("home");
+  const [page, setPage] = useState<Page>(currentPage);
   const [today, setToday] = useState(localDate);
   const [state, setState] = useState<State>(emptyState);
   const [ready, setReady] = useState(false);
@@ -169,7 +175,21 @@ export default function App() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
     mainRef.current?.scrollTo({ top: 0, behavior: "instant" });
+    if (page === "help") {
+      document
+        .querySelector<HTMLElement>(".help-page h1")
+        ?.focus({ preventScroll: true });
+      if (window.location.hash)
+        document
+          .getElementById(window.location.hash.slice(1))
+          ?.scrollIntoView();
+    }
   }, [page]);
+  useEffect(() => {
+    const restore = () => selectPage(currentPage());
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
   useEffect(() => {
     const url = new URL(window.location.href);
     if (url.searchParams.get("login") === "failed") {
@@ -209,12 +229,40 @@ export default function App() {
     }
   }
   function navigate(next: Page) {
+    const historyState = { ...window.history.state, reficoPage: next };
+    if (next === "help") {
+      if (busyRef.current || page === "help") return;
+      window.history.replaceState(
+        { ...window.history.state, reficoPage: page },
+        "",
+      );
+      window.history.pushState(
+        { ...historyState, reficoHelpReturn: true },
+        "",
+        "/help",
+      );
+    } else {
+      delete historyState.reficoHelpReturn;
+      // Tabs still share the root URL; retain the tab when returning from help.
+      window.history.replaceState(
+        historyState,
+        "",
+        page === "help" ? "/" : window.location.href,
+      );
+    }
+    selectPage(next);
+  }
+  function selectPage(next: Page) {
     setPage(next);
     setAdjustingPrepared(null);
     setEditingPrepared(null);
     setEditingProduct(null);
     setAdjustingProduct(null);
     setNotice("");
+  }
+  function leaveHelp() {
+    if (window.history.state?.reficoHelpReturn) window.history.back();
+    else navigate("home");
   }
   async function saveProduct(product: Product) {
     await persist(
@@ -285,7 +333,7 @@ export default function App() {
         </div>
       );
     });
-  const title = navigation.find((n) => n.id === page)!.label;
+  const title = navigation.find((n) => n.id === page)?.label;
   const inventoryRows = (products: Product[]) =>
     products.map((product) => (
       <InventoryRow
@@ -311,6 +359,8 @@ export default function App() {
         }
       />
     ));
+  // The guide is readable from a direct URL, even without a signed-in session.
+  if (page === "help") return <HelpPage onBack={leaveHelp} />;
   if (!ready)
     return (
       <LoginScreen
@@ -341,6 +391,7 @@ export default function App() {
           canLogout={authMode === "google"}
           busy={busy}
           onLogout={logout}
+          onHelp={() => navigate("help")}
         />
       </header>
       <nav className="navigation" aria-label="メインメニュー">

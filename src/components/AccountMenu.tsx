@@ -17,9 +17,16 @@ interface Props {
   canLogout: boolean;
   busy: boolean;
   onLogout: () => Promise<void>;
+  onHelp: () => void;
 }
 
-export function AccountMenu({ user, canLogout, busy, onLogout }: Props) {
+export function AccountMenu({
+  user,
+  canLogout,
+  busy,
+  onLogout,
+  onHelp,
+}: Props) {
   const panelId = useId();
   const titleId = useId();
   const mobile = useMediaQuery("(max-width: 600px)");
@@ -58,10 +65,10 @@ export function AccountMenu({ user, canLogout, busy, onLogout }: Props) {
           variant="subtitle1"
           sx={{ fontWeight: 650 }}
         >
-          アカウント
+          メニュー
         </Typography>
         <IconButton
-          aria-label="アカウント設定を閉じる"
+          aria-label="メニューを閉じる"
           onClick={close}
           sx={{ width: 44, height: 44 }}
         >
@@ -72,41 +79,88 @@ export function AccountMenu({ user, canLogout, busy, onLogout }: Props) {
           </SvgIcon>
         </IconButton>
       </Stack>
-      {user && (
-        <Box sx={{ mb: 3, overflowWrap: "anywhere" }}>
-          <Typography sx={{ fontWeight: 600 }}>{user.name}</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {user.email}
-          </Typography>
-        </Box>
-      )}
+      <Box
+        component="section"
+        sx={{ mb: 0, pb: 2.5, overflowWrap: "anywhere" }}
+      >
+        <Typography
+          component="h3"
+          variant="body2"
+          sx={{ fontWeight: 600, mb: 1.5 }}
+        >
+          アカウント
+        </Typography>
+        {user && (
+          <>
+            <Typography sx={{ fontWeight: 600 }}>{user.name}</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {user.email}
+            </Typography>
+          </>
+        )}
+      </Box>
       <Divider />
       {/* Invitations and household sharing are not implemented yet. */}
-      <Box sx={{ py: 2.5 }}>
+      <Box component="section" sx={{ py: 2.5, mb: 0 }}>
         <Typography
           component="h3"
           variant="body2"
           sx={{ fontWeight: 600, mb: 1 }}
         >
-          共有設定
+          家庭
         </Typography>
         <Typography variant="body2" color="text.secondary">
           現在は共有に対応していません。
         </Typography>
       </Box>
       <Divider />
-      <Box sx={{ py: 2.5 }}>
+      <Box component="section" sx={{ py: 2.5, mb: 0 }}>
         <Typography
           component="h3"
           variant="body2"
           sx={{ fontWeight: 600, mb: 1.5 }}
         >
+          表示
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 1 }}>
           テーマ
         </Typography>
         <ThemeControl inline />
       </Box>
+      <Box component="section" sx={{ mt: "auto", pt: 3, mb: 0 }}>
+        <Divider sx={{ mb: 2.5 }} />
+        <Typography
+          component="h3"
+          variant="body2"
+          sx={{ fontWeight: 600, mb: 1 }}
+        >
+          サポート
+        </Typography>
+        <Button
+          component="a"
+          href="/help"
+          fullWidth
+          disabled={busy || loggingOut}
+          onClick={(event) => {
+            if (
+              event.button !== 0 ||
+              event.metaKey ||
+              event.ctrlKey ||
+              event.shiftKey ||
+              event.altKey
+            )
+              return;
+            event.preventDefault();
+            close();
+            onHelp();
+          }}
+          sx={{ justifyContent: "space-between", minHeight: 44, px: 0 }}
+        >
+          使い方 <span aria-hidden="true">›</span>
+        </Button>
+      </Box>
       {canLogout && (
-        <Box sx={{ mt: "auto", pt: 3 }}>
+        <Box sx={{ pt: 3 }}>
           <Divider sx={{ mb: 2 }} />
           {error && (
             <p className="error" role="alert">
@@ -128,9 +182,9 @@ export function AccountMenu({ user, canLogout, busy, onLogout }: Props) {
   );
   return (
     <>
-      <Tooltip title="アカウント設定">
+      <Tooltip title="メニュー">
         <IconButton
-          aria-label="アカウント設定を開く"
+          aria-label="メニューを開く"
           aria-haspopup="dialog"
           aria-controls={open ? panelId : undefined}
           aria-expanded={open}
@@ -171,6 +225,7 @@ export function AccountMenu({ user, canLogout, busy, onLogout }: Props) {
                 pb: "max(20px, env(safe-area-inset-bottom))",
                 borderLeft: 1,
                 borderColor: "divider",
+                display: "block",
               },
             },
           }}
