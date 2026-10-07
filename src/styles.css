@@ -252,6 +252,7 @@ section {
   border-left: 2px solid var(--accent);
 }
 .cooking-result {
+  max-width: 680px;
   margin-bottom: 20px;
   padding: 12px 14px;
   background: var(--selected-background);
@@ -497,7 +498,7 @@ label .amount-input select {
     flex-shrink: 0;
     z-index: 10;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0;
     padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom)
       env(safe-area-inset-left);

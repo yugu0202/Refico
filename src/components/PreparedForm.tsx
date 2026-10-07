@@ -18,15 +18,13 @@ export function PreparedForm({
   editing,
   onSave,
   onCancel,
-  cancelLabel = "キャンセル",
   autoFocus = true,
 }: {
   state: State;
   today: string;
   editing?: Cooking;
   onSave: (command: Command) => Promise<void>;
-  onCancel: () => void;
-  cancelLabel?: string;
+  onCancel?: () => void;
   autoFocus?: boolean;
 }) {
   const [date, setDate] = useState(editing?.date ?? today);
@@ -152,7 +150,10 @@ export function PreparedForm({
           rows={rows}
           onChange={setRows}
           available={state.products.filter(
-            (p) => !!editing || stock(state, p.id).quantity > 0,
+            (p) =>
+              !!editing ||
+              stock(state, p.id).quantity > 0 ||
+              rows.some((r) => r.productId === p.id),
           )}
           editing={editing}
           itemLabel="食材"
@@ -167,9 +168,11 @@ export function PreparedForm({
           </p>
         )}
         <div className="actions">
-          <Button type="button" onClick={onCancel} disabled={saving}>
-            {cancelLabel}
-          </Button>
+          {onCancel && (
+            <Button type="button" onClick={onCancel} disabled={saving}>
+              キャンセル
+            </Button>
+          )}
           <Button
             type="submit"
             variant="contained"

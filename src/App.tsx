@@ -60,6 +60,12 @@ const navigation = [
     icon: "M3 9h18l-2 12H5L3 9ZM8 9l4-6 4 6M9 13v4M15 13v4",
   },
   {
+    id: "cooking",
+    label: "料理を作る",
+    shortLabel: "料理",
+    icon: "M6 10h12v8a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3v-8ZM4 10h16M8 7h8M12 4v3M3 13h3M18 13h3",
+  },
+  {
     id: "meal",
     label: "食事を記録",
     shortLabel: "食事",
@@ -76,7 +82,6 @@ function currentPage(): Page {
 export default function App() {
   const mainRef = useRef<HTMLElement>(null);
   const [page, setPage] = useState<Page>(currentPage);
-  const [creatingCooking, setCreatingCooking] = useState(false);
   const helpPage = helpPageFromPath(`/${page}`);
   const [reopenMenu, setReopenMenu] = useState(() =>
     Boolean(window.history.state?.reficoMenuOpen),
@@ -138,7 +143,8 @@ export default function App() {
         setEditingPrepared(null);
         setAdjustingPrepared(null);
         setSearch("");
-        setCreatingCooking(false);
+        setSavedCookingId(null);
+        setPreparedToAdd(undefined);
       }
       if (
         identityRef.current !== data.spaceId ||
@@ -207,7 +213,8 @@ export default function App() {
     setLoginError("");
     setStorageError("");
     setState(emptyState());
-    setCreatingCooking(false);
+    setSavedCookingId(null);
+    setPreparedToAdd(undefined);
     setEditingPrepared(null);
     navigate("home");
   }
@@ -224,11 +231,19 @@ export default function App() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const selectedDate = selectedDay ?? today;
   const [formVersion, setFormVersion] = useState(0);
+  const [mealVersion, setMealVersion] = useState(0);
+  const [cookingVersion, setCookingVersion] = useState(0);
+  const [savedCookingId, setSavedCookingId] = useState<string | null>(null);
+  const [preparedToAdd, setPreparedToAdd] = useState<{
+    batchId: string;
+    token: string;
+  }>();
+  const savedCooking = state.cookings.find((c) => c.id === savedCookingId);
   const [search, setSearch] = useState("");
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
     mainRef.current?.scrollTo({ top: 0, behavior: "instant" });
-    if (page === "meal") {
+    if (page === "meal" || page === "cooking") {
       mainRef.current
         ?.querySelector<HTMLHeadingElement>("h1")
         ?.focus({ preventScroll: true });
@@ -241,7 +256,7 @@ export default function App() {
         .querySelector<HTMLElement>(".help-page")
         ?.scrollTo({ top: 0, behavior: "instant" });
     }
-  }, [page, creatingCooking]);
+  }, [page]);
   useEffect(() => {
     const restore = () => selectPage(currentPage());
     window.addEventListener("popstate", restore);
@@ -290,12 +305,6 @@ export default function App() {
       busyRef.current = false;
       setBusy(false);
     }
-  }
-  async function createCooking(command: Command): Promise<Cooking> {
-    if (command.type !== "prepared.create")
-      throw new Error("料理の入力を確認してください");
-    const next = await persist(command, "");
-    return next.cookings.at(-1)!;
   }
   function navigate(next: Page) {
     const historyState = { ...window.history.state, reficoPage: next };
@@ -349,7 +358,6 @@ export default function App() {
   }
   function selectPage(next: Page) {
     setPage(next);
-    setCreatingCooking(false);
     setReopenMenu(Boolean(window.history.state?.reficoMenuOpen));
     setAdjustingPrepared(null);
     setEditingPrepared(null);
@@ -591,14 +599,7 @@ export default function App() {
       </nav>
       <main ref={mainRef} key={spaceId}>
         <div className="page-heading">
-          <h1 tabIndex={-1}>
-            {page === "meal" && creatingCooking ? "料理を作る" : title}
-          </h1>
-          {page === "meal" && creatingCooking && (
-            <Button disabled={busy} onClick={() => setCreatingCooking(false)}>
-              食事入力に戻る
-            </Button>
-          )}
+          <h1 tabIndex={-1}>{title}</h1>
         </div>
         {storageError && (
           <p className="error" role="alert">
@@ -971,36 +972,63 @@ export default function App() {
                 />
               </>
             )}
-            {page === "meal" && (
-              <>
-                <MealForm
-                  key={formVersion}
-                  state={state}
-                  today={today}
-                  money={money}
-                  onCreateCooking={createCooking}
-                  cookingOpen={creatingCooking}
-                  onCookingChange={(open) => {
-                    if (!busyRef.current) setCreatingCooking(open);
-                  }}
-                  onSave={async (command) => {
-                    await persist(command, "食事を記録しました");
-                    setFormVersion((v) => v + 1);
-                  }}
-                />
-                {!creatingCooking && (
-                  <History
-                    type="meal"
-                    state={state}
-                    today={today}
-                    onSave={async (command, message) => {
-                      await persist(command, message);
+            <div hidden={page !== "cooking"}>
+              {savedCooking && (
+                <div className="cooking-result" role="status">
+                  <p>「{savedCooking.name}」を保存しました。</p>
+                  <Button
+                    type="button"
+                    disabled={
+                      busy || preparedRemaining(state, savedCooking) <= 0
+                    }
+                    onClick={() => {
+                      navigate("meal");
+                      setPreparedToAdd({
+                        batchId: savedCooking.id,
+                        token: crypto.randomUUID(),
+                      });
                     }}
-                    saving={busy}
-                  />
-                )}
-              </>
-            )}
+                  >
+                    食事に追加
+                  </Button>
+                </div>
+              )}
+              <PreparedForm
+                key={cookingVersion}
+                state={state}
+                today={today}
+                autoFocus={false}
+                onSave={async (command) => {
+                  const next = await persist(command, "");
+                  setSavedCookingId(next.cookings.at(-1)!.id);
+                  setCookingVersion((v) => v + 1);
+                }}
+              />
+            </div>
+            <div hidden={page !== "meal"}>
+              <MealForm
+                key={mealVersion}
+                state={state}
+                today={today}
+                money={money}
+                preparedToAdd={preparedToAdd}
+                onPreparedAdded={() => setPreparedToAdd(undefined)}
+                onSave={async (command) => {
+                  await persist(command, "食事を記録しました");
+                  setPreparedToAdd(undefined);
+                  setMealVersion((v) => v + 1);
+                }}
+              />
+              <History
+                type="meal"
+                state={state}
+                today={today}
+                onSave={async (command, message) => {
+                  await persist(command, message);
+                }}
+                saving={busy}
+              />
+            </div>
           </>
         )}
       </main>
