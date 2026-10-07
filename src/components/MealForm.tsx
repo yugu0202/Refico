@@ -75,7 +75,8 @@ export function MealForm({
   );
   const batches = state.cookings.filter(
     (c) =>
-      (c.date <= date && (!!editing || preparedRemaining(state, c) > 0)) ||
+      (c.date <= date && preparedRemaining(state, c) > 0) ||
+      editing?.prepared?.some((p) => p.batchId === c.id) ||
       rows.some((r) => r.batchId === c.id),
   );
   const buildInput = (): Extract<Command, { type: "meal.create" }>["input"] => {

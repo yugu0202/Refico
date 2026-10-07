@@ -142,7 +142,20 @@ export const helpArticles: HelpArticle[] = [
       alt: "料理タブで、料理名・作った日・作った量4食分・使った食材を入力する操作図",
       caption: "作った全体を保存し、食べた分は食事で記録します。",
     },
-    related: ["eat-prepared", "adjust-stock", "edit-meal"],
+    related: ["eat-prepared", "adjust-stock", "edit-meal", "edit-cooking"],
+  },
+  {
+    id: "edit-cooking",
+    category: "料理",
+    title: "料理履歴を確認・修正する",
+    intro: "食べ切った料理も、料理履歴から確認・修正できます。",
+    steps: [
+      "「料理」でフォーム下の「料理履歴」を見ます。古い記録は「すべて見る」から探します。",
+      "料理の行を開くと、残量と使った食材を確認できます。",
+      "鉛筆を押し、料理名・作った日・作った量・使った食材を修正して「変更を保存」を押します。",
+    ],
+    note: "修正すると関連する食費も変わります。後の記録と矛盾する変更は保存できません。",
+    related: ["make-prepared", "eat-prepared", "adjust-stock"],
   },
   {
     id: "eat-prepared",
@@ -154,7 +167,7 @@ export const helpArticles: HelpArticle[] = [
       "「自炊」を選び、「使ったもの」の料理から料理を選んで「食べた量（食分）」を入力します。",
       "金額を確認し、「食事を記録」を押します。",
     ],
-    related: ["make-prepared", "view-stock", "edit-meal"],
+    related: ["make-prepared", "view-stock", "edit-meal", "edit-cooking"],
   },
   {
     id: "edit-meal",
@@ -189,6 +202,7 @@ export const helpArticles: HelpArticle[] = [
     steps: [
       "「在庫」で対象を探し、名前の横の鉛筆を押します。",
       "食材では名前や単位の設定、料理では料理名・作った日・量・使った食材を変更します。",
+      "残量のない料理は「料理」の料理履歴から鉛筆を押して修正します。",
       "「変更を保存」を押します。",
     ],
     image: {

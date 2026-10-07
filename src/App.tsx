@@ -405,7 +405,9 @@ export default function App() {
     0,
   );
   const filtered = state.products.filter((p) => p.name.includes(search));
-  const prepared = state.cookings;
+  const prepared = state.cookings.filter(
+    (c) => preparedRemaining(state, c) > 0,
+  );
   const filteredPrepared = prepared.filter((m) => m.name.includes(search));
   const preparedRows = (items: typeof prepared) =>
     items.map((m) => {
@@ -979,6 +981,15 @@ export default function App() {
                   await persist(command, "料理を保存しました");
                   setCookingVersion((v) => v + 1);
                 }}
+              />
+              <History
+                type="cooking"
+                state={state}
+                today={today}
+                onSave={async (command, message) => {
+                  await persist(command, message);
+                }}
+                saving={busy}
               />
             </div>
             <div hidden={page !== "meal"}>
