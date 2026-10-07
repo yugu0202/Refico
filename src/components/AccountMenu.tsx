@@ -1,6 +1,9 @@
+import type { Space } from "../api";
+import type { SpaceDetails } from "./SpaceSettings";
 import { useEffect, useId, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
@@ -13,6 +16,11 @@ import useMediaQuery from "@mui/material/useMediaQuery";
 import { ThemeControl } from "./ThemeControl";
 
 interface Props {
+  spaces: Space[];
+  spaceId: string;
+  onSwitch: (id: string) => Promise<void>;
+  onPrepareSettings: () => Promise<SpaceDetails>;
+  onSettings: (details: SpaceDetails) => void;
   user: { name: string; email: string } | null;
   canLogout: boolean;
   busy: boolean;
@@ -23,6 +31,11 @@ interface Props {
 }
 
 export function AccountMenu({
+  spaces,
+  spaceId,
+  onSwitch,
+  onSettings,
+  onPrepareSettings,
   user,
   canLogout,
   busy,
@@ -39,16 +52,49 @@ export function AccountMenu({
   const [loggingOut, setLoggingOut] = useState(false);
   const loggingOutRef = useRef(false);
   const [error, setError] = useState("");
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const settingsPending = useRef(false);
+  const settingsGeneration = useRef(0);
+  useEffect(
+    () => () => {
+      ++settingsGeneration.current;
+    },
+    [],
+  );
   const open = Boolean(anchor);
   useEffect(() => {
     if (reopen) setAnchor(triggerRef.current);
   }, [reopen]);
   function close() {
+    ++settingsGeneration.current;
+    settingsPending.current = false;
+    setSettingsLoading(false);
     setAnchor(null);
     onClosed();
   }
+  async function openSettings() {
+    if (busy || loggingOutRef.current || settingsPending.current) return;
+    settingsPending.current = true;
+    const generation = ++settingsGeneration.current;
+    setSettingsLoading(true);
+    setError("");
+    try {
+      const details = await onPrepareSettings();
+      if (generation !== settingsGeneration.current) return;
+      close();
+      onSettings(details);
+    } catch (e) {
+      if (generation === settingsGeneration.current)
+        setError(e instanceof Error ? e.message : "設定を読み込めませんでした");
+    } finally {
+      if (generation === settingsGeneration.current) {
+        settingsPending.current = false;
+        setSettingsLoading(false);
+      }
+    }
+  }
   async function logout() {
-    if (busy || loggingOutRef.current) return;
+    if (busy || loggingOutRef.current || settingsPending.current) return;
     loggingOutRef.current = true;
     setLoggingOut(true);
     setError("");
@@ -109,18 +155,76 @@ export function AccountMenu({
         )}
       </Box>
       <Divider />
-      {/* Invitations and space sharing are not implemented yet. */}
+
       <Box component="section" sx={{ py: 2.5, mb: 0 }}>
         <Typography
           component="h3"
           variant="body2"
-          sx={{ fontWeight: 600, mb: 1 }}
+          sx={{ fontWeight: 600, mb: 1.5 }}
         >
           スペース
         </Typography>
-        <Typography variant="body2" color="text.secondary">
-          現在は共有に対応していません。
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          使用するスペース
         </Typography>
+        {spaces.map((space) => (
+          <Button
+            key={space.id}
+            fullWidth
+            variant="text"
+            disabled={busy || loggingOut || settingsLoading}
+            aria-pressed={space.id === spaceId}
+            sx={{
+              justifyContent: "space-between",
+              minHeight: 44,
+              color: "text.primary",
+              fontWeight: space.id === spaceId ? 650 : 400,
+            }}
+            onClick={async () => {
+              setError("");
+              try {
+                await onSwitch(space.id);
+                close();
+              } catch (e) {
+                setError(
+                  e instanceof Error ? e.message : "切り替えできませんでした",
+                );
+              }
+            }}
+          >
+            {space.name}
+            <span aria-hidden="true">{space.id === spaceId ? "✓" : ""}</span>
+          </Button>
+        ))}
+        <Button
+          fullWidth
+          variant="text"
+          disabled={busy || loggingOut || settingsLoading}
+          sx={{
+            justifyContent: "space-between",
+            minHeight: 44,
+            px: 0,
+            color: "text.primary",
+          }}
+          onClick={() => void openSettings()}
+          aria-busy={settingsLoading}
+        >
+          共有・スペースの設定
+          {settingsLoading ? (
+            <CircularProgress
+              size={16}
+              color="inherit"
+              aria-label="読み込み中"
+            />
+          ) : (
+            <span aria-hidden="true">›</span>
+          )}
+        </Button>
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
       </Box>
       <Divider />
       <Box component="section" sx={{ py: 2.5, mb: 0 }}>
@@ -136,7 +240,7 @@ export function AccountMenu({
           href="/help"
           variant="text"
           fullWidth
-          disabled={busy || loggingOut}
+          disabled={busy || loggingOut || settingsLoading}
           onClick={(event) => {
             if (
               event.button !== 0 ||
@@ -186,7 +290,7 @@ export function AccountMenu({
             fullWidth
             color="error"
             variant="text"
-            disabled={busy || loggingOut}
+            disabled={busy || loggingOut || settingsLoading}
             onClick={() => void logout()}
           >
             {loggingOut ? "ログアウト中…" : "ログアウト"}

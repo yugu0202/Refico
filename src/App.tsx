@@ -1,3 +1,9 @@
+import {
+  SpaceSettings,
+  Invitation,
+  type SpaceDetails,
+} from "./components/SpaceSettings";
+import { sharingRequest, type Space } from "./api";
 import { AccountMenu } from "./components/AccountMenu";
 import { BrandLogo } from "./components/BrandLogo";
 import { HelpPage } from "./components/HelpPage";
@@ -73,6 +79,14 @@ export default function App() {
   const [reopenMenu, setReopenMenu] = useState(() =>
     Boolean(window.history.state?.reficoMenuOpen),
   );
+  const [spaces, setSpaces] = useState<Space[]>([]);
+  const [spaceId, setSpaceId] = useState("");
+  const [spaceSettings, setSpaceSettings] = useState<SpaceDetails | null>(null);
+  const [invitation, setInvitation] = useState(
+    () =>
+      window.location.pathname.match(/^\/invitations\/([a-f0-9]{64})$/)?.[1] ??
+      null,
+  );
   const [today, setToday] = useState(localDate);
   const [state, setState] = useState<State>(emptyState);
   const [ready, setReady] = useState(false);
@@ -101,7 +115,7 @@ export default function App() {
       () => busyRef.current || loadsInFlight.current > 0,
     ),
   );
-  async function reload(force = false) {
+  async function reload(force = false, propagate = false) {
     if (busyRef.current && !force) return;
     focusRefresh.markFresh();
     ++loadsInFlight.current;
@@ -111,7 +125,18 @@ export default function App() {
       const data = await bootstrap(force);
       if (generation === loadGeneration.current) setAuthMode(data.authMode);
       if (generation !== loadGeneration.current) return;
+      setSpaces(data.spaces);
+      setSpaceId(data.spaceId);
       setSampleDataEnabled(data.sampleDataEnabled === true);
+      if (identityRef.current && identityRef.current !== data.spaceId) {
+        setSpaceSettings(null);
+        setFormVersion((v) => v + 1);
+        setEditingProduct(null);
+        setAdjustingProduct(null);
+        setEditingPrepared(null);
+        setAdjustingPrepared(null);
+        setSearch("");
+      }
       if (
         identityRef.current !== data.spaceId ||
         data.revision >= revisionRef.current
@@ -139,6 +164,7 @@ export default function App() {
         setStorageError(
           e instanceof Error ? e.message : "読み込めませんでした",
         );
+      if (propagate) throw e;
     } finally {
       --loadsInFlight.current;
       if (generation === loadGeneration.current) setAuthChecking(false);
@@ -152,8 +178,10 @@ export default function App() {
     try {
       const response = await authClient.signIn.social({
         provider: "google",
-        callbackURL: "/",
-        errorCallbackURL: "/?login=failed",
+        callbackURL: invitation ? `/invitations/${invitation}` : "/",
+        errorCallbackURL: invitation
+          ? `/invitations/${invitation}?login=failed`
+          : "/?login=failed",
       });
       if (response.error) throw new Error(response.error.message);
     } catch {
@@ -231,7 +259,11 @@ export default function App() {
     setBusy(true);
     ++loadGeneration.current;
     try {
-      const next = await sendCommand(command, revisionRef.current);
+      const next = await sendCommand(
+        command,
+        revisionRef.current,
+        identityRef.current,
+      );
       focusRefresh.markFresh();
       revisionRef.current = next.revision;
       setState(next.state);
@@ -444,6 +476,29 @@ export default function App() {
     );
   return (
     <div className="app-shell">
+      {spaceSettings && spaces.find((s) => s.id === spaceId) && (
+        <SpaceSettings
+          key={`space-settings:${spaceId}`}
+          space={spaces.find((s) => s.id === spaceId)!}
+          initialDetails={spaceSettings}
+          onClose={() => setSpaceSettings(null)}
+          onChanged={() => reload(true, true)}
+        />
+      )}
+      {invitation && (
+        <Invitation
+          token={invitation}
+          onCancel={() => {
+            setInvitation(null);
+            window.history.replaceState(null, "", "/");
+          }}
+          onAccepted={async () => {
+            await reload(true, true);
+            setInvitation(null);
+            window.history.replaceState(null, "", "/");
+          }}
+        />
+      )}
       <header className="app-header">
         <a
           href="#"
@@ -457,6 +512,37 @@ export default function App() {
           Refico
         </a>
         <AccountMenu
+          spaces={spaces}
+          spaceId={spaceId}
+          onSwitch={async (id) => {
+            if (busyRef.current) throw new Error("保存中です");
+            busyRef.current = true;
+            setBusy(true);
+            ++loadGeneration.current;
+            try {
+              await sharingRequest("/api/spaces", {
+                type: "switch",
+                spaceId: id,
+              });
+              await reload(true, true);
+            } finally {
+              busyRef.current = false;
+              setBusy(false);
+            }
+          }}
+          onPrepareSettings={async () => {
+            const details = await sharingRequest<SpaceDetails>(
+              "/api/spaces/details",
+              undefined,
+              spaceId,
+            );
+            if (identityRef.current !== spaceId)
+              throw new Error(
+                "スペースが変更されました。もう一度お試しください。",
+              );
+            return details;
+          }}
+          onSettings={setSpaceSettings}
           user={user}
           canLogout={authMode === "google"}
           busy={busy}
@@ -487,7 +573,7 @@ export default function App() {
           </Button>
         ))}
       </nav>
-      <main ref={mainRef}>
+      <main ref={mainRef} key={spaceId}>
         <div className="page-heading">
           <h1>{title}</h1>
         </div>

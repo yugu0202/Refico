@@ -1,13 +1,20 @@
+import { z } from "zod";
+import {
+  resolveSpace,
+  listSpaces,
+  switchSpace,
+  spaceDetails,
+  createInvitation,
+  invitationInfo,
+  acceptInvitation,
+  manageSpace,
+  SharingError,
+} from "./sharing.ts";
 import { previewUser } from "./preview-user.ts";
 import { getAuth } from "./auth.ts";
 import type { Env } from "./env.ts";
 import { sampleDataEnabled } from "./env.ts";
-import {
-  personalSpace,
-  loadSnapshot,
-  receipt,
-  saveSnapshot,
-} from "./repository.ts";
+import { loadSnapshot, receipt, saveSnapshot } from "./repository.ts";
 import { applyCommand, mutationSchema } from "../src/domain/commands.ts";
 import { toModel, toView } from "../src/domain/model.ts";
 import { parseState } from "../src/domain/validation.ts";
@@ -73,12 +80,92 @@ export default {
       }
       if (request.method !== "GET" && !sameOrigin(request, env))
         return json({ error: "許可されていない送信元です" }, 403);
+      const inviteMatch = path.match(/^\/api\/invitations\/([a-f0-9]{64})$/);
+      // Previewing an invitation needs its token and authenticated user, not
+      // the user's personal/active space. Keep provisioning for acceptance.
+      if (inviteMatch && request.method === "GET")
+        return json(await invitationInfo(db, inviteMatch[1], user.id));
       // Membership is resolved server-side from Google session or the shared preview account.
-      const spaceId = await personalSpace(db, user.id);
+      const spaceId = await resolveSpace(db, user.id);
+      if (inviteMatch && request.method === "POST") {
+        await acceptInvitation(db, inviteMatch[1], user.id);
+        return json({ ok: true });
+      }
+      if (path === "/api/spaces/details" && request.method === "GET") {
+        if (
+          request.headers.get("X-Refico-Space") &&
+          request.headers.get("X-Refico-Space") !== spaceId
+        )
+          return json(
+            { error: "スペースが変更されています。再読み込みしてください" },
+            409,
+          );
+        return json(await spaceDetails(db, spaceId));
+      }
+      if (path === "/api/spaces" && request.method === "POST") {
+        if (
+          !request.headers.get("content-type")?.startsWith("application/json")
+        )
+          return json({ error: "JSON形式で送信してください" }, 415);
+        const raw = await request.text();
+        if (new TextEncoder().encode(raw).length > 4096)
+          return json({ error: "入力が大きすぎます" }, 413);
+        let body: unknown;
+        try {
+          body = JSON.parse(raw);
+        } catch {
+          return json({ error: "入力を確認してください" }, 400);
+        }
+        const schema = z.discriminatedUnion("type", [
+          z
+            .object({
+              type: z.literal("switch"),
+              spaceId: z.string().min(1).max(256),
+            })
+            .strict(),
+          z.object({ type: z.literal("invite") }).strict(),
+          z.object({ type: z.literal("leave") }).strict(),
+          z
+            .object({
+              type: z.literal("rename"),
+              name: z.string().trim().min(1).max(80),
+            })
+            .strict(),
+          z
+            .object({
+              type: z.literal("remove"),
+              userId: z.string().min(1).max(256),
+            })
+            .strict(),
+          z
+            .object({
+              type: z.literal("revoke"),
+              invitationId: z.string().regex(/^[a-f0-9]{64}$/),
+            })
+            .strict(),
+        ]);
+        const parsed = schema.safeParse(body);
+        if (!parsed.success)
+          return json({ error: "入力を確認してください" }, 400);
+        if (parsed.data.type === "switch")
+          await switchSpace(db, user.id, parsed.data.spaceId);
+        else {
+          if (request.headers.get("X-Refico-Space") !== spaceId)
+            return json(
+              { error: "スペースが変更されています。再読み込みしてください" },
+              409,
+            );
+          if (parsed.data.type === "invite")
+            return json(await createInvitation(db, user.id, spaceId));
+          await manageSpace(db, user.id, spaceId, parsed.data);
+        }
+        return json({ ok: true });
+      }
       if (path === "/api/bootstrap" && request.method === "GET") {
         const snapshot = await loadSnapshot(db, spaceId);
         return json({
           revision: snapshot.revision,
+          spaces: await listSpaces(db, user.id),
           spaceId,
           authMode: mode,
           sampleDataEnabled: sampleDataEnabled(env),
@@ -87,6 +174,12 @@ export default {
         });
       }
       if (path === "/api/commands" && request.method === "POST") {
+        const expectedSpace = request.headers.get("X-Refico-Space");
+        if (expectedSpace && expectedSpace !== spaceId)
+          return json(
+            { error: "スペースが変更されています。再読み込みしてください" },
+            409,
+          );
         if (
           !request.headers.get("content-type")?.startsWith("application/json")
         )
@@ -183,6 +276,8 @@ export default {
       }
       return json({ error: "Not found" }, 404);
     } catch (e) {
+      if (e instanceof SharingError)
+        return json({ error: e.message }, e.status);
       console.error("Refico API failed", e);
       return json(
         { error: "処理に失敗しました。時間をおいて再試行してください" },

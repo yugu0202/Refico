@@ -62,3 +62,21 @@ test("競合復旧のbootstrapは保存前から取得中の応答を再利用�
   responses[0](Response.json({ revision: 0 }));
   assert.equal((await old).revision, 0);
 });
+
+test("同じ入力でもスペースごとに再送IDと操作対象を分離する", async () => {
+  const sent: { id: string; space: string | null }[] = [];
+  const client = createCommandClient((async (_url, init: RequestInit) => {
+    sent.push({
+      id: JSON.parse(init.body as string).requestId,
+      space: new Headers(init.headers).get("X-Refico-Space"),
+    });
+    throw new Error("lost response");
+  }) as typeof fetch);
+  const command = { type: "sample.create", date: "2026-10-01" } as const;
+  await assert.rejects(client(command, 0, "a"));
+  await assert.rejects(client(command, 0, "b"));
+  assert.equal(sent[0].space, "a");
+  assert.equal(sent[2].space, "b");
+  assert.equal(sent[0].id, sent[1].id);
+  assert.notEqual(sent[0].id, sent[2].id);
+});

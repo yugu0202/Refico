@@ -15,7 +15,7 @@ export async function personalSpace(
 ): Promise<string> {
   const existing = await db
     .prepare(
-      "SELECT space_id FROM space_members WHERE user_id = ? ORDER BY joined_at, space_id LIMIT 1",
+      "SELECT space_id FROM space_members WHERE user_id = ? AND role = 'owner' ORDER BY joined_at, space_id LIMIT 1",
     )
     .bind(userId)
     .first<{ space_id: string }>();
@@ -24,7 +24,7 @@ export async function personalSpace(
   await db.batch([
     db
       .prepare(
-        "INSERT OR IGNORE INTO spaces (id, owner_user_id, name) VALUES (?, ?, '自分の在庫')",
+        "INSERT OR IGNORE INTO spaces (id, owner_user_id, name) VALUES (?, ?, 'マイスペース')",
       )
       .bind(id, userId),
     db
