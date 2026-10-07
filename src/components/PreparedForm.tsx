@@ -19,6 +19,7 @@ export function PreparedForm({
   onSave,
   onCancel,
   autoFocus = true,
+  showCost = true,
 }: {
   state: State;
   today: string;
@@ -26,6 +27,7 @@ export function PreparedForm({
   onSave: (command: Command) => Promise<void>;
   onCancel?: () => void;
   autoFocus?: boolean;
+  showCost?: boolean;
 }) {
   const [date, setDate] = useState(editing?.date ?? today);
   const [name, setName] = useState(editing?.name ?? "");
@@ -158,10 +160,12 @@ export function PreparedForm({
           editing={editing}
           itemLabel="食材"
         />
-        <div className="estimate">
-          <span>料理の金額</span>
-          <strong>{estimate === undefined ? "—" : money(estimate)}</strong>
-        </div>
+        {showCost && (
+          <div className="estimate">
+            <span>料理の金額</span>
+            <strong>{estimate === undefined ? "—" : money(estimate)}</strong>
+          </div>
+        )}
         {(error || estimateError) && (
           <p className="error" role="alert">
             {error || estimateError}

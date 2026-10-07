@@ -23,6 +23,7 @@ import Dialog from "@mui/material/Dialog";
 import DialogContent from "@mui/material/DialogContent";
 import SvgIcon from "@mui/material/SvgIcon";
 import TextField from "@mui/material/TextField";
+import { Toast } from "./components/Toast";
 import { useEffect, useState, useRef } from "react";
 import {
   dailyCosts,
@@ -143,8 +144,7 @@ export default function App() {
         setEditingPrepared(null);
         setAdjustingPrepared(null);
         setSearch("");
-        setSavedCookingId(null);
-        setPreparedToAdd(undefined);
+        setNotice("");
       }
       if (
         identityRef.current !== data.spaceId ||
@@ -213,13 +213,13 @@ export default function App() {
     setLoginError("");
     setStorageError("");
     setState(emptyState());
-    setSavedCookingId(null);
-    setPreparedToAdd(undefined);
+    setNotice("");
     setEditingPrepared(null);
     navigate("home");
   }
   const [storageError, setStorageError] = useState("");
   const [notice, setNotice] = useState("");
+  const [noticeVersion, setNoticeVersion] = useState(0);
   const [adjustingPrepared, setAdjustingPrepared] = useState<Cooking | null>(
     null,
   );
@@ -233,12 +233,6 @@ export default function App() {
   const [formVersion, setFormVersion] = useState(0);
   const [mealVersion, setMealVersion] = useState(0);
   const [cookingVersion, setCookingVersion] = useState(0);
-  const [savedCookingId, setSavedCookingId] = useState<string | null>(null);
-  const [preparedToAdd, setPreparedToAdd] = useState<{
-    batchId: string;
-    token: string;
-  }>();
-  const savedCooking = state.cookings.find((c) => c.id === savedCookingId);
   const [search, setSearch] = useState("");
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -279,11 +273,16 @@ export default function App() {
       window.removeEventListener("focus", refresh);
     };
   }, []);
+  function notify(message: string) {
+    setNotice(message);
+    if (message) setNoticeVersion((v) => v + 1);
+  }
   async function persist(command: Command, message: string) {
     if (busyRef.current)
       throw new Error("保存中です。完了してから操作してください");
     busyRef.current = true;
     setBusy(true);
+    setNotice("");
     ++loadGeneration.current;
     try {
       const next = await sendCommand(
@@ -294,7 +293,7 @@ export default function App() {
       focusRefresh.markFresh();
       revisionRef.current = next.revision;
       setState(next.state);
-      setNotice(message);
+      notify(message);
       setStorageError("");
       return next.state;
     } catch (e) {
@@ -507,6 +506,7 @@ export default function App() {
           initialDetails={spaceSettings}
           onClose={() => setSpaceSettings(null)}
           onChanged={() => reload(true, true)}
+          onNotify={notify}
         />
       )}
       {invitation && (
@@ -520,6 +520,7 @@ export default function App() {
             await reload(true, true);
             setInvitation(null);
             window.history.replaceState(null, "", "/");
+            notify("スペースに参加しました");
           }}
         />
       )}
@@ -613,11 +614,6 @@ export default function App() {
         )}
         {ready && storageError && (
           <Button onClick={() => void reload()}>再読み込み</Button>
-        )}
-        {notice && (
-          <p className="notice" role="status">
-            {notice}
-          </p>
         )}
         {ready && (
           <>
@@ -973,34 +969,14 @@ export default function App() {
               </>
             )}
             <div hidden={page !== "cooking"}>
-              {savedCooking && (
-                <div className="cooking-result" role="status">
-                  <p>「{savedCooking.name}」を保存しました。</p>
-                  <Button
-                    type="button"
-                    disabled={
-                      busy || preparedRemaining(state, savedCooking) <= 0
-                    }
-                    onClick={() => {
-                      navigate("meal");
-                      setPreparedToAdd({
-                        batchId: savedCooking.id,
-                        token: crypto.randomUUID(),
-                      });
-                    }}
-                  >
-                    食事に追加
-                  </Button>
-                </div>
-              )}
               <PreparedForm
                 key={cookingVersion}
                 state={state}
                 today={today}
                 autoFocus={false}
+                showCost={false}
                 onSave={async (command) => {
-                  const next = await persist(command, "");
-                  setSavedCookingId(next.cookings.at(-1)!.id);
+                  await persist(command, "料理を保存しました");
                   setCookingVersion((v) => v + 1);
                 }}
               />
@@ -1011,11 +987,8 @@ export default function App() {
                 state={state}
                 today={today}
                 money={money}
-                preparedToAdd={preparedToAdd}
-                onPreparedAdded={() => setPreparedToAdd(undefined)}
                 onSave={async (command) => {
                   await persist(command, "食事を記録しました");
-                  setPreparedToAdd(undefined);
                   setMealVersion((v) => v + 1);
                 }}
               />
@@ -1032,6 +1005,12 @@ export default function App() {
           </>
         )}
       </main>
+      <Toast
+        open={!!notice}
+        message={notice}
+        version={noticeVersion}
+        onClose={() => setNotice("")}
+      />
     </div>
   );
 }
