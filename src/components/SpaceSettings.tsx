@@ -6,9 +6,14 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
+  InputAdornment,
+  Snackbar,
+  SvgIcon,
   Stack,
   TextField,
   Typography,
+  Tooltip,
 } from "@mui/material";
 import { sharingRequest, type Space } from "../api";
 export interface SpaceDetails {
@@ -31,6 +36,8 @@ export function SpaceSettings({
   const [busy, setBusy] = useState(false);
   const guard = useRef(false);
   const [error, setError] = useState("");
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const [copying, setCopying] = useState(false);
   const [invite, setInvite] = useState<{ id: string; link: string } | null>(
     null,
   );
@@ -39,6 +46,20 @@ export function SpaceSettings({
     userId?: string;
     label: string;
   } | null>(null);
+  async function copyLink() {
+    if (!invite || copying || busy) return;
+    const link = invite.link;
+    setCopying(true);
+    setCopiedLink(null);
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedLink(link);
+    } catch {
+      setError("リンクを選択してコピーしてください");
+    } finally {
+      setCopying(false);
+    }
+  }
   async function load() {
     setDetails(
       await sharingRequest<SpaceDetails>(
@@ -170,22 +191,62 @@ export function SpaceSettings({
                   <TextField
                     label="招待リンク"
                     value={invite.link}
-                    slotProps={{ htmlInput: { readOnly: true } }}
+                    slotProps={{
+                      htmlInput: { readOnly: true },
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <Tooltip
+                              title={
+                                copiedLink === invite.link
+                                  ? "コピーしました"
+                                  : "リンクをコピー"
+                              }
+                            >
+                              <span>
+                                <IconButton
+                                  aria-label="招待リンクをコピー"
+                                  disabled={busy || copying}
+                                  onClick={() => void copyLink()}
+                                  sx={{ width: 44, height: 44 }}
+                                >
+                                  <SvgIcon
+                                    sx={{
+                                      fill: "none",
+                                      stroke: "currentColor",
+                                      strokeWidth: 1.8,
+                                    }}
+                                  >
+                                    {copiedLink === invite.link ? (
+                                      <path
+                                        d="m5 12 4 4L19 6"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      />
+                                    ) : (
+                                      <>
+                                        <rect
+                                          x="8"
+                                          y="8"
+                                          width="12"
+                                          height="12"
+                                          rx="2"
+                                        />
+                                        <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+                                      </>
+                                    )}
+                                  </SvgIcon>
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </InputAdornment>
+                        ),
+                      },
+                    }}
                   />
                   <Typography variant="body2" color="text.secondary">
                     7日間有効・1人だけ参加できます。
                   </Typography>
-                  <Button
-                    onClick={() =>
-                      void navigator.clipboard
-                        .writeText(invite.link)
-                        .catch(() =>
-                          setError("リンクを選択してコピーしてください"),
-                        )
-                    }
-                  >
-                    リンクをコピー
-                  </Button>
                 </>
               )}
               {details?.invitations.map((i) => (
@@ -248,6 +309,14 @@ export function SpaceSettings({
           閉じる
         </Button>
       </DialogActions>
+      <Snackbar
+        open={!!invite && copiedLink === invite.link}
+        message="コピーしました"
+        autoHideDuration={2500}
+        onClose={(_, reason) => {
+          if (reason !== "clickaway") setCopiedLink(null);
+        }}
+      />
     </Dialog>
   );
 }
