@@ -154,7 +154,7 @@ export function PreparedForm({
           itemLabel="食材"
         />
         <div className="estimate">
-          <span>作り置きの金額</span>
+          <span>料理の金額</span>
           <strong>{estimate === undefined ? "—" : money(estimate)}</strong>
         </div>
         {(error || estimateError) && (
@@ -171,7 +171,7 @@ export function PreparedForm({
             variant="contained"
             disabled={saving || estimate === undefined}
           >
-            {editing ? "変更を保存" : "作り置きを保存"}
+            {editing ? "変更を保存" : "料理を保存"}
           </Button>
         </div>
       </fieldset>

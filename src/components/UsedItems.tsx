@@ -98,7 +98,7 @@ export function UsedItems({
               }}
             >
               <option value="" disabled>
-                {batches.length ? "食材・作り置きを選択" : "食材を選択"}
+                {batches.length ? "食材・料理を選択" : "食材を選択"}
               </option>
               <optgroup label="食材">
                 {available
@@ -114,7 +114,7 @@ export function UsedItems({
                   ))}
               </optgroup>
               {batches.length > 0 && (
-                <optgroup label="作り置き">
+                <optgroup label="料理">
                   {batches
                     .filter(
                       (m) =>

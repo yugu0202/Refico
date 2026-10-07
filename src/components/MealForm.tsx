@@ -3,6 +3,10 @@ import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import { PreparedForm } from "./PreparedForm";
 import { useState, useRef, useId, type FormEvent } from "react";
 import {
   mealKinds,
@@ -13,6 +17,7 @@ import {
   type State,
   type Meal,
   type MealInput,
+  type Cooking,
 } from "../domain/inventory";
 import { updateMeal } from "../domain/history";
 import { UsedItems, type Draft } from "./UsedItems";
@@ -23,10 +28,10 @@ export function MealForm({
   money,
   editing,
   onCancel,
-  initialPrepared,
+  onCreateCooking,
 }: {
   editing?: Meal;
-  initialPrepared?: { batchId: string; quantity: number };
+  onCreateCooking?: (command: Command) => Promise<Cooking>;
   onCancel?: () => void;
   state: State;
   today: string;
@@ -70,17 +75,38 @@ export function MealForm({
             unit: "食分",
           })),
         ].concat(editing.direct ? [draft()] : [])
-      : [
-          initialPrepared
-            ? {
-                ...draft(),
-                batchId: initialPrepared.batchId,
-                quantity: String(initialPrepared.quantity),
-                unit: "食分",
-              }
-            : draft(),
-        ],
+      : [draft()],
   );
+  const [cookingOpen, setCookingOpen] = useState(false);
+  const [cookingSaving, setCookingSaving] = useState(false);
+  const cookingSavingRef = useRef(false);
+  const [savedCookingId, setSavedCookingId] = useState<string | null>(null);
+  const cookingTitleId = useId();
+  const savedCooking = state.cookings.find((c) => c.id === savedCookingId);
+  const savedRemaining = savedCooking
+    ? preparedRemaining(state, savedCooking)
+    : 0;
+  const canAddCooking =
+    !!savedCooking && savedCooking.date <= date && savedRemaining > 0;
+  function addCooking() {
+    if (!savedCooking || !canAddCooking) return;
+    const row = {
+      ...draft(),
+      batchId: savedCooking.id,
+      quantity: String(Math.min(1, savedRemaining)),
+      unit: "食分",
+    };
+    setRows((current) => {
+      const empty = current.findIndex(
+        (r) => !r.productId && !r.batchId && !r.quantity,
+      );
+      return empty < 0
+        ? [...current, row]
+        : current.map((r, i) => (i === empty ? row : r));
+    });
+    setSavedCookingId(null);
+    setError("");
+  }
   const batches = state.cookings.filter(
     (c) => c.date <= date && (!!editing || preparedRemaining(state, c) > 0),
   );
@@ -167,150 +193,221 @@ export function MealForm({
     }
   }
   return (
-    <form
-      className={`entry-form wide${source === "direct" ? " direct-meal-form" : ""}`}
-      onSubmit={submit}
-    >
-      <fieldset className="form-fields" disabled={saving}>
-        <Tabs
-          value={source}
-          aria-label="食事の記録方法"
-          onChange={(_, value: "inventory" | "direct") => {
-            setSource(value);
-            setError("");
-          }}
-          sx={{
-            mb: 2,
-            minHeight: 44,
-            "& .MuiTab-root": {
+    <>
+      <form
+        className={`entry-form wide${source === "direct" ? " direct-meal-form" : ""}`}
+        onSubmit={submit}
+      >
+        <fieldset className="form-fields" disabled={saving || cookingSaving}>
+          <Tabs
+            value={source}
+            aria-label="食事の記録方法"
+            onChange={(_, value: "inventory" | "direct") => {
+              setSource(value);
+              setError("");
+            }}
+            sx={{
+              mb: 2,
               minHeight: 44,
-              minWidth: 88,
-              px: 2,
-              fontWeight: 400,
+              "& .MuiTab-root": {
+                minHeight: 44,
+                minWidth: 88,
+                px: 2,
+                fontWeight: 400,
+              },
+              "& .Mui-selected": { fontWeight: 700 },
+            }}
+          >
+            <Tab
+              value="inventory"
+              label="自炊"
+              disabled={saving || cookingSaving}
+              id={`${sourceFieldsId}-inventory`}
+              aria-controls={sourceFieldsId}
+            />
+            <Tab
+              value="direct"
+              label="外食など"
+              disabled={saving || cookingSaving}
+              id={`${sourceFieldsId}-direct`}
+              aria-controls={sourceFieldsId}
+            />
+          </Tabs>
+          <div className="two-columns">
+            <TextField
+              className="field"
+              label="食事の日付"
+              required
+              type="date"
+              slotProps={{ inputLabel: { shrink: true } }}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+            <TextField
+              className="field"
+              label="食事"
+              select
+              value={kind}
+              slotProps={{ select: { native: true } }}
+              onChange={(e) => setKind(e.target.value)}
+            >
+              {mealKinds.map((k) => (
+                <option key={k}>{k}</option>
+              ))}
+            </TextField>
+          </div>
+          {source === "direct" ? (
+            <div
+              className="direct-meal-fields"
+              id={sourceFieldsId}
+              role="tabpanel"
+              aria-labelledby={`${sourceFieldsId}-direct`}
+            >
+              <TextField
+                label="金額（円）"
+                required
+                type="number"
+                value={cost}
+                slotProps={{
+                  htmlInput: { min: 0, max: 100000000, step: 1 },
+                }}
+                onChange={(e) => setCost(e.target.value)}
+              />
+              <TextField
+                label="店名（任意）"
+                value={place}
+                slotProps={{
+                  htmlInput: { maxLength: 100 },
+                }}
+                onChange={(e) => setPlace(e.target.value)}
+              />
+              <TextField
+                label="メモ（任意）"
+                value={note}
+                multiline
+                minRows={1}
+                maxRows={4}
+                slotProps={{
+                  htmlInput: { maxLength: 500 },
+                }}
+                onChange={(e) => setNote(e.target.value)}
+              />
+            </div>
+          ) : (
+            <div
+              className="inventory-meal-fields"
+              id={sourceFieldsId}
+              role="tabpanel"
+              aria-labelledby={`${sourceFieldsId}-inventory`}
+            >
+              <div className="section-heading">
+                <h2>使ったもの</h2>
+                {onCreateCooking && (
+                  <Button
+                    type="button"
+                    disabled={saving || cookingSaving}
+                    onClick={() => setCookingOpen(true)}
+                  >
+                    料理を作る
+                  </Button>
+                )}
+              </div>
+              {savedCooking && (
+                <div className="cooking-result" role="status">
+                  <p>「{savedCooking.name}」を保存しました。</p>
+                  <Button
+                    type="button"
+                    disabled={saving || !canAddCooking}
+                    onClick={addCooking}
+                  >
+                    この料理を食事に追加
+                  </Button>
+                  {savedCooking.date > date && (
+                    <p className="hint">作った日以降の食事に追加できます。</p>
+                  )}
+                  {savedRemaining <= 0 && (
+                    <p className="hint">この料理の残量はありません。</p>
+                  )}
+                </div>
+              )}
+              {available.length === 0 && batches.length === 0 && (
+                <p className="hint">
+                  在庫がありません。購入を記録すると食材を選べます。
+                </p>
+              )}
+              <UsedItems
+                state={state}
+                rows={rows}
+                onChange={setRows}
+                available={available}
+                batches={batches}
+                editing={editing}
+              />
+            </div>
+          )}
+          {source === "inventory" && (
+            <div className="estimate">
+              <span>この食事の金額</span>
+              <strong>{estimate === undefined ? "—" : money(estimate)}</strong>
+            </div>
+          )}
+          {(error || estimateError) && (
+            <p className="error" role="alert">
+              {error || estimateError}
+            </p>
+          )}
+          <div className={editing ? "actions" : "form-footer"}>
+            {onCancel && <Button onClick={onCancel}>キャンセル</Button>}
+            <Button
+              variant="contained"
+              type="submit"
+              disabled={saving || estimate === undefined}
+            >
+              {editing ? "変更を保存" : "食事を記録"}
+            </Button>
+          </div>
+        </fieldset>
+      </form>
+      {cookingOpen && onCreateCooking && (
+        <Dialog
+          open
+          fullWidth
+          maxWidth="sm"
+          aria-labelledby={cookingTitleId}
+          onClose={() => {
+            if (!cookingSavingRef.current) setCookingOpen(false);
+          }}
+          slotProps={{
+            paper: {
+              sx: {
+                margin: { xs: 2, sm: 4 },
+                width: { xs: "calc(100% - 32px)", sm: "calc(100% - 64px)" },
+              },
             },
-            "& .Mui-selected": { fontWeight: 700 },
           }}
         >
-          <Tab
-            value="inventory"
-            label="自炊"
-            disabled={saving}
-            id={`${sourceFieldsId}-inventory`}
-            aria-controls={sourceFieldsId}
-          />
-          <Tab
-            value="direct"
-            label="外食など"
-            disabled={saving}
-            id={`${sourceFieldsId}-direct`}
-            aria-controls={sourceFieldsId}
-          />
-        </Tabs>
-        <div className="two-columns">
-          <TextField
-            className="field"
-            label="食事の日付"
-            required
-            type="date"
-            slotProps={{ inputLabel: { shrink: true } }}
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-          <TextField
-            className="field"
-            label="食事"
-            select
-            value={kind}
-            slotProps={{ select: { native: true } }}
-            onChange={(e) => setKind(e.target.value)}
-          >
-            {mealKinds.map((k) => (
-              <option key={k}>{k}</option>
-            ))}
-          </TextField>
-        </div>
-        {source === "direct" ? (
-          <div
-            className="direct-meal-fields"
-            id={sourceFieldsId}
-            role="tabpanel"
-            aria-labelledby={`${sourceFieldsId}-direct`}
-          >
-            <TextField
-              label="金額（円）"
-              required
-              type="number"
-              value={cost}
-              slotProps={{
-                htmlInput: { min: 0, max: 100000000, step: 1 },
-              }}
-              onChange={(e) => setCost(e.target.value)}
-            />
-            <TextField
-              label="店名（任意）"
-              value={place}
-              slotProps={{
-                htmlInput: { maxLength: 100 },
-              }}
-              onChange={(e) => setPlace(e.target.value)}
-            />
-            <TextField
-              label="メモ（任意）"
-              value={note}
-              multiline
-              minRows={1}
-              maxRows={4}
-              slotProps={{
-                htmlInput: { maxLength: 500 },
-              }}
-              onChange={(e) => setNote(e.target.value)}
-            />
-          </div>
-        ) : (
-          <div
-            className="inventory-meal-fields"
-            id={sourceFieldsId}
-            role="tabpanel"
-            aria-labelledby={`${sourceFieldsId}-inventory`}
-          >
-            <h2>使ったもの</h2>
-            {available.length === 0 && batches.length === 0 && (
-              <p className="hint">
-                在庫がありません。購入を記録すると食材を選べます。
-              </p>
-            )}
-            <UsedItems
+          <DialogTitle id={cookingTitleId}>料理を作る</DialogTitle>
+          <DialogContent sx={{ "&&": { paddingTop: 1.5 } }}>
+            <PreparedForm
               state={state}
-              rows={rows}
-              onChange={setRows}
-              available={available}
-              batches={batches}
-              editing={editing}
+              today={date}
+              onCancel={() => setCookingOpen(false)}
+              onSave={async (command) => {
+                cookingSavingRef.current = true;
+                setCookingSaving(true);
+                try {
+                  const cooking = await onCreateCooking(command);
+                  setSavedCookingId(cooking.id);
+                  setCookingOpen(false);
+                } finally {
+                  cookingSavingRef.current = false;
+                  setCookingSaving(false);
+                }
+              }}
             />
-          </div>
-        )}
-        {source === "inventory" && (
-          <div className="estimate">
-            <span>この食事の金額</span>
-            <strong>{estimate === undefined ? "—" : money(estimate)}</strong>
-          </div>
-        )}
-        {(error || estimateError) && (
-          <p className="error" role="alert">
-            {error || estimateError}
-          </p>
-        )}
-        <div className={editing ? "actions" : "form-footer"}>
-          {onCancel && <Button onClick={onCancel}>キャンセル</Button>}
-          <Button
-            variant="contained"
-            type="submit"
-            disabled={saving || estimate === undefined}
-          >
-            {editing ? "変更を保存" : "食事を記録"}
-          </Button>
-        </div>
-      </fieldset>
-    </form>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   );
 }

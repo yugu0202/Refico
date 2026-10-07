@@ -251,6 +251,19 @@ section {
   color: var(--notice-text);
   border-left: 2px solid var(--accent);
 }
+.cooking-result {
+  margin-bottom: 20px;
+  padding: 12px 14px;
+  background: var(--selected-background);
+  border-left: 2px solid var(--accent);
+}
+.cooking-result p {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.cooking-result .hint {
+  margin: 8px 0 0;
+}
 .error {
   font-size: 13px;
   color: var(--mui-palette-error-main);

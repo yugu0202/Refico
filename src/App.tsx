@@ -137,9 +137,6 @@ export default function App() {
         setEditingPrepared(null);
         setAdjustingPrepared(null);
         setSearch("");
-        setCreatingPrepared(false);
-        setSavedPreparedId(null);
-        setMealPreset(undefined);
       }
       if (
         identityRef.current !== data.spaceId ||
@@ -208,20 +205,11 @@ export default function App() {
     setLoginError("");
     setStorageError("");
     setState(emptyState());
-    setCreatingPrepared(false);
     setEditingPrepared(null);
-    setSavedPreparedId(null);
-    setMealPreset(undefined);
     navigate("home");
   }
   const [storageError, setStorageError] = useState("");
   const [notice, setNotice] = useState("");
-  const [creatingPrepared, setCreatingPrepared] = useState(false);
-  const [savedPreparedId, setSavedPreparedId] = useState<string | null>(null);
-  const [mealPreset, setMealPreset] = useState<{
-    batchId: string;
-    quantity: number;
-  }>();
   const [adjustingPrepared, setAdjustingPrepared] = useState<Cooking | null>(
     null,
   );
@@ -295,6 +283,12 @@ export default function App() {
       setBusy(false);
     }
   }
+  async function createCooking(command: Command): Promise<Cooking> {
+    if (command.type !== "prepared.create")
+      throw new Error("料理の入力を確認してください");
+    const next = await persist(command, "");
+    return next.cookings.at(-1)!;
+  }
   function navigate(next: Page) {
     const historyState = { ...window.history.state, reficoPage: next };
     if (helpPageFromPath(`/${next}`)) {
@@ -347,9 +341,6 @@ export default function App() {
   }
   function selectPage(next: Page) {
     setPage(next);
-    setCreatingPrepared(false);
-    setSavedPreparedId(null);
-    setMealPreset(undefined);
     setReopenMenu(Boolean(window.history.state?.reficoMenuOpen));
     setAdjustingPrepared(null);
     setEditingPrepared(null);
@@ -412,7 +403,7 @@ export default function App() {
                 type="button"
                 disabled={busy}
                 aria-label={`${m.name}を編集`}
-                title="作り置きを編集"
+                title="料理を編集"
                 onClick={() => {
                   setEditingPrepared(m);
                   setNotice("");
@@ -425,7 +416,7 @@ export default function App() {
               </IconButton>
             </Stack>
             <p className="hint">
-              <span className="inventory-kind">作り置き</span> · 作った日{" "}
+              <span className="inventory-kind">料理</span> · 作った日{" "}
               {dateLabel(m.date)}
             </p>
           </div>
@@ -611,29 +602,6 @@ export default function App() {
             {notice}
           </p>
         )}
-        {savedPreparedId &&
-          state.cookings.some(
-            (c) => c.id === savedPreparedId && preparedRemaining(state, c) > 0,
-          ) && (
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                const cooking = state.cookings.find(
-                  (c) => c.id === savedPreparedId,
-                )!;
-                const preset = {
-                  batchId: cooking.id,
-                  quantity: Math.min(1, preparedRemaining(state, cooking)),
-                };
-                navigate("meal");
-                setMealPreset(preset);
-                setFormVersion((v) => v + 1);
-              }}
-            >
-              この作り置きを使って食事を記録
-            </Button>
-          )}
         {ready && (
           <>
             {adjustingPrepared && (
@@ -662,12 +630,11 @@ export default function App() {
                 }}
               />
             )}
-            {(creatingPrepared || editingPrepared) && (
+            {editingPrepared && (
               <Dialog
                 open
                 onClose={() => {
                   if (!busyRef.current) {
-                    setCreatingPrepared(false);
                     setEditingPrepared(null);
                   }
                 }}
@@ -686,28 +653,17 @@ export default function App() {
                   },
                 }}
               >
-                <DialogTitle id="prepared-form-title">
-                  {editingPrepared ? "作り置きを編集" : "作り置きを作る"}
-                </DialogTitle>
+                <DialogTitle id="prepared-form-title">料理を編集</DialogTitle>
                 <DialogContent sx={{ "&&": { paddingTop: 1.5 } }}>
                   <PreparedForm
                     state={state}
                     today={today}
-                    editing={editingPrepared ?? undefined}
+                    editing={editingPrepared}
                     onCancel={() => {
-                      setCreatingPrepared(false);
                       setEditingPrepared(null);
                     }}
                     onSave={async (command) => {
-                      const next = await persist(
-                        command,
-                        editingPrepared
-                          ? "作り置きを更新しました"
-                          : "作り置きを保存しました",
-                      );
-                      if (command.type === "prepared.create")
-                        setSavedPreparedId(next.cookings.at(-1)!.id);
-                      setCreatingPrepared(false);
+                      await persist(command, "料理を更新しました");
                       setEditingPrepared(null);
                     }}
                   />
@@ -805,7 +761,7 @@ export default function App() {
                             {meal.direct
                               ? "外食など"
                               : meal.prepared?.length
-                                ? "作り置き"
+                                ? "料理"
                                 : `${meal.usages.length}食材`}
                           </span>
                           <strong className="numeric">
@@ -880,18 +836,6 @@ export default function App() {
             )}
             {page === "inventory" && (
               <>
-                <div className="actions">
-                  <Button
-                    disabled={busy}
-                    onClick={() => {
-                      setSavedPreparedId(null);
-                      setNotice("");
-                      setCreatingPrepared(true);
-                    }}
-                  >
-                    作り置きを作る
-                  </Button>
-                </div>
                 <TextField
                   className="search"
                   label="在庫を探す"
@@ -925,7 +869,7 @@ export default function App() {
                 </section>
                 {(state.preparedAdjustments ?? []).length > 0 && (
                   <section>
-                    <h2>作り置きの在庫調整履歴</h2>
+                    <h2>料理の在庫調整履歴</h2>
                     {[...(state.preparedAdjustments ?? [])]
                       .reverse()
                       .map((a) => (
@@ -1018,10 +962,9 @@ export default function App() {
                   state={state}
                   today={today}
                   money={money}
-                  initialPrepared={mealPreset}
+                  onCreateCooking={createCooking}
                   onSave={async (command) => {
                     await persist(command, "食事を記録しました");
-                    setMealPreset(undefined);
                     setFormVersion((v) => v + 1);
                   }}
                 />
