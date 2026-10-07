@@ -271,8 +271,6 @@ export function MealForm({
               type="number"
               value={cost}
               slotProps={{
-                inputLabel: { shrink: true },
-                input: { notched: true },
                 htmlInput: { min: 0, max: 100000000, step: 1 },
               }}
               onChange={(e) => setCost(e.target.value)}
@@ -281,8 +279,6 @@ export function MealForm({
               label="店名（任意）"
               value={place}
               slotProps={{
-                inputLabel: { shrink: true },
-                input: { notched: true },
                 htmlInput: { maxLength: 100 },
               }}
               onChange={(e) => setPlace(e.target.value)}
@@ -294,8 +290,6 @@ export function MealForm({
               minRows={1}
               maxRows={4}
               slotProps={{
-                inputLabel: { shrink: true },
-                input: { notched: true },
                 htmlInput: { maxLength: 500 },
               }}
               onChange={(e) => setNote(e.target.value)}
