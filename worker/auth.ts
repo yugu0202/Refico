@@ -6,6 +6,9 @@ const createAuth = (env: Env) =>
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: [new URL(env.BETTER_AUTH_URL).origin],
+    // Revocation on other devices is observed within five minutes. Membership
+    // is still resolved from D1 on every request, never from this cookie.
+    session: { cookieCache: { enabled: true, maxAge: 5 * 60 } },
     socialProviders: {
       google: {
         clientId: env.GOOGLE_CLIENT_ID,

@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
 import type { D1Database, D1PreparedStatement } from "./env.ts";
 export function testDatabase() {
+  const queries: string[] = [];
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec("PRAGMA foreign_keys = ON");
   for (const name of ["0001_auth.sql", "0002_inventory.sql"])
@@ -17,14 +18,17 @@ export function testDatabase() {
         return prepare(sql, args);
       },
       async all() {
+        queries.push(sql);
         const results = sqlite.prepare(sql).all(...values);
         return { success: true, results, meta: { changes: 0, last_row_id: 0 } };
       },
       async first(column?: string) {
+        queries.push(sql);
         const row = sqlite.prepare(sql).get(...values);
         return column ? (row?.[column] ?? null) : (row ?? null);
       },
       async run() {
+        queries.push(sql);
         const r = sqlite.prepare(sql).run(...values);
         return {
           success: true,
@@ -36,12 +40,14 @@ export function testDatabase() {
         };
       },
       async raw() {
+        queries.push(sql);
         return sqlite
           .prepare(sql)
           .all(...values)
           .map((row) => Object.values(row));
       },
       execute() {
+        queries.push(sql);
         const s = sqlite.prepare(sql);
         if (s.columns().length)
           return {
@@ -85,12 +91,18 @@ export function testDatabase() {
       return db;
     },
   };
-  return { sqlite, db: db as unknown as D1Database };
+  return { sqlite, db: db as unknown as D1Database, queries };
 }
 export function addUser(sqlite: DatabaseSync, id: string) {
   sqlite
     .prepare(
       "INSERT INTO user (id, name, email, emailVerified, createdAt, updatedAt) VALUES (?, ?, ?, 1, ?, ?)",
     )
-    .run(id, id, `${id}@example.com`, Date.now(), Date.now());
+    .run(
+      id,
+      id,
+      `${id}@example.com`,
+      new Date().toISOString(),
+      new Date().toISOString(),
+    );
 }

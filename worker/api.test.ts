@@ -50,9 +50,9 @@ test("認証済みAPIは所有者を分離し、再送・古い更新・偽造�
           `session-${id}`,
           `token-${id}`,
           id,
-          Date.now() + 86400000,
-          Date.now(),
-          Date.now(),
+          new Date(Date.now() + 86400000).toISOString(),
+          new Date().toISOString(),
+          new Date().toISOString(),
         );
     }
     assert.equal((await request("bootstrap")).status, 401);
@@ -242,6 +242,104 @@ test("共通プレビューはURL・Cookieによらず保存を共有し、本�
       503,
     );
   } finally {
+    sqlite.close();
+  }
+});
+
+test("認証CookieはD1参照を省き、期限切れと改ざんを再検証し、APIエラーでも更新される", async (t) => {
+  const { sqlite, db, queries } = testDatabase();
+  const start = Date.now();
+  let now = start;
+  t.mock.method(Date, "now", () => now);
+  const secret = "test-secret-for-refico-at-least-thirty-two-characters";
+  const env: Env = {
+    APP_ENV: "production",
+    DB: db,
+    ASSETS: { fetch: async () => new Response("assets") },
+    BETTER_AUTH_URL: "http://localhost:8787",
+    BETTER_AUTH_SECRET: secret,
+    GOOGLE_CLIENT_ID: "test",
+    GOOGLE_CLIENT_SECRET: "test",
+  };
+  const token = "cached-token";
+  const tokenCookie = `better-auth.session_token=${encodeURIComponent(token + "." + createHmac("sha256", secret).update(token).digest("base64"))}`;
+  const request = (cookie: string, invalidCommand = false) =>
+    worker.fetch(
+      new Request(
+        `http://localhost:8787/api/${invalidCommand ? "commands" : "bootstrap"}`,
+        {
+          headers: {
+            cookie,
+            ...(invalidCommand
+              ? {
+                  origin: env.BETTER_AUTH_URL,
+                  "Content-Type": "application/json",
+                }
+              : {}),
+          },
+          ...(invalidCommand ? { method: "POST", body: "{}" } : {}),
+        },
+      ),
+      env,
+    );
+  const cacheCookie = (response: Response) => {
+    const cookies = response.headers.getSetCookie();
+    const cache = cookies
+      .filter((c) => c.startsWith("better-auth.session_data="))
+      .at(-1);
+    assert.ok(cache, "API response must forward the refreshed cache cookie");
+    assert.match(cache, /Max-Age=300/);
+    return cache.split(";")[0];
+  };
+  const authReads = () =>
+    queries.filter(
+      (sql) => /^select\b/i.test(sql) && /\b(?:session|user)\b/.test(sql),
+    );
+  try {
+    addUser(sqlite, "cached");
+    sqlite
+      .prepare(
+        "INSERT INTO session (id, token, userId, expiresAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        "cached-session",
+        token,
+        "cached",
+        new Date(start + 86400000).toISOString(),
+        new Date(start).toISOString(),
+        new Date(start).toISOString(),
+      );
+    const first = await request(tokenCookie);
+    assert.equal(first.status, 200);
+    const cached = `${tokenCookie}; ${cacheCookie(first)}`;
+    assert.ok(authReads().length > 0);
+    queries.length = 0;
+    assert.equal((await request(cached)).status, 200);
+    assert.equal(authReads().length, 0);
+    // Force expiry without waiting five minutes. Even validation errors must
+    // propagate the refreshed cookie so the following request can use it.
+    now = start + 301000;
+    queries.length = 0;
+    const expired = await request(cached, true);
+    assert.equal(expired.status, 400);
+    assert.ok(authReads().length > 0);
+    const renewed = `${tokenCookie}; ${cacheCookie(expired)}`;
+    queries.length = 0;
+    assert.equal((await request(renewed)).status, 200);
+    assert.equal(authReads().length, 0);
+    sqlite.prepare("DELETE FROM session WHERE id = ?").run("cached-session");
+    // A revoked session can survive only until the configured cache expiry.
+    assert.equal((await request(renewed)).status, 200);
+    const payload = JSON.parse(
+      Buffer.from(cacheCookie(expired).split("=")[1], "base64url").toString(),
+    );
+    payload.session.user.name = "forged";
+    const damaged = `${tokenCookie}; better-auth.session_data=${Buffer.from(JSON.stringify(payload)).toString("base64url")}`;
+    assert.equal((await request(damaged)).status, 401);
+    now = start + 602000;
+    assert.equal((await request(renewed)).status, 401);
+  } finally {
+    t.mock.restoreAll();
     sqlite.close();
   }
 });
