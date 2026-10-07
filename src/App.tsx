@@ -1,6 +1,7 @@
 import { AccountMenu } from "./components/AccountMenu";
 import { BrandLogo } from "./components/BrandLogo";
 import { HelpPage } from "./components/HelpPage";
+import { helpPageFromPath, type HelpPageId } from "./help";
 import type { Command } from "./domain/commands";
 import { ApiError, bootstrap, sendCommand, authClient } from "./api";
 import { History } from "./components/History";
@@ -56,15 +57,17 @@ const navigation = [
     icon: "M5 3v5a3 3 0 0 0 6 0V3M8 3v18M19 3c-3 2-4 5-4 9h4M19 3v18",
   },
 ] as const;
-type Page = (typeof navigation)[number]["id"] | "help";
+type Page = (typeof navigation)[number]["id"] | HelpPageId;
 function currentPage(): Page {
-  if (window.location.pathname === "/help") return "help";
+  const help = helpPageFromPath(window.location.pathname);
+  if (help) return help;
   const saved = window.history.state?.reficoPage;
   return navigation.some((item) => item.id === saved) ? saved : "home";
 }
 export default function App() {
   const mainRef = useRef<HTMLElement>(null);
   const [page, setPage] = useState<Page>(currentPage);
+  const helpPage = helpPageFromPath(`/${page}`);
   const [today, setToday] = useState(localDate);
   const [state, setState] = useState<State>(emptyState);
   const [ready, setReady] = useState(false);
@@ -175,14 +178,13 @@ export default function App() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
     mainRef.current?.scrollTo({ top: 0, behavior: "instant" });
-    if (page === "help") {
+    if (helpPage) {
       document
         .querySelector<HTMLElement>(".help-page h1")
         ?.focus({ preventScroll: true });
-      if (window.location.hash)
-        document
-          .getElementById(window.location.hash.slice(1))
-          ?.scrollIntoView();
+      document
+        .querySelector<HTMLElement>(".help-page")
+        ?.scrollTo({ top: 0, behavior: "instant" });
     }
   }, [page]);
   useEffect(() => {
@@ -230,8 +232,8 @@ export default function App() {
   }
   function navigate(next: Page) {
     const historyState = { ...window.history.state, reficoPage: next };
-    if (next === "help") {
-      if (busyRef.current || page === "help") return;
+    if (helpPageFromPath(`/${next}`)) {
+      if (busyRef.current || next === page) return;
       window.history.replaceState(
         { ...window.history.state, reficoPage: page },
         "",
@@ -239,7 +241,7 @@ export default function App() {
       window.history.pushState(
         { ...historyState, reficoHelpReturn: true },
         "",
-        "/help",
+        `/${next}`,
       );
     } else {
       delete historyState.reficoHelpReturn;
@@ -247,7 +249,7 @@ export default function App() {
       window.history.replaceState(
         historyState,
         "",
-        page === "help" ? "/" : window.location.href,
+        helpPage ? "/" : window.location.href,
       );
     }
     selectPage(next);
@@ -262,7 +264,14 @@ export default function App() {
   }
   function leaveHelp() {
     if (window.history.state?.reficoHelpReturn) window.history.back();
-    else navigate("home");
+    else if (helpPage && helpPage !== "help") {
+      window.history.replaceState(
+        { ...window.history.state, reficoPage: "help" },
+        "",
+        "/help",
+      );
+      selectPage("help");
+    } else navigate("home");
   }
   async function saveProduct(product: Product) {
     await persist(
@@ -360,7 +369,10 @@ export default function App() {
       />
     ));
   // The guide is readable from a direct URL, even without a signed-in session.
-  if (page === "help") return <HelpPage onBack={leaveHelp} />;
+  if (helpPage)
+    return (
+      <HelpPage page={helpPage} onBack={leaveHelp} onNavigate={navigate} />
+    );
   if (!ready)
     return (
       <LoginScreen

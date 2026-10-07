@@ -684,15 +684,71 @@ label .amount-input select {
 .help-page li + li {
   margin-top: 12px;
 }
-.help-topics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
-  gap: 0 20px;
+.help-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-.help-topics a {
+.help-links a {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   min-height: 44px;
+  padding: 8px 0;
+  text-decoration: none;
+}
+.help-links a:hover {
   color: var(--accent);
-  text-underline-offset: 3px;
+}
+.help-links a > span {
+  color: var(--muted);
+}
+.help-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+.help-breadcrumb a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.help-figure {
+  margin: 24px 0;
+}
+.help-figure img {
+  display: block;
+  width: 100%;
+  max-width: 520px;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.help-figure figcaption {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.help-example {
+  width: 100%;
+  border-collapse: collapse;
+}
+.help-example caption {
+  text-align: left;
+  padding-bottom: 12px;
+}
+.help-example th,
+.help-example td {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.help-example th {
+  text-align: left;
+  font-weight: 500;
+}
+.help-example td {
+  text-align: right;
 }
