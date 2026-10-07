@@ -160,9 +160,12 @@ export function AccountMenu({
         <Typography
           component="h3"
           variant="body2"
-          sx={{ fontWeight: 600, mb: 1 }}
+          sx={{ fontWeight: 600, mb: 1.5 }}
         >
           スペース
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          使用するスペース
         </Typography>
         {spaces.map((space) => (
           <Button

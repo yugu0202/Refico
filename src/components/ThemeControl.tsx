@@ -5,8 +5,8 @@ import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import SvgIcon from "@mui/material/SvgIcon";
 import Tooltip from "@mui/material/Tooltip";
-import ToggleButton from "@mui/material/ToggleButton";
-import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+import Button from "@mui/material/Button";
+import Stack from "@mui/material/Stack";
 
 const options = [
   { value: "system", label: "端末設定" },
@@ -19,31 +19,28 @@ export function ThemeControl({ inline = false }: { inline?: boolean }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   if (inline)
     return (
-      <ToggleButtonGroup
-        exclusive
-        value={mode ?? "system"}
-        aria-label="テーマ"
-        onChange={(_, next: "system" | "light" | "dark" | null) => {
-          if (next) setMode(next);
-        }}
-        sx={{ width: "100%" }}
-      >
+      <Stack role="group" aria-label="テーマ">
         {options.map((option) => (
-          <ToggleButton
+          <Button
             key={option.value}
-            value={option.value}
+            fullWidth
+            variant="text"
+            aria-pressed={(mode ?? "system") === option.value}
+            onClick={() => setMode(option.value)}
             sx={{
-              flex: 1,
+              justifyContent: "space-between",
               minHeight: 44,
-              px: 1,
-              textTransform: "none",
-              "&.Mui-selected": { fontWeight: 700 },
+              color: "text.primary",
+              fontWeight: (mode ?? "system") === option.value ? 650 : 400,
             }}
           >
             {option.label}
-          </ToggleButton>
+            <span aria-hidden="true">
+              {(mode ?? "system") === option.value ? "✓" : ""}
+            </span>
+          </Button>
         ))}
-      </ToggleButtonGroup>
+      </Stack>
     );
   return (
     <>
