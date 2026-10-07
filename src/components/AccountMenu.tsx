@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Divider from "@mui/material/Divider";
@@ -18,6 +18,8 @@ interface Props {
   busy: boolean;
   onLogout: () => Promise<void>;
   onHelp: () => void;
+  reopen: boolean;
+  onClosed: () => void;
 }
 
 export function AccountMenu({
@@ -26,7 +28,10 @@ export function AccountMenu({
   busy,
   onLogout,
   onHelp,
+  reopen,
+  onClosed,
 }: Props) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const titleId = useId();
   const mobile = useMediaQuery("(max-width: 600px)");
@@ -35,8 +40,12 @@ export function AccountMenu({
   const loggingOutRef = useRef(false);
   const [error, setError] = useState("");
   const open = Boolean(anchor);
+  useEffect(() => {
+    if (reopen) setAnchor(triggerRef.current);
+  }, [reopen]);
   function close() {
     setAnchor(null);
+    onClosed();
   }
   async function logout() {
     if (busy || loggingOutRef.current) return;
@@ -190,6 +199,7 @@ export function AccountMenu({
     <>
       <Tooltip title="メニュー">
         <IconButton
+          ref={triggerRef}
           aria-label="メニューを開く"
           aria-haspopup="dialog"
           aria-controls={open ? panelId : undefined}

@@ -233,3 +233,19 @@ export function helpPageFromPath(path: string): HelpPageId | null {
 export function findHelpArticle(page: HelpPageId) {
   return helpArticles.find((article) => `help/${article.id}` === page);
 }
+
+export function helpBackAction(
+  page: HelpPageId,
+  state: { reficoHelpDepth?: number; reficoHelpReturn?: boolean } | null,
+): { type: "go"; delta: number } | { type: "replace"; page: "help" | "home" } {
+  // The button follows the hierarchy, independently of related-article history.
+  if (page !== "help") {
+    const depth = state?.reficoHelpDepth;
+    if (Number.isInteger(depth) && depth! > 0)
+      return { type: "go", delta: -depth! };
+    return { type: "replace", page: "help" };
+  }
+  return state?.reficoHelpReturn
+    ? { type: "go", delta: -1 }
+    : { type: "replace", page: "home" };
+}

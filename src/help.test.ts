@@ -6,6 +6,7 @@ import {
   helpCategories,
   helpPageFromPath,
   findHelpArticle,
+  helpBackAction,
 } from "./help.ts";
 
 test("使い方の直接URL・末尾スラッシュ・不明な記事を解決し、他のパスとは区別する", () => {
@@ -36,4 +37,39 @@ test("一覧と関連記事に孤立・重複・リンク切れがなく、操�
         existsSync(new URL(`../public${article.image.src}`, import.meta.url)),
       );
   }
+});
+
+test("パンくずは説明履歴を積まず一覧へ戻り、一覧の戻るはメニューへの復帰になる", () => {
+  assert.deepEqual(
+    helpBackAction("help/record-meal", {
+      reficoHelpDepth: 1,
+      reficoHelpReturn: true,
+    }),
+    { type: "go", delta: -1 },
+  );
+  assert.deepEqual(
+    helpBackAction("help/make-prepared", {
+      reficoHelpDepth: 3,
+      reficoHelpReturn: true,
+    }),
+    { type: "go", delta: -3 },
+  );
+  assert.deepEqual(
+    helpBackAction("help", { reficoHelpDepth: 0, reficoHelpReturn: true }),
+    { type: "go", delta: -1 },
+  );
+});
+test("直接開いた記事や一覧の戻るは説明に循環しない", () => {
+  assert.deepEqual(helpBackAction("help/record-meal", null), {
+    type: "replace",
+    page: "help",
+  });
+  assert.deepEqual(helpBackAction("help", { reficoHelpReturn: false }), {
+    type: "replace",
+    page: "home",
+  });
+  assert.deepEqual(
+    helpBackAction("help/unknown", { reficoHelpDepth: undefined }),
+    { type: "replace", page: "help" },
+  );
 });

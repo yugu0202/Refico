@@ -1,7 +1,7 @@
 import { AccountMenu } from "./components/AccountMenu";
 import { BrandLogo } from "./components/BrandLogo";
 import { HelpPage } from "./components/HelpPage";
-import { helpPageFromPath, type HelpPageId } from "./help";
+import { helpPageFromPath, helpBackAction, type HelpPageId } from "./help";
 import type { Command } from "./domain/commands";
 import { ApiError, bootstrap, sendCommand, authClient } from "./api";
 import { History } from "./components/History";
@@ -68,6 +68,9 @@ export default function App() {
   const mainRef = useRef<HTMLElement>(null);
   const [page, setPage] = useState<Page>(currentPage);
   const helpPage = helpPageFromPath(`/${page}`);
+  const [reopenMenu, setReopenMenu] = useState(() =>
+    Boolean(window.history.state?.reficoMenuOpen),
+  );
   const [today, setToday] = useState(localDate);
   const [state, setState] = useState<State>(emptyState);
   const [ready, setReady] = useState(false);
@@ -234,17 +237,43 @@ export default function App() {
     const historyState = { ...window.history.state, reficoPage: next };
     if (helpPageFromPath(`/${next}`)) {
       if (busyRef.current || next === page) return;
+      if (helpPage && next === "help") {
+        leaveHelp();
+        return;
+      }
+      const currentDepth =
+        window.history.state?.reficoHelpDepth ??
+        (helpPage === "help" ? 0 : undefined);
       window.history.replaceState(
-        { ...window.history.state, reficoPage: page },
+        {
+          ...window.history.state,
+          reficoPage: page,
+          ...(helpPage
+            ? { reficoHelpDepth: currentDepth }
+            : { reficoMenuOpen: true }),
+        },
         "",
       );
       window.history.pushState(
-        { ...historyState, reficoHelpReturn: true },
+        {
+          ...historyState,
+          reficoMenuOpen: false,
+          reficoHelpReturn: helpPage
+            ? Boolean(window.history.state?.reficoHelpReturn)
+            : true,
+          reficoHelpDepth: helpPage
+            ? currentDepth === undefined
+              ? undefined
+              : currentDepth + 1
+            : 0,
+        },
         "",
         `/${next}`,
       );
     } else {
       delete historyState.reficoHelpReturn;
+      delete historyState.reficoHelpDepth;
+      historyState.reficoMenuOpen = false;
       // Tabs still share the root URL; retain the tab when returning from help.
       window.history.replaceState(
         historyState,
@@ -256,6 +285,7 @@ export default function App() {
   }
   function selectPage(next: Page) {
     setPage(next);
+    setReopenMenu(Boolean(window.history.state?.reficoMenuOpen));
     setAdjustingPrepared(null);
     setEditingPrepared(null);
     setEditingProduct(null);
@@ -263,15 +293,30 @@ export default function App() {
     setNotice("");
   }
   function leaveHelp() {
-    if (window.history.state?.reficoHelpReturn) window.history.back();
-    else if (helpPage && helpPage !== "help") {
+    if (!helpPage) return;
+    const action = helpBackAction(helpPage, window.history.state);
+    if (action.type === "go") window.history.go(action.delta);
+    else {
       window.history.replaceState(
-        { ...window.history.state, reficoPage: "help" },
+        {
+          ...window.history.state,
+          reficoPage: action.page,
+          reficoHelpReturn: false,
+          reficoHelpDepth: action.page === "help" ? 0 : undefined,
+          reficoMenuOpen: false,
+        },
         "",
-        "/help",
+        action.page === "help" ? "/help" : "/",
       );
-      selectPage("help");
-    } else navigate("home");
+      selectPage(action.page);
+    }
+  }
+  function menuClosed() {
+    setReopenMenu(false);
+    window.history.replaceState(
+      { ...window.history.state, reficoMenuOpen: false },
+      "",
+    );
   }
   async function saveProduct(product: Product) {
     await persist(
@@ -404,6 +449,8 @@ export default function App() {
           busy={busy}
           onLogout={logout}
           onHelp={() => navigate("help")}
+          reopen={reopenMenu}
+          onClosed={menuClosed}
         />
       </header>
       <nav className="navigation" aria-label="メインメニュー">
