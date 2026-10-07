@@ -13,6 +13,7 @@ const db = (id) => ({
 const config = {
   d1_databases: [db("production")],
   previews: { d1_databases: [db("preview")] },
+  env: { staging: { d1_databases: [db("staging")] } },
 };
 test("環境ごとのDBを選び、本番と同じプレビューDBや未設定を拒否する", () => {
   assert.equal(
@@ -40,7 +41,7 @@ test("環境ごとのDBを選び、本番と同じプレビューDBや未設定�
 test("マイグレーション後に配信し、失敗時は配信せず一時設定を削除する", () => {
   const directory = mkdtempSync(join(tmpdir(), "refico-deploy-"));
   try {
-    for (const target of ["production", "preview"]) {
+    for (const target of ["production", "preview", "staging"]) {
       const calls = [];
       deploy(
         target,
@@ -59,7 +60,14 @@ test("マイグレーション後に配信し、失敗時は配信せず一時�
         directory,
       );
       assert.equal(calls.length, 2);
-      assert.equal(calls[1][0], target === "preview" ? "preview" : "deploy");
+      assert.deepEqual(calls[1], [
+        target === "preview" ? "preview" : "deploy",
+        "--config",
+        join(directory, "wrangler.jsonc"),
+        ...(target === "preview"
+          ? []
+          : ["--env", target === "staging" ? "staging" : ""]),
+      ]);
     }
     let count = 0;
     assert.throws(
@@ -80,4 +88,23 @@ test("マイグレーション後に配信し、失敗時は配信せず一時�
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("stagingは専用DBを使い、本番DBと設定の欠落を拒否する", () => {
+  assert.equal(
+    migrationConfig(config, "staging").d1_databases[0].database_id,
+    "staging",
+  );
+  assert.throws(
+    () =>
+      migrationConfig(
+        { ...config, env: { staging: { d1_databases: [db("production")] } } },
+        "staging",
+      ),
+    /production database/,
+  );
+  assert.throws(
+    () => migrationConfig({ ...config, env: {} }, "staging"),
+    /No D1/,
+  );
 });
