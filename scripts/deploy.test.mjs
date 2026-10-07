@@ -142,3 +142,91 @@ test("devだけstagingのプレビュー設定を使い、本番DBへの接続�
   );
   assert.throws(() => stagingPreviewConfig(config, {}), /No D1/);
 });
+
+test("Tursoは対象環境だけをmigrateし、失敗時は配信せずD1へfallbackしない", () => {
+  const directory = mkdtempSync(join(tmpdir(), "refico-turso-deploy-"));
+  const production = {
+    DB_BACKEND: "turso",
+    TURSO_DATABASE_URL: "libsql://prod.turso.io",
+  };
+  const staging = {
+    DB_BACKEND: "turso",
+    TURSO_DATABASE_URL: "libsql://staging.turso.io",
+  };
+  const turso = stagingPreviewConfig(
+    { ...config, vars: production },
+    { previews: { vars: staging, d1_databases: [] } },
+  );
+  try {
+    const calls = [];
+    const migrations = [];
+    deploy(
+      "staging",
+      turso,
+      (args) => {
+        calls.push(args);
+        const generated = JSON.parse(readFileSync(args[2], "utf8"));
+        assert.equal(generated.previews.vars.DB_BACKEND, "turso");
+        assert.equal(
+          generated.previews.vars.TURSO_DATABASE_URL,
+          staging.TURSO_DATABASE_URL,
+        );
+        assert.deepEqual(generated.previews.d1_databases, []);
+      },
+      directory,
+      (...args) => migrations.push(args),
+    );
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][0], "preview");
+    assert.deepEqual(migrations[0], [
+      "staging",
+      staging.TURSO_DATABASE_URL,
+      directory,
+    ]);
+    assert.throws(
+      () =>
+        deploy(
+          "staging",
+          turso,
+          () => assert.fail("must not deploy"),
+          directory,
+          () => {
+            throw new Error("migration failed");
+          },
+        ),
+      /migration failed/,
+    );
+    assert.throws(
+      () =>
+        migrationConfig(
+          { ...turso, previews: { vars: production } },
+          "staging",
+        ),
+      /production database/,
+    );
+    assert.throws(
+      () =>
+        migrationConfig(
+          {
+            ...turso,
+            previews: {
+              vars: { ...staging, TURSO_DATABASE_URL: "https://prod.turso.io" },
+            },
+          },
+          "staging",
+        ),
+      /production database/,
+    );
+    assert.throws(
+      () =>
+        migrationConfig(
+          { ...turso, previews: { vars: { DB_BACKEND: "turso" } } },
+          "preview",
+        ),
+      /TURSO_DATABASE_URL/,
+    );
+    assert.deepEqual(readdirSync(join(directory, ".wrangler")), []);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

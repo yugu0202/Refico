@@ -13,6 +13,12 @@ import {
 import { previewUser } from "./preview-user.ts";
 import { getAuth } from "./auth.ts";
 import type { Env } from "./env.ts";
+import {
+  openDatabase,
+  databaseConfigured,
+  TursoDatabase,
+  type Database,
+} from "./database.ts";
 import { sampleDataEnabled } from "./env.ts";
 import { loadSnapshot, receipt, saveSnapshot } from "./repository.ts";
 import { applyCommand, mutationSchema } from "../src/domain/commands.ts";
@@ -30,7 +36,11 @@ export function sameOrigin(
   );
 }
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: Env,
+    context?: { waitUntil(promise: Promise<unknown>): void },
+  ): Promise<Response> {
     const responseHeaders = new Headers({ "Cache-Control": "no-store" });
     const json = (body: unknown, status = 200) =>
       Response.json(body, { status, headers: responseHeaders });
@@ -44,8 +54,14 @@ export default {
       (mode === "test" && env.APP_ENV !== "preview")
     )
       return json({ error: "認証設定を確認してください", authMode: mode }, 503);
+    let configured = false;
+    try {
+      configured = databaseConfigured(env);
+    } catch {
+      /* Invalid backend fails closed. */
+    }
     if (
-      !env.DB ||
+      !configured ||
       (mode === "google" &&
         (!env.BETTER_AUTH_URL ||
           !env.BETTER_AUTH_SECRET ||
@@ -56,16 +72,20 @@ export default {
         { error: "サーバー設定が完了していません", authMode: mode },
         503,
       );
+    let db: Database | undefined;
     try {
-      const db = env.DB.withSession("first-primary");
+      db = openDatabase(env);
       let user: { id: string; name: string; email: string } | null;
       if (mode === "test") {
-        user = await previewUser(db, env.DB);
+        user = await previewUser(
+          db,
+          db instanceof TursoDatabase ? env : env.DB,
+        );
         if (path.startsWith("/api/auth/"))
           return json({ error: "Not found" }, 404);
       } else {
-        const auth = getAuth(env);
-        if (path.startsWith("/api/auth/")) return auth.handler(request);
+        const auth = getAuth(env, db);
+        if (path.startsWith("/api/auth/")) return await auth.handler(request);
         const { response: session, headers } = await auth.api.getSession({
           headers: request.headers,
           returnHeaders: true,
@@ -278,11 +298,24 @@ export default {
     } catch (e) {
       if (e instanceof SharingError)
         return json({ error: e.message }, e.status);
-      console.error("Refico API failed", e);
+      console.error(
+        "Refico API failed",
+        db instanceof TursoDatabase ? { backend: "turso" } : e,
+      );
       return json(
         { error: "処理に失敗しました。時間をおいて再試行してください" },
         500,
       );
+    } finally {
+      if (db instanceof TursoDatabase) {
+        // Finish cleanup after sending the response in Workers. Failures must
+        // not turn an already committed save into an API error.
+        const cleanup = db.close().catch(() => {
+          console.error("Turso connection cleanup failed");
+        });
+        if (context) context.waitUntil(cleanup);
+        else await cleanup;
+      }
     }
   },
 };

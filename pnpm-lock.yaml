@@ -17,9 +17,15 @@ importers:
       '@mui/material':
         specifier: ^9.4.0
         version: 9.4.0(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(@types/react@19.3.0)(react@19.3.0)(supports-color@10.2.2))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@tursodatabase/serverless':
+        specifier: ^1.4.1
+        version: 1.4.1
       better-auth:
         specifier: ^1.7.7
         version: 1.7.7(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      kysely:
+        specifier: ^0.29.6
+        version: 0.29.6
       react:
         specifier: ^19.3.0
         version: 19.3.0
@@ -1042,6 +1048,9 @@ packages:
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
+  '@tursodatabase/serverless@1.4.1':
+    resolution: {integrity: sha512-kcbGx0zb0Js4WnIrIF4AlsK3gzryRdTyUQev/9UbxtcH/iyk7u0Rk+l7dWdPC/5Ymu1WlbSyn4oUb02eNbn6Mw==}
 
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
@@ -2209,6 +2218,8 @@ snapshots:
   '@speed-highlight/core@1.2.24': {}
 
   '@standard-schema/spec@1.1.0': {}
+
+  '@tursodatabase/serverless@1.4.1': {}
 
   '@types/estree@1.0.9': {}
 

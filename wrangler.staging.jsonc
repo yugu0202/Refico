@@ -1,6 +1,7 @@
 {
   "previews": {
     "vars": {
+      "DB_BACKEND": "d1",
       "APP_ENV": "staging",
       "AUTH_MODE": "google",
       "BETTER_AUTH_URL": "https://dev-refico.yugu0202.workers.dev",
