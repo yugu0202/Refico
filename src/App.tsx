@@ -1,3 +1,4 @@
+import { EnvironmentLabel } from "./components/EnvironmentLabel";
 import {
   SpaceSettings,
   Invitation,
@@ -504,7 +505,10 @@ export default function App() {
           }}
         >
           <BrandLogo size={28} />
-          Refico
+          <span className="brand-name">
+            Refico
+            <EnvironmentLabel />
+          </span>
         </a>
         <AccountMenu
           spaces={spaces}

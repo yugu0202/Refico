@@ -48,6 +48,11 @@ export default {
     if (!path.startsWith("/api/")) return env.ASSETS.fetch(request);
     if (path === "/api/health" && request.method === "GET")
       return json({ status: "ok", storage: "server" });
+    if (path === "/api/environment" && request.method === "GET")
+      return json({
+        environment: env.APP_ENV ?? "production",
+        branch: env.APP_ENV === "preview" ? (env.APP_BRANCH ?? null) : null,
+      });
     const mode = env.AUTH_MODE ?? "google";
     if (
       (mode !== "google" && mode !== "test") ||

@@ -842,3 +842,24 @@ label .amount-input select {
 .remaining-input .field {
   margin-bottom: 0 !important;
 }
+
+.brand-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.environment-label {
+  display: block;
+  max-width: min(58vw, 420px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  letter-spacing: normal;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--mui-palette-warning-main);
+}
+.environment-staging {
+  color: var(--mui-palette-info-main);
+}

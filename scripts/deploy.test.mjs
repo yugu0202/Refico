@@ -69,13 +69,15 @@ test("マイグレーション後に配信し、失敗時は配信せず一時�
               generated.d1_databases[0].migrations_dir,
               join(directory, "migrations"),
             );
-          } else if (target === "staging") {
+          } else if (target !== "production") {
             const generated = JSON.parse(readFileSync(args[2], "utf8"));
+            assert.equal(generated.previews.vars.APP_ENV, target);
+            assert.equal(typeof generated.previews.vars.APP_BRANCH, "string");
             assert.equal(generated.name, "refico");
             assert.equal(generated.env, undefined);
             assert.equal(
               generated.previews.d1_databases[0].database_id,
-              "staging",
+              target,
             );
             assert.equal(generated.main, join(directory, "worker/index.ts"));
             assert.equal(generated.assets.directory, join(directory, "dist"));
@@ -90,7 +92,7 @@ test("マイグレーション後に配信し、失敗時は配信せず一時�
         "",
         ...(target === "staging" ? ["--name", "dev"] : []),
       ]);
-      if (target !== "staging")
+      if (target === "production")
         assert.equal(calls[1][2], join(directory, "wrangler.jsonc"));
       assert.deepEqual(readdirSync(join(directory, ".wrangler")), []);
     }
