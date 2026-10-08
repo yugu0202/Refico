@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
+import Collapse from "@mui/material/Collapse";
 import Divider from "@mui/material/Divider";
 import Drawer from "@mui/material/Drawer";
 import IconButton from "@mui/material/IconButton";
@@ -47,6 +48,10 @@ export function AccountMenu({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const titleId = useId();
+  const spaceChoicesId = useId();
+  const spaceChoiceRef = useRef<HTMLButtonElement>(null);
+  const focusSpaceChoice = useRef(false);
+  const [spaceChoicesOpen, setSpaceChoicesOpen] = useState(false);
   const mobile = useMediaQuery("(max-width: 600px)");
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -55,6 +60,12 @@ export function AccountMenu({
   const [settingsLoading, setSettingsLoading] = useState(false);
   const settingsPending = useRef(false);
   const settingsGeneration = useRef(0);
+  useEffect(() => {
+    if (focusSpaceChoice.current && !spaceChoicesOpen && !busy) {
+      focusSpaceChoice.current = false;
+      spaceChoiceRef.current?.focus();
+    }
+  }, [spaceChoicesOpen, busy]);
   useEffect(
     () => () => {
       ++settingsGeneration.current;
@@ -69,6 +80,8 @@ export function AccountMenu({
     ++settingsGeneration.current;
     settingsPending.current = false;
     setSettingsLoading(false);
+    focusSpaceChoice.current = false;
+    setSpaceChoicesOpen(false);
     setAnchor(null);
     onClosed();
   }
@@ -164,38 +177,94 @@ export function AccountMenu({
         >
           スペース
         </Typography>
-        <Typography variant="body2" sx={{ mb: 1 }}>
-          使用するスペース
-        </Typography>
-        {spaces.map((space) => (
-          <Button
-            key={space.id}
-            fullWidth
-            variant="text"
-            disabled={busy || loggingOut || settingsLoading}
-            aria-pressed={space.id === spaceId}
+        <Button
+          ref={spaceChoiceRef}
+          fullWidth
+          variant="text"
+          disabled={busy || loggingOut || settingsLoading}
+          aria-expanded={spaceChoicesOpen}
+          aria-controls={spaceChoicesId}
+          onClick={() => setSpaceChoicesOpen((value) => !value)}
+          sx={{
+            justifyContent: "space-between",
+            minHeight: 44,
+            px: 0,
+            gap: 1,
+            color: "text.primary",
+            textAlign: "left",
+          }}
+        >
+          <Box component="span" sx={{ minWidth: 0, overflowWrap: "anywhere" }}>
+            <Typography
+              component="span"
+              variant="body2"
+              sx={{ display: "block" }}
+            >
+              使用するスペース
+            </Typography>
+            <Typography
+              component="span"
+              variant="body2"
+              color="text.secondary"
+              sx={{ display: "block" }}
+            >
+              {spaces.find((space) => space.id === spaceId)?.name ?? "—"}
+            </Typography>
+          </Box>
+          <SvgIcon
             sx={{
-              justifyContent: "space-between",
-              minHeight: 44,
-              color: "text.primary",
-              fontWeight: space.id === spaceId ? 650 : 400,
-            }}
-            onClick={async () => {
-              setError("");
-              try {
-                await onSwitch(space.id);
-                close();
-              } catch (e) {
-                setError(
-                  e instanceof Error ? e.message : "切り替えできませんでした",
-                );
-              }
+              flexShrink: 0,
+              fill: "none",
+              stroke: "currentColor",
+              strokeWidth: 1.8,
+              transform: spaceChoicesOpen ? "rotate(180deg)" : "none",
             }}
           >
-            {space.name}
-            <span aria-hidden="true">{space.id === spaceId ? "✓" : ""}</span>
-          </Button>
-        ))}
+            <path
+              d="m6 9 6 6 6-6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </SvgIcon>
+        </Button>
+        <Collapse in={spaceChoicesOpen} id={spaceChoicesId}>
+          <Stack role="group" aria-label="使用するスペース">
+            {spaces.map((space) => (
+              <Button
+                key={space.id}
+                fullWidth
+                variant="text"
+                disabled={busy || loggingOut || settingsLoading}
+                aria-pressed={space.id === spaceId}
+                sx={{
+                  justifyContent: "space-between",
+                  minHeight: 44,
+                  color: "text.primary",
+                  fontWeight: space.id === spaceId ? 650 : 400,
+                }}
+                onClick={async () => {
+                  setError("");
+                  try {
+                    await onSwitch(space.id);
+                    focusSpaceChoice.current = true;
+                    setSpaceChoicesOpen(false);
+                  } catch (e) {
+                    setError(
+                      e instanceof Error
+                        ? e.message
+                        : "切り替えできませんでした",
+                    );
+                  }
+                }}
+              >
+                {space.name}
+                <span aria-hidden="true">
+                  {space.id === spaceId ? "✓" : ""}
+                </span>
+              </Button>
+            ))}
+          </Stack>
+        </Collapse>
         <Button
           fullWidth
           variant="text"
@@ -272,9 +341,6 @@ export function AccountMenu({
           sx={{ fontWeight: 600, mb: 1.5 }}
         >
           表示
-        </Typography>
-        <Typography variant="body2" sx={{ mb: 1 }}>
-          テーマ
         </Typography>
         <ThemeControl inline />
       </Box>

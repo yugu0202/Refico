@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useColorScheme } from "@mui/material/styles";
 import IconButton from "@mui/material/IconButton";
 import Menu from "@mui/material/Menu";
@@ -7,6 +7,9 @@ import SvgIcon from "@mui/material/SvgIcon";
 import Tooltip from "@mui/material/Tooltip";
 import Button from "@mui/material/Button";
 import Stack from "@mui/material/Stack";
+import Box from "@mui/material/Box";
+import Collapse from "@mui/material/Collapse";
+import Typography from "@mui/material/Typography";
 
 const options = [
   { value: "system", label: "端末設定" },
@@ -17,30 +20,91 @@ const options = [
 export function ThemeControl({ inline = false }: { inline?: boolean }) {
   const { mode, setMode } = useColorScheme();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [choicesOpen, setChoicesOpen] = useState(false);
+  const choicesId = useId();
+  const choiceRef = useRef<HTMLButtonElement>(null);
+  const currentMode = mode ?? "system";
   if (inline)
     return (
-      <Stack role="group" aria-label="テーマ">
-        {options.map((option) => (
-          <Button
-            key={option.value}
-            fullWidth
-            variant="text"
-            aria-pressed={(mode ?? "system") === option.value}
-            onClick={() => setMode(option.value)}
+      <>
+        <Button
+          ref={choiceRef}
+          fullWidth
+          variant="text"
+          aria-expanded={choicesOpen}
+          aria-controls={choicesId}
+          onClick={() => setChoicesOpen((value) => !value)}
+          sx={{
+            justifyContent: "space-between",
+            minHeight: 44,
+            px: 0,
+            gap: 1,
+            color: "text.primary",
+            textAlign: "left",
+          }}
+        >
+          <Box component="span">
+            <Typography
+              component="span"
+              variant="body2"
+              sx={{ display: "block" }}
+            >
+              テーマ
+            </Typography>
+            <Typography
+              component="span"
+              variant="body2"
+              color="text.secondary"
+              sx={{ display: "block" }}
+            >
+              {options.find((option) => option.value === currentMode)?.label}
+            </Typography>
+          </Box>
+          <SvgIcon
             sx={{
-              justifyContent: "space-between",
-              minHeight: 44,
-              color: "text.primary",
-              fontWeight: (mode ?? "system") === option.value ? 650 : 400,
+              flexShrink: 0,
+              fill: "none",
+              stroke: "currentColor",
+              strokeWidth: 1.8,
+              transform: choicesOpen ? "rotate(180deg)" : "none",
             }}
           >
-            {option.label}
-            <span aria-hidden="true">
-              {(mode ?? "system") === option.value ? "✓" : ""}
-            </span>
-          </Button>
-        ))}
-      </Stack>
+            <path
+              d="m6 9 6 6 6-6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </SvgIcon>
+        </Button>
+        <Collapse in={choicesOpen} id={choicesId}>
+          <Stack role="group" aria-label="テーマ">
+            {options.map((option) => (
+              <Button
+                key={option.value}
+                fullWidth
+                variant="text"
+                aria-pressed={currentMode === option.value}
+                onClick={() => {
+                  setMode(option.value);
+                  setChoicesOpen(false);
+                  choiceRef.current?.focus();
+                }}
+                sx={{
+                  justifyContent: "space-between",
+                  minHeight: 44,
+                  color: "text.primary",
+                  fontWeight: currentMode === option.value ? 650 : 400,
+                }}
+              >
+                {option.label}
+                <span aria-hidden="true">
+                  {currentMode === option.value ? "✓" : ""}
+                </span>
+              </Button>
+            ))}
+          </Stack>
+        </Collapse>
+      </>
     );
   return (
     <>
