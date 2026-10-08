@@ -512,7 +512,7 @@ label .amount-input select {
     padding: 8px 10px;
   }
   .inventory-row {
-    align-items: flex-start;
+    align-items: center;
   }
   .inventory-row .hint {
     font-size: 11px;
@@ -815,4 +815,30 @@ label .amount-input select {
 .stock-unit-field .MuiToggleButton-root {
   min-width: 64px;
   min-height: 44px;
+}
+
+.inventory-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+  margin-left: auto;
+}
+.remaining-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 105px;
+  gap: 8px;
+}
+.remaining-input .MuiFormControl-root {
+  min-width: 0;
+}
+.inventory-group-heading > span {
+  padding-right: 52px;
+}
+.remaining-input {
+  align-items: start;
+  margin-bottom: 22px;
+}
+.remaining-input .field {
+  margin-bottom: 0 !important;
 }

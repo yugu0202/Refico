@@ -7,11 +7,17 @@ import {
   updateProductInventory,
   type RemainingChange,
 } from "../domain/inventory-edit";
+import {
+  stockDisplayUnit,
+  stockQuantity,
+  convertStockQuantity,
+} from "../domain/stock-amount";
 import TextField from "@mui/material/TextField";
 import { useState, useRef, type FormEvent } from "react";
 import {
   baseUnits,
   stock,
+  standardUnits,
   type State,
   createProduct,
   type BaseUnit,
@@ -47,12 +53,18 @@ export function ProductForm({
   );
   const current =
     product && state ? stock(state, product.id).quantity / 1000 : 0;
-  const [quantity, setQuantity] = useState(String(current));
+  const [remainingUnit, setRemainingUnit] = useState(() =>
+    stockDisplayUnit(base, current),
+  );
+  const [quantity, setQuantity] = useState(
+    String(current / remainingUnit.factor),
+  );
+  const targetQuantity = stockQuantity(quantity, remainingUnit);
   const [reason, setReason] = useState("");
   const adjustment =
-    product && state && today && Number(quantity) !== current
+    product && state && today && targetQuantity !== current
       ? {
-          quantity: quantity.trim() ? Number(quantity) : NaN,
+          quantity: targetQuantity,
           date: today,
           reason,
         }
@@ -123,7 +135,16 @@ export function ProductForm({
             <RemainingFields
               current={current}
               quantity={quantity}
-              unit={base}
+              unit={remainingUnit.name}
+              factor={remainingUnit.factor}
+              units={standardUnits(base)}
+              onUnit={(name) => {
+                const next = standardUnits(base).find((u) => u.name === name)!;
+                setQuantity(
+                  convertStockQuantity(quantity, remainingUnit, next),
+                );
+                setRemainingUnit(next);
+              }}
               reason={reason}
               onQuantity={setQuantity}
               onReason={setReason}

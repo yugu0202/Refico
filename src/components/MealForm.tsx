@@ -292,7 +292,7 @@ export function MealForm({
         )}
         {source === "inventory" && (
           <div className="estimate">
-            <span>この食事の食費</span>
+            <span>合計</span>
             <strong>{estimate === undefined ? "—" : money(estimate)}</strong>
           </div>
         )}

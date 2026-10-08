@@ -404,31 +404,31 @@ export default function App() {
       return (
         <div className="inventory-row" key={m.id}>
           <div>
-            <Stack direction="row" sx={{ alignItems: "center" }}>
-              <strong>{m.name}</strong>
-              <IconButton
-                type="button"
-                disabled={busy}
-                aria-label={`${m.name}を編集`}
-                title="料理を編集"
-                onClick={() => {
-                  setEditingPrepared(m);
-                  setNotice("");
-                }}
-                sx={{ width: 44, height: 44, flexShrink: 0 }}
-              >
-                <SvgIcon fontSize="small">
-                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
-                </SvgIcon>
-              </IconButton>
-            </Stack>
+            <strong>{m.name}</strong>
             <p className="hint">
               <span className="inventory-kind">料理</span> · 作った日{" "}
               {dateLabel(m.date)}
             </p>
           </div>
-          <div className="numeric">
-            <strong>{number(remaining)}食分</strong>
+          <div className="inventory-actions">
+            <div className="numeric">
+              <strong>{number(remaining)}食分</strong>
+            </div>
+            <IconButton
+              type="button"
+              disabled={busy}
+              aria-label={`${m.name}を編集`}
+              title="料理を編集"
+              onClick={() => {
+                setEditingPrepared(m);
+                setNotice("");
+              }}
+              sx={{ width: 44, height: 44, flexShrink: 0 }}
+            >
+              <SvgIcon fontSize="small">
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+              </SvgIcon>
+            </IconButton>
           </div>
         </div>
       );
