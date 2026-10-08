@@ -26,6 +26,8 @@ export function UsedItems({
   batches = [],
   editing,
   itemLabel = "使ったもの",
+  minimumRows = 1,
+  addLabel = "＋ もう1品追加",
 }: {
   state: State;
   rows: Draft[];
@@ -34,6 +36,8 @@ export function UsedItems({
   batches?: Cooking[];
   editing?: { usages: Usage[] };
   itemLabel?: string;
+  minimumRows?: number;
+  addLabel?: string;
 }) {
   const update = (key: string, changes: Partial<Draft>) =>
     setRows(rows.map((r) => (r.key === key ? { ...r, ...changes } : r)));
@@ -153,7 +157,7 @@ export function UsedItems({
               type="button"
               aria-label={`${itemLabel}${index + 1}を削除`}
               title="削除"
-              disabled={rows.length === 1}
+              disabled={rows.length <= minimumRows}
               onClick={() => setRows(rows.filter((r) => r.key !== row.key))}
               sx={{ width: 44, height: 44 }}
             >
@@ -180,7 +184,7 @@ export function UsedItems({
         disabled={rows.length >= available.length + batches.length}
         onClick={() => setRows([...rows, draft()])}
       >
-        ＋ もう1品追加
+        {addLabel}
       </Button>
     </>
   );

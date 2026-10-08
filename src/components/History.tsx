@@ -107,9 +107,9 @@ export function History({
                       {dateLabel(m.date)} · {m.kind}
                     </strong>
                     <span>
-                      {m.direct
+                      {m.direct && !m.usages.length && !m.prepared?.length
                         ? "外食など"
-                        : `${m.usages.length + (m.prepared?.length ?? 0)}品`}
+                        : `${m.usages.length + (m.prepared?.length ?? 0) + (m.direct ? 1 : 0)}品`}
                     </span>
                     <strong className="numeric">{money(mealCost(m))}</strong>
                   </summary>

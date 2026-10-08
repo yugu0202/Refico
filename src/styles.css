@@ -269,8 +269,7 @@ label .amount-input select {
   grid-template-columns: minmax(0, 1fr) 105px;
   gap: 8px;
 }
-.entry-form .form-fields > .text-button,
-.inventory-meal-fields > .text-button {
+.entry-form .form-fields > .text-button {
   display: block;
   margin: -8px 0 22px;
 }
@@ -297,10 +296,13 @@ label .amount-input select {
   gap: 16px;
   margin-top: 20px;
 }
-.direct-meal-form .form-footer {
-  margin-top: 20px;
-  padding-top: 0;
-  border-top: 0;
+.direct-meal-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.direct-meal-heading h2 {
+  margin: 0;
 }
 .meal-note {
   white-space: pre-wrap;

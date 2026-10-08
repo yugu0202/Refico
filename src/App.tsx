@@ -727,11 +727,11 @@ export default function App() {
                         <summary>
                           <strong>{meal.kind}</strong>
                           <span>
-                            {meal.direct
+                            {meal.direct &&
+                            !meal.usages.length &&
+                            !meal.prepared?.length
                               ? "外食など"
-                              : meal.prepared?.length
-                                ? "料理"
-                                : `${meal.usages.length}食材`}
+                              : `${meal.usages.length + (meal.prepared?.length ?? 0) + (meal.direct ? 1 : 0)}品`}
                           </span>
                           <strong className="numeric">
                             {money(mealCost(meal))}

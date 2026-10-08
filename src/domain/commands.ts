@@ -30,6 +30,13 @@ const purchase = z
     date,
   })
   .strict();
+const directCost = z
+  .object({
+    cost: z.number().int().min(0).max(100000000),
+    place: z.string().trim().max(100),
+    note: z.string().trim().max(500),
+  })
+  .strict();
 const inventoryMeal = z
   .object({
     source: z.literal("inventory").optional(),
@@ -49,6 +56,7 @@ const inventoryMeal = z
     prepared: z
       .array(z.object({ batchId: id, quantity: positive }).strict())
       .max(100),
+    direct: directCost.optional(),
   })
   .strict();
 const cooking = z
@@ -73,9 +81,7 @@ const meal = z.union([
       source: z.literal("direct"),
       date,
       kind: z.enum(["朝食", "昼食", "夕食", "その他"]),
-      cost: z.number().int().min(0).max(100000000),
-      place: z.string().trim().max(100),
-      note: z.string().trim().max(500),
+      ...directCost.shape,
     })
     .strict(),
 ]);
@@ -211,7 +217,7 @@ export function applyCommand(state: State, command: Command): State {
             place: m.place,
             note: m.note,
           })
-        : recordMeal(state, m.date, m.kind, m.inputs, m.prepared);
+        : recordMeal(state, m.date, m.kind, m.inputs, m.prepared, m.direct);
     }
     case "meal.update": {
       const m = command.input;
@@ -228,6 +234,7 @@ export function applyCommand(state: State, command: Command): State {
         m.kind,
         m.inputs,
         m.prepared,
+        m.direct,
       );
     }
     case "stock.adjust":
