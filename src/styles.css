@@ -382,13 +382,12 @@ label .amount-input select {
 }
 .unit-row {
   display: grid;
-  grid-template-columns: 1fr auto 100px auto auto;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) 44px;
+  align-items: center;
   gap: 8px;
   margin-bottom: 12px;
 }
 .unit-row > span {
-  padding-bottom: 12px;
   font-size: 12px;
 }
 .meal-row {
@@ -528,13 +527,6 @@ label .amount-input select {
   .ingredient > .MuiFormControl-root:not(:first-child),
   .ingredient > .amount-input {
     grid-column: 1 / -1;
-  }
-  .unit-row {
-    grid-template-columns: minmax(0, 1fr) auto 80px auto;
-  }
-  .unit-row button {
-    grid-column: 1 / -1;
-    justify-self: end;
   }
   .inset {
     padding: 16px;
@@ -804,4 +796,23 @@ label .amount-input select {
 }
 .help-example td {
   text-align: right;
+}
+
+.unit-row-single {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+.stock-unit-field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 16px 0;
+}
+.stock-unit-field .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+.stock-unit-field .MuiToggleButton-root {
+  min-width: 64px;
+  min-height: 44px;
 }

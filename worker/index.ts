@@ -126,7 +126,13 @@ export default {
         if (
           !request.headers.get("content-type")?.startsWith("application/json")
         )
-          return json({ error: "JSON形式で送信してください" }, 415);
+          return json(
+            {
+              error:
+                "送信内容を読み取れませんでした。再読み込みしてからお試しください",
+            },
+            415,
+          );
         const raw = await request.text();
         if (new TextEncoder().encode(raw).length > 4096)
           return json({ error: "入力が大きすぎます" }, 413);
@@ -203,7 +209,13 @@ export default {
         if (
           !request.headers.get("content-type")?.startsWith("application/json")
         )
-          return json({ error: "JSON形式で送信してください" }, 415);
+          return json(
+            {
+              error:
+                "送信内容を読み取れませんでした。再読み込みしてからお試しください",
+            },
+            415,
+          );
         if (Number(request.headers.get("content-length")) > 65536)
           return json({ error: "入力が大きすぎます" }, 413);
         const raw = await request.text();
@@ -228,7 +240,13 @@ export default {
         const fingerprint = JSON.stringify({ revision, command });
         const oldReceipt = await receipt(db, spaceId, requestId);
         if (oldReceipt && oldReceipt.fingerprint !== fingerprint)
-          return json({ error: "同じ送信IDで異なる内容は保存できません" }, 409);
+          return json(
+            {
+              error:
+                "送信内容が変わりました。最新の内容を確認して、もう一度保存してください",
+            },
+            409,
+          );
         const snapshot = await loadSnapshot(db, spaceId);
         if (oldReceipt)
           return json({
@@ -239,7 +257,7 @@ export default {
           return json(
             {
               error:
-                "別の操作で更新されています。再読み込みしてから保存してください",
+                "他の操作で記録が更新されました。最新の内容を確認して、もう一度保存してください",
               code: "revision_conflict",
             },
             409,
@@ -285,7 +303,7 @@ export default {
             return json(
               {
                 error:
-                  "別の操作で更新されています。再読み込みしてから保存してください",
+                  "他の操作で記録が更新されました。最新の内容を確認して、もう一度保存してください",
                 code: "revision_conflict",
               },
               409,

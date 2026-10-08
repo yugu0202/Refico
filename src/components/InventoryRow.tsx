@@ -1,4 +1,3 @@
-import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
 import SvgIcon from "@mui/material/SvgIcon";
@@ -15,13 +14,11 @@ export function InventoryRow({
   state,
   showValue = true,
   onEdit,
-  onAdjust,
 }: {
   product: Product;
   state: State;
   showValue?: boolean;
   onEdit?: () => void;
-  onAdjust?: () => void;
 }) {
   const balance = stock(state, product.id);
   const last = latestPurchase(state, product.id);
@@ -62,17 +59,6 @@ export function InventoryRow({
         <div className="numeric">
           <strong>{q}</strong>
           {showValue && <p className="hint">{money(balance.value)}</p>}
-          {onAdjust && (
-            <Button
-              type="button"
-              variant="text"
-              onClick={onAdjust}
-              aria-label={`${product.name}の在庫を調整`}
-              sx={{ display: "block", marginLeft: "auto", minWidth: 0 }}
-            >
-              在庫調整
-            </Button>
-          )}
         </div>
       </Stack>
     </div>

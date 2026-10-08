@@ -141,9 +141,9 @@ test("作り置きの作成量修正が後続の食費に反映され、消費�
         servings: 1.5,
         eatenServings: 1,
       }),
-    /残量が不足/,
+    /残量が足りません/,
   );
-  assert.throws(() => updateMeal(state, id, date, "夕食", input), /作り置き/);
+  assert.throws(() => updateMeal(state, id, date, "夕食", input), /料理/);
   assert.deepEqual(reload(next), next);
 });
 

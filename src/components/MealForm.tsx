@@ -23,9 +23,11 @@ export function MealForm({
   money,
   editing,
   onCancel,
+  onPurchase,
 }: {
   editing?: Meal;
   onCancel?: () => void;
+  onPurchase?: () => void;
   state: State;
   today: string;
   onSave: (command: Command) => Promise<void>;
@@ -188,14 +190,14 @@ export function MealForm({
         >
           <Tab
             value="inventory"
-            label="自炊"
+            label="食材・料理から"
             disabled={saving}
             id={`${sourceFieldsId}-inventory`}
             aria-controls={sourceFieldsId}
           />
           <Tab
             value="direct"
-            label="外食など"
+            label="金額を入力"
             disabled={saving}
             id={`${sourceFieldsId}-direct`}
             aria-controls={sourceFieldsId}
@@ -213,7 +215,7 @@ export function MealForm({
           />
           <TextField
             className="field"
-            label="食事"
+            label="食事の種類"
             select
             value={kind}
             slotProps={{ select: { native: true } }}
@@ -232,7 +234,7 @@ export function MealForm({
             aria-labelledby={`${sourceFieldsId}-direct`}
           >
             <TextField
-              label="金額（円）"
+              label="食事代（円）"
               required
               type="number"
               value={cost}
@@ -242,7 +244,7 @@ export function MealForm({
               onChange={(e) => setCost(e.target.value)}
             />
             <TextField
-              label="店名（任意）"
+              label="店名・購入先（任意）"
               value={place}
               slotProps={{
                 htmlInput: { maxLength: 100 },
@@ -270,23 +272,27 @@ export function MealForm({
           >
             <h2>使ったもの</h2>
             {available.length === 0 && batches.length === 0 && (
-              <p className="hint">
-                在庫がありません。購入を記録すると食材を選べます。
-              </p>
+              <div className="empty">
+                <p>使える在庫がありません。</p>
+                {onPurchase && <Button onClick={onPurchase}>購入を記録</Button>}
+                <Button onClick={() => setSource("direct")}>金額を入力</Button>
+              </div>
             )}
-            <UsedItems
-              state={state}
-              rows={rows}
-              onChange={setRows}
-              available={available}
-              batches={batches}
-              editing={editing}
-            />
+            {(available.length > 0 || batches.length > 0) && (
+              <UsedItems
+                state={state}
+                rows={rows}
+                onChange={setRows}
+                available={available}
+                batches={batches}
+                editing={editing}
+              />
+            )}
           </div>
         )}
         {source === "inventory" && (
           <div className="estimate">
-            <span>この食事の金額</span>
+            <span>この食事の食費</span>
             <strong>{estimate === undefined ? "—" : money(estimate)}</strong>
           </div>
         )}

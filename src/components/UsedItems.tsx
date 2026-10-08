@@ -180,7 +180,7 @@ export function UsedItems({
         disabled={rows.length >= available.length + batches.length}
         onClick={() => setRows([...rows, draft()])}
       >
-        ＋ 追加
+        ＋ もう1品追加
       </Button>
     </>
   );

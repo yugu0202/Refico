@@ -99,7 +99,7 @@ export function HelpPage({
                   width="520"
                   height="260"
                 />
-                <figcaption>操作箇所の図：{article.image.caption}</figcaption>
+                <figcaption>{article.image.caption}</figcaption>
               </figure>
             )}
             <section aria-labelledby="help-steps">

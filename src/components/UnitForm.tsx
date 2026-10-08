@@ -1,5 +1,5 @@
 import Button from "@mui/material/Button";
-import TextField from "@mui/material/TextField";
+import { UnitFields } from "./UnitFields";
 import { useState, useRef, type FormEvent } from "react";
 import type { Product, Unit } from "../domain/inventory";
 
@@ -37,25 +37,14 @@ export function UnitForm({
       <h2 id="unit-title">{product.name}の単位を追加</h2>
       <form onSubmit={submit}>
         <fieldset className="form-fields" disabled={saving}>
-          <TextField
-            className="field"
-            label="単位名"
+          <UnitFields
+            name={name}
+            factor={factor}
+            base={product.baseUnit}
             autoFocus
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            slotProps={{ htmlInput: { maxLength: 20 } }}
-            placeholder="合・袋・パック"
-          />
-          <TextField
-            className="field"
-            label={`1${name || "単位"}あたりの量（${product.baseUnit}）`}
-            type="number"
-            required
-            value={factor}
-            onChange={(e) => setFactor(e.target.value)}
-            slotProps={{
-              htmlInput: { inputMode: "decimal", min: "0.001", step: "0.001" },
+            onChange={(name, factor) => {
+              setName(name);
+              setFactor(factor);
             }}
           />
           {error && (
