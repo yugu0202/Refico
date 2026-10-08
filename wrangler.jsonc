@@ -5,20 +5,14 @@
   "compatibility_date": "2026-10-06",
   "preview_urls": true,
   "vars": {
-    "DB_BACKEND": "d1",
+    "DB_BACKEND": "turso",
+    "TURSO_DATABASE_URL": "libsql://refico-production-yugu0202.aws-ap-northeast-1.turso.io",
     "APP_ENV": "production",
     "AUTH_MODE": "google",
     "BETTER_AUTH_URL": "https://refico.yugu0202.net",
   },
   "compatibility_flags": ["nodejs_compat"],
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "refico",
-      "database_id": "383db856-8cc9-4d3e-8ebb-f527c09388e0",
-      "migrations_dir": "migrations",
-    },
-  ],
+  "d1_databases": [],
   "observability": {
     "enabled": true,
     "logs": {

@@ -234,7 +234,7 @@ test("Tursoは対象環境だけをmigrateし、失敗時は配信せずD1へfal
   }
 });
 
-test("リポジトリ設定は通常previewのみTursoで、dev/stagingと本番をD1に保つ", () => {
+test("リポジトリ設定は本番・dev/staging・previewで別々のTurso DBを使う", () => {
   const production = parse(
     readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
     [],
@@ -245,20 +245,28 @@ test("リポジトリ設定は通常previewのみTursoで、dev/stagingと本番
     [],
     { allowTrailingComma: true },
   );
-  assert.equal(databaseSettings(production, "production").backend, "d1");
+  assert.deepEqual(databaseSettings(production, "production"), {
+    backend: "turso",
+    url: "libsql://refico-production-yugu0202.aws-ap-northeast-1.turso.io",
+  });
   assert.deepEqual(databaseSettings(production, "preview"), {
     backend: "turso",
     url: "libsql://refico-preview-yugu0202.aws-ap-northeast-1.turso.io",
   });
   assert.deepEqual(migrationConfig(production, "preview").d1_databases, []);
   assert.deepEqual(production.previews.d1_databases, []);
-  assert.equal(
-    databaseSettings(
-      stagingPreviewConfig(production, stagingOverrides),
-      "staging",
-    ).backend,
-    "d1",
-  );
+  const staging = stagingPreviewConfig(production, stagingOverrides);
+  assert.deepEqual(databaseSettings(staging, "staging"), {
+    backend: "turso",
+    url: "libsql://refico-staging-yugu0202.aws-ap-northeast-1.turso.io",
+  });
+  assert.deepEqual(migrationConfig(production, "production").d1_databases, []);
+  assert.deepEqual(migrationConfig(staging, "staging").d1_databases, []);
+  assert.deepEqual(production.d1_databases, []);
+  assert.deepEqual(staging.previews.d1_databases, []);
+  assert.equal(production.vars.AUTH_MODE, "google");
+  assert.equal(staging.previews.vars.AUTH_MODE, "google");
+  assert.equal(production.previews.vars.AUTH_MODE, "test");
 });
 
 test("マイグレーションはTURSO_AUTH_TOKENだけを使い、子プロセス引数に秘密値を入れない", () => {

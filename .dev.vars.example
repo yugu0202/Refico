@@ -3,7 +3,8 @@ BETTER_AUTH_SECRET=replace-with-a-random-secret-of-at-least-32-characters
 GOOGLE_CLIENT_ID=replace-with-google-oauth-client-id
 GOOGLE_CLIENT_SECRET=replace-with-google-oauth-client-secret
 
-# Optional Turso backend; use a development DB, separate from production.
-# DB_BACKEND=turso
-# TURSO_DATABASE_URL=libsql://your-dev-database.turso.io
-# TURSO_AUTH_TOKEN=
+# Use a development DB, separate from production and staging.
+APP_ENV=development
+DB_BACKEND=turso
+TURSO_DATABASE_URL=libsql://your-dev-database.turso.io
+TURSO_AUTH_TOKEN=replace-with-development-database-token

@@ -16,7 +16,7 @@ Cloudflare Workers上で動作する、食材の在庫管理と1日の食費計�
 - プレビュー・開発環境では空の状態からサンプルデータを追加
 
 React + MUI + TypeScript + Vite。Cloudflare Workersが静的アセットとAPIを配信します。
-GoogleログインとD1保存に対応し、ユーザー専用のスペース単位でデータを管理します。
+GoogleログインとTurso / D1保存に対応し、ユーザー専用のスペース単位でデータを管理します。
 購入・食事履歴の編集、在庫調整、作り置き・廃棄をサーバーで計算・保存します。
 スペースへの招待・共有画面、記録削除、バーコードは未実装です。
 旧localStorageデータの移行は行いません。
@@ -45,14 +45,15 @@ MUI のテーマは src/theme.ts で管理します。
 
 ## Cloudflare Workers / Googleログイン
 
-1. 本番用とプレビュー用にD1を別々に作ります。
+1. 本番・staging・previewはそれぞれ専用のTurso DBを使います。接続先は設定済みです。
 
-```bash
-pnpm exec wrangler d1 create refico
-pnpm exec wrangler d1 create refico-preview
-```
+| 環境          | 設定                                        | Turso DB                     |
+| ------------- | ------------------------------------------- | ---------------------------- |
+| 本番          | `wrangler.jsonc` の `vars`                  | `refico-production-yugu0202` |
+| dev / staging | `wrangler.staging.jsonc` の `previews.vars` | `refico-staging-yugu0202`    |
+| 通常preview   | `wrangler.jsonc` の `previews.vars`         | `refico-preview-yugu0202`    |
 
-2. `wrangler.jsonc`のトップレベルと`previews.d1_databases`の仮IDをそれぞれのIDに置き換えます。DBバインディング名は両方`DB`です。仮IDは本番リソースを指していません。
+2. 各Worker / PreviewのSecretsとCloudflare BuildsのSecretsへ`TURSO_AUTH_TOKEN`を設定します。同じ名前を使い、対象DBへアクセスできる値をそれぞれの設定先に登録します。既存D1データのコピーは行いません。
 3. 本番公開URLをトップレベルの`vars.BETTER_AUTH_URL`に設定します。Google OAuthのコールバックURLと一致させます。プレビューは共通テストアカウントを使用するので`BETTER_AUTH_URL`とGoogle設定は不要です。
 4. Google Cloud ConsoleでOAuthクライアント（ウェブアプリケーション）を作ります。Authorized redirect URIsに`<公開URL>/api/auth/callback/google`を登録します。ローカルは`http://localhost:8787/api/auth/callback/google`。プレビューではGoogle OAuthを使用しません。
 5. `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`、`BETTER_AUTH_SECRET`をWorkerのSecretsに登録します。認証secretは`openssl rand -hex 32`などで生成します。OAuthの秘密値はコミットしません。
@@ -62,16 +63,17 @@ pnpm exec wrangler d1 create refico-preview
 pnpm exec wrangler secret put GOOGLE_CLIENT_ID
 pnpm exec wrangler secret put GOOGLE_CLIENT_SECRET
 pnpm exec wrangler secret put BETTER_AUTH_SECRET
+pnpm exec wrangler secret put TURSO_AUTH_TOKEN
 pnpm deploy
 ```
 
 ### staging（devブランチ）
 
-`dev`は既存Worker `refico`のブランチプレビューです。公開URLは`https://dev-refico.yugu0202.workers.dev`で、`wrangler.staging.jsonc`の設定を通常の`previews`へ重ね、専用D1・`APP_ENV=staging`・`AUTH_MODE=google`を使います。サンプルデータ追加は本番と同様に無効です。
+`dev`は既存Worker `refico`のブランチプレビューです。公開URLは`https://dev-refico.yugu0202.workers.dev`で、`wrangler.staging.jsonc`の設定を通常の`previews`へ重ね、専用Turso DB・`APP_ENV=staging`・`AUTH_MODE=google`を使います。サンプルデータ追加は本番と同様に無効です。
 
-Cloudflare Buildsは既存のrefico Workerで、本番ブランチ`main`、ビルドコマンド`pnpm build`、本番デプロイコマンド`pnpm deploy:worker`、プレビューデプロイコマンド`pnpm deploy:preview`にします。`WORKERS_CI_BRANCH=dev`の場合だけstaging設定を選び、それ以外のプレビューは共通テストアカウント・preview D1を使います。
+Cloudflare Buildsは既存のrefico Workerで、本番ブランチ`main`、ビルドコマンド`pnpm build`、本番デプロイコマンド`pnpm deploy:worker`、プレビューデプロイコマンド`pnpm deploy:preview`にします。`WORKERS_CI_BRANCH=dev`の場合だけstaging設定を選び、それ以外のプレビューは共通テストアカウント・preview Turso DBを使います。
 
-手動でdevプレビューへ配信する場合は、ビルド後に`pnpm deploy:staging`を実行します。staging D1へのマイグレーション後、`wrangler preview --name dev`で配信します。別Workerの作成や`--env staging`は不要です。
+手動でdevプレビューへ配信する場合は、ビルド後に`pnpm deploy:staging`を実行します。staging Turso DBへのマイグレーション後、`wrangler preview --name dev`で配信します。別Workerの作成や`--env staging`は不要です。
 
 staging用OAuthクライアントのリダイレクトURIは`https://dev-refico.yugu0202.workers.dev/api/auth/callback/google`です。初回配信後、Secretsをdevプレビューだけに登録します。本番とは別のOAuthクライアントと認証secretを使います。
 
@@ -81,15 +83,16 @@ pnpm deploy:staging
 pnpm exec wrangler preview secret put GOOGLE_CLIENT_ID --name dev
 pnpm exec wrangler preview secret put GOOGLE_CLIENT_SECRET --name dev
 pnpm exec wrangler preview secret put BETTER_AUTH_SECRET --name dev
+pnpm exec wrangler preview secret put TURSO_AUTH_TOKEN --name dev
 ```
 
 ### プレビューの共通テストアカウント
 
-`previews.vars`は`APP_ENV=preview`、`AUTH_MODE=test`に設定済みです。アプリ内のログインを省略し、プレビューDBに固定IDの共通ユーザーを作成します。同じプレビューD1を使うブランチ・URL・ブラウザでは、全員が同じスペースのデータを共有します。Cookieを削除しても保存済みデータを確認できます。Google設定・認証Secrets・AccessのAUD設定は不要です。
+`previews.vars`は`APP_ENV=preview`、`AUTH_MODE=test`に設定済みです。アプリ内のログインを省略し、プレビューDBに固定IDの共通ユーザーを作成します。同じプレビューDBを使うブランチ・URL・ブラウザでは、全員が同じスペースのデータを共有します。Cookieを削除しても保存済みデータを確認できます。Google設定・認証Secrets・AccessのAUD設定は不要です。
 
 Cloudflare Accessで対象プレビュー全体（静的アセットとAPI）を保護してください。Accessは入口の制限として利用し、アプリではAccess JWTやユーザー情報を検証しません。Access保護がないURLでは誰でも共通データを読み書きできます。本番で`AUTH_MODE=test`を指定した場合はAPIを拒否します。
 
-プレビューD1は本番と別に作成・マイグレーションしてください。以前のAccessユーザーの記録は共通アカウントへ移行しません。競合は既存のリビジョン検証で拒否します。
+プレビューTurso DBは本番と別に作成・マイグレーションしてください。以前のAccessユーザーの記録は共通アカウントへ移行しません。競合は既存のリビジョン検証で拒否します。
 
 ローカルで試す場合は別のWrangler設定で`APP_ENV=preview`、`AUTH_MODE=test`とローカルD1を指定してください。
 
@@ -97,11 +100,11 @@ Cloudflare Accessで対象プレビュー全体（静的アセットとAPI）を
 
 ### ローカル
 
-`.dev.vars.example`を`.dev.vars`にコピーし、Google OAuthの開発用クライアントと認証secretを設定します。
+`.dev.vars.example`を`.dev.vars`にコピーし、Google OAuthの開発用クライアントと認証secret、開発専用Turso DBのURL・トークンを設定します。同じURL・トークンを環境変数へ設定してマイグレーションを実行します（マイグレーションCLIは`.dev.vars`を読みません）。
 
 ```bash
 pnpm install
-pnpm db:migrate:local
+pnpm db:migrate:turso
 pnpm dev:worker
 ```
 
@@ -109,9 +112,9 @@ pnpm dev:worker
 
 ### 自動マイグレーション
 
-デプロイ用スクリプトは本番は`wrangler.jsonc`のトップレベル、通常プレビューは`previews.d1_databases`、devプレビューは`wrangler.staging.jsonc`の`previews.d1_databases`を選択します。CLI用の一時設定を生成し、未適用マイグレーションをすべて適用してから配信します。失敗時は配信を中止し、一時設定は削除します。プレビュー・stagingのDBが本番DBと同じIDの場合も拒否します。
+デプロイ用スクリプトは本番は`wrangler.jsonc`の`vars`、通常プレビューは同ファイルの`previews.vars`、devプレビューは`wrangler.staging.jsonc`の`previews.vars`を選択します。`DB_BACKEND`に応じて対象DBへ未適用マイグレーションをすべて適用してから配信します。失敗時は配信を中止し、一時設定は削除します。Tursoの場合はプレビュー・stagingの接続先が本番と同じホストなら拒否し、D1の場合は本番と同じDB IDなら拒否します。
 
-`pnpm deploy`はビルド・本番マイグレーション・本番配信を行います。Cloudflare Buildsではビルドコマンドを`pnpm build`、本番デプロイコマンドを`pnpm deploy:worker`、プレビューデプロイコマンドを`pnpm deploy:preview`にします。ビルド用APIトークンには対象DBのD1編集権限が必要です。DashboardでSQLを手動適用せず、Wranglerの`d1_migrations`で適用履歴を管理してください。
+`pnpm deploy`はビルド・本番マイグレーション・本番配信を行います。Cloudflare Buildsではビルドコマンドを`pnpm build`、本番デプロイコマンドを`pnpm deploy:worker`、プレビューデプロイコマンドを`pnpm deploy:preview`にします。Tursoではビルド用Secretの`TURSO_AUTH_TOKEN`でマイグレーションを実行し、`refico_migrations`で適用履歴を管理します。D1を選ぶ場合はビルド用APIトークンに対象DBのD1編集権限が必要で、Wranglerの`d1_migrations`で履歴を管理します。
 
 ### Workers Builds
 
@@ -160,7 +163,7 @@ Better Authの署名付きセッションCookieを5分間キャッシュしま�
 
 ### Tursoを使う場合
 
-通常のブランチpreviewは`refico-preview-yugu0202`のTurso DBを使用します。dev/stagingと本番はD1です。previewのD1データは自動移行しません。
+本番は`refico-production-yugu0202`、dev/stagingは`refico-staging-yugu0202`、通常のブランチpreviewは`refico-preview-yugu0202`のTurso DBを使用します。各環境のD1データは自動移行しません。
 
 `DB_BACKEND`を`d1`（既定）または`turso`にすると、在庫・スペース・招待・Better Authを同じバックエンドへ切り替えられます。Tursoを選んだ状態で接続設定が欠けたり通信に失敗した場合、D1にはフォールバックしません。Concurrent Writesは使用せず、snapshotの一括読み取り・更新は通常のトランザクションで実行します。
 
