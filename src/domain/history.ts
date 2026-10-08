@@ -49,7 +49,7 @@ export function updateCooking(
   inputs: MealInput[],
 ): State {
   const old = state.cookings.find((c) => c.id === id);
-  if (!old) throw new Error("作り置きが見つかりません");
+  if (!old) throw new Error("料理が見つかりません");
   if (
     date === old.date &&
     servings === old.servings &&

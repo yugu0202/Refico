@@ -37,7 +37,6 @@ import {
 import { ProductForm } from "./components/ProductForm";
 import { PurchaseForm } from "./components/PurchaseForm";
 import { MealForm } from "./components/MealForm";
-import { StockAdjustmentForm } from "./components/StockAdjustmentForm";
 import { CostCalendar } from "./components/CostCalendar";
 import { InventoryRow } from "./components/InventoryRow";
 import { money, number, localDate, dateLabel } from "./format";
@@ -140,9 +139,7 @@ export default function App() {
         setSpaceSettings(null);
         setFormVersion((v) => v + 1);
         setEditingProduct(null);
-        setAdjustingProduct(null);
         setEditingPrepared(null);
-        setAdjustingPrepared(null);
         setSearch("");
         setNotice("");
       }
@@ -220,14 +217,8 @@ export default function App() {
   const [storageError, setStorageError] = useState("");
   const [notice, setNotice] = useState("");
   const [noticeVersion, setNoticeVersion] = useState(0);
-  const [adjustingPrepared, setAdjustingPrepared] = useState<Cooking | null>(
-    null,
-  );
   const [editingPrepared, setEditingPrepared] = useState<Cooking | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(
-    null,
-  );
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const selectedDate = selectedDay ?? today;
   const [formVersion, setFormVersion] = useState(0);
@@ -358,10 +349,8 @@ export default function App() {
   function selectPage(next: Page) {
     setPage(next);
     setReopenMenu(Boolean(window.history.state?.reficoMenuOpen));
-    setAdjustingPrepared(null);
     setEditingPrepared(null);
     setEditingProduct(null);
-    setAdjustingProduct(null);
     setNotice("");
   }
   function leaveHelp() {
@@ -415,44 +404,31 @@ export default function App() {
       return (
         <div className="inventory-row" key={m.id}>
           <div>
-            <Stack direction="row" sx={{ alignItems: "center" }}>
-              <strong>{m.name}</strong>
-              <IconButton
-                type="button"
-                disabled={busy}
-                aria-label={`${m.name}を編集`}
-                title="料理を編集"
-                onClick={() => {
-                  setEditingPrepared(m);
-                  setNotice("");
-                }}
-                sx={{ width: 44, height: 44, flexShrink: 0 }}
-              >
-                <SvgIcon fontSize="small">
-                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
-                </SvgIcon>
-              </IconButton>
-            </Stack>
+            <strong>{m.name}</strong>
             <p className="hint">
               <span className="inventory-kind">料理</span> · 作った日{" "}
               {dateLabel(m.date)}
             </p>
           </div>
-          <div className="numeric">
-            <strong>{number(remaining)}食分</strong>
-            <Button
+          <div className="inventory-actions">
+            <div className="numeric">
+              <strong>{number(remaining)}食分</strong>
+            </div>
+            <IconButton
               type="button"
-              variant="text"
               disabled={busy}
-              aria-label={`${m.name}の在庫を調整`}
+              aria-label={`${m.name}を編集`}
+              title="料理を編集"
               onClick={() => {
-                setAdjustingPrepared(m);
+                setEditingPrepared(m);
                 setNotice("");
               }}
-              sx={{ display: "block", marginLeft: "auto", minWidth: 0 }}
+              sx={{ width: 44, height: 44, flexShrink: 0 }}
             >
-              在庫調整
-            </Button>
+              <SvgIcon fontSize="small">
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+              </SvgIcon>
+            </IconButton>
           </div>
         </div>
       );
@@ -465,14 +441,6 @@ export default function App() {
         product={product}
         state={state}
         showValue={false}
-        onAdjust={
-          page === "inventory"
-            ? () => {
-                setAdjustingProduct(product);
-                setNotice("");
-              }
-            : undefined
-        }
         onEdit={
           page === "inventory"
             ? () => {
@@ -619,32 +587,6 @@ export default function App() {
         )}
         {ready && (
           <>
-            {adjustingPrepared && (
-              <StockAdjustmentForm
-                key={adjustingPrepared.id}
-                state={state}
-                prepared={adjustingPrepared}
-                today={today}
-                onCancel={() => setAdjustingPrepared(null)}
-                onSave={async (next) => {
-                  await persist(next, "在庫を調整しました");
-                  setAdjustingPrepared(null);
-                }}
-              />
-            )}
-            {adjustingProduct && (
-              <StockAdjustmentForm
-                key={adjustingProduct.id}
-                state={state}
-                product={adjustingProduct}
-                today={today}
-                onCancel={() => setAdjustingProduct(null)}
-                onSave={async (next) => {
-                  await persist(next, "在庫を調整しました");
-                  setAdjustingProduct(null);
-                }}
-              />
-            )}
             {editingPrepared && (
               <Dialog
                 open
@@ -671,9 +613,11 @@ export default function App() {
                 <DialogTitle id="prepared-form-title">料理を編集</DialogTitle>
                 <DialogContent sx={{ "&&": { paddingTop: 1.5 } }}>
                   <PreparedForm
+                    onPurchase={() => navigate("purchase")}
                     state={state}
                     today={today}
                     editing={editingPrepared}
+                    showCost={false}
                     onCancel={() => {
                       setEditingPrepared(null);
                     }}
@@ -711,14 +655,17 @@ export default function App() {
                     embedded
                     key={editingProduct.id}
                     product={editingProduct}
+                    state={state}
+                    today={today}
                     onSave={saveProduct}
-                    onSaveChanges={async (name, units) => {
+                    onSaveChanges={async (name, units, adjustment) => {
                       await persist(
                         {
                           type: "product.update",
                           id: editingProduct.id,
                           name,
                           units,
+                          adjustment,
                         },
                         `${name.trim()}を更新しました`,
                       );
@@ -739,7 +686,7 @@ export default function App() {
                     <p className="daily-total">{money(total)}</p>
                   </div>
                   <div className="month-total">
-                    <p className="eyebrow">今月合計</p>
+                    <p className="eyebrow">今月の食費</p>
                     <p>{money(monthTotal)}</p>
                   </div>
                 </section>
@@ -763,7 +710,9 @@ export default function App() {
                     </Button>
                   </div>
                   {meals.length === 0 ? (
-                    <p className="empty">まだ食事の記録がありません。</p>
+                    <p className="empty">
+                      この日の食事はまだ記録されていません。
+                    </p>
                   ) : (
                     meals.map((meal) => (
                       <details
@@ -884,7 +833,7 @@ export default function App() {
                 </section>
                 {(state.preparedAdjustments ?? []).length > 0 && (
                   <section>
-                    <h2>料理の在庫調整履歴</h2>
+                    <h2>料理の残量修正履歴</h2>
                     {[...(state.preparedAdjustments ?? [])]
                       .reverse()
                       .map((a) => (
@@ -911,7 +860,7 @@ export default function App() {
                 )}
                 {(state.adjustments ?? []).length > 0 && (
                   <section>
-                    <h2>在庫調整履歴</h2>
+                    <h2>食材の残量修正履歴</h2>
                     {[...(state.adjustments ?? [])].reverse().map((a) => {
                       const product = state.products.find(
                         (p) => p.id === a.productId,
@@ -972,6 +921,7 @@ export default function App() {
             )}
             <div hidden={page !== "cooking"}>
               <PreparedForm
+                onPurchase={() => navigate("purchase")}
                 key={cookingVersion}
                 state={state}
                 today={today}
@@ -994,6 +944,7 @@ export default function App() {
             </div>
             <div hidden={page !== "meal"}>
               <MealForm
+                onPurchase={() => navigate("purchase")}
                 key={mealVersion}
                 state={state}
                 today={today}

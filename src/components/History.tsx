@@ -50,7 +50,7 @@ export function History({
   const meal = meals.find((m) => m.id === editingId);
   const cooking = cookings.find((c) => c.id === editingId);
   const save = async (next: Command) => {
-    await onSave(next, `${title}を更新しました`);
+    await onSave(next, `${kind}の記録を更新しました`);
     setEditingId(null);
   };
   return (
@@ -64,7 +64,7 @@ export function History({
               setPage(0);
             }}
           >
-            {all ? "最近の履歴" : "すべて見る"}
+            {all ? "最新5件を表示" : "すべて見る"}
           </Button>
         )}
       </div>

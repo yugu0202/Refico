@@ -58,7 +58,7 @@ test("スペース解決は所属を確認し、初回だけ作成し、未所�
     const liveId = await tokenHash(live.token);
     await manageSpace(db, "a", a, { type: "revoke", invitationId: liveId });
     await manageSpace(db, "a", a, { type: "revoke", invitationId: liveId });
-    await assert.rejects(invitationInfo(db, live.token, "c"), /無効/);
+    await assert.rejects(invitationInfo(db, live.token, "c"), /利用できません/);
   } finally {
     sqlite.close();
   }
@@ -92,7 +92,7 @@ test("招待は単一利用・既存記録保持・現在スペース切替、�
     assert.equal((await listSpaces(db, "b")).length, 2);
     assert.equal((await loadSnapshot(db, b)).revision, 1);
     await acceptInvitation(db, invite.token, "b"); // Lost response retry is safe.
-    await assert.rejects(acceptInvitation(db, invite.token, "c"), /使用済み/);
+    await assert.rejects(acceptInvitation(db, invite.token, "c"), /利用できません/);
     await assert.rejects(createInvitation(db, "b", a), /オーナー/);
     await assert.rejects(switchSpace(db, "c", a), /所属/);
     await assert.rejects(
@@ -116,13 +116,13 @@ test("期限切れ・無効化・メンバー削除後の招待と更新を拒�
     const b = await personalSpace(db, "b");
     const expired = await createInvitation(db, "a", a);
     sqlite.prepare("UPDATE space_invitations SET expires_at=0").run();
-    await assert.rejects(acceptInvitation(db, expired.token, "b"), /期限切れ/);
+    await assert.rejects(acceptInvitation(db, expired.token, "b"), /利用できません/);
     const revoked = await createInvitation(db, "a", a);
     await manageSpace(db, "a", a, {
       type: "revoke",
       invitationId: await tokenHash(revoked.token),
     });
-    await assert.rejects(acceptInvitation(db, revoked.token, "b"), /無効/);
+    await assert.rejects(acceptInvitation(db, revoked.token, "b"), /利用できません/);
     const invite = await createInvitation(db, "a", a);
     await Promise.allSettled([
       acceptInvitation(db, invite.token, "b"),
@@ -351,7 +351,7 @@ test("D1ランタイムでも招待のclaim・所属・選択を一括保存し�
       type: "revoke",
       invitationId: await tokenHash(revoked.token),
     });
-    await assert.rejects(invitationInfo(db, revoked.token, "b"), /無効/);
+    await assert.rejects(invitationInfo(db, revoked.token, "b"), /利用できません/);
     const invite = await createInvitation(db, "a", a);
     await acceptInvitation(db, invite.token, "b");
     assert.equal(await activeSpace(db, "b", b), a);

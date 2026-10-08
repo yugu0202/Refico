@@ -1,16 +1,20 @@
 import { useState, useRef, type FormEvent } from "react";
 import Button from "@mui/material/Button";
+import InputAdornment from "@mui/material/InputAdornment";
+import { RemainingFields } from "./RemainingFields";
 import TextField from "@mui/material/TextField";
 import { UsedItems, type Draft } from "./UsedItems";
 import {
   cookingCost,
   recordCooking,
   stock,
+  preparedRemaining,
   type Cooking,
   type State,
 } from "../domain/inventory";
 import { updateCooking } from "../domain/history";
 import type { Command } from "../domain/commands";
+import { updateCookingInventory } from "../domain/inventory-edit";
 import { money } from "../format";
 export function PreparedForm({
   state,
@@ -18,6 +22,7 @@ export function PreparedForm({
   editing,
   onSave,
   onCancel,
+  onPurchase,
   autoFocus = true,
   showCost = true,
 }: {
@@ -26,6 +31,7 @@ export function PreparedForm({
   editing?: Cooking;
   onSave: (command: Command) => Promise<void>;
   onCancel?: () => void;
+  onPurchase?: () => void;
   autoFocus?: boolean;
   showCost?: boolean;
 }) {
@@ -34,6 +40,10 @@ export function PreparedForm({
   const [servings, setServings] = useState(
     editing ? String(editing.servings) : "",
   );
+  const current = editing ? preparedRemaining(state, editing) : 0;
+  const lastServings = useRef(editing?.servings ?? 0);
+  const [quantity, setQuantity] = useState(String(current));
+  const [reason, setReason] = useState("");
   const [rows, setRows] = useState<Draft[]>(
     editing
       ? editing.usages.map((u) => ({
@@ -68,6 +78,27 @@ export function PreparedForm({
         unit: r.unit,
       })),
   });
+  const command = (): Command =>
+    editing
+      ? {
+          type: "prepared.update",
+          id: editing.id,
+          input: input(),
+          adjustment: {
+            quantity: quantity.trim() ? Number(quantity) : NaN,
+            date: today,
+            reason,
+          },
+        }
+      : { type: "prepared.create", input: input() };
+  const available = state.products.filter(
+    (p) =>
+      !!editing ||
+      stock(state, p.id).quantity > 0 ||
+      rows.some((r) => r.productId === p.id),
+  );
+  let expected = current;
+  let recalculate = false;
   let estimate: number | undefined;
   let estimateError = "";
   if (
@@ -78,9 +109,25 @@ export function PreparedForm({
   ) {
     try {
       const c = input();
-      const next = editing
+      const revised = editing
         ? updateCooking(state, editing.id, c.date, c.name, c.servings, c.inputs)
-        : recordCooking(state, c.date, c.name, c.servings, c.inputs);
+        : undefined;
+      if (revised && editing) {
+        expected = preparedRemaining(
+          revised,
+          revised.cookings.find((c) => c.id === editing.id)!,
+        );
+        recalculate =
+          c.servings !== editing.servings ||
+          Number(quantity) > expected ||
+          cookingCost(revised.cookings.find((c) => c.id === editing.id)!) !==
+            cookingCost(editing);
+      }
+      const cmd = command();
+      const next =
+        cmd.type === "prepared.update"
+          ? updateCookingInventory(state, cmd.id, cmd.input, cmd.adjustment)
+          : recordCooking(state, c.date, c.name, c.servings, c.inputs);
       estimate = cookingCost(
         editing
           ? next.cookings.find((c) => c.id === editing.id)!
@@ -97,11 +144,7 @@ export function PreparedForm({
     setSaving(true);
     setError("");
     try {
-      await onSave(
-        editing
-          ? { type: "prepared.update", id: editing.id, input: input() }
-          : { type: "prepared.create", input: input() },
-      );
+      await onSave(command());
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存できませんでした");
     } finally {
@@ -133,33 +176,81 @@ export function PreparedForm({
           />
           <TextField
             className="field"
-            label="作った量（食分）"
+            label="作った食数"
             type="number"
             required
             value={servings}
-            onChange={(e) => setServings(e.target.value)}
-            slotProps={{ htmlInput: { min: 0.001, step: 0.001 } }}
+            onChange={(e) => {
+              const value = e.target.value;
+              // Keep the eaten/discarded count when changing the original yield.
+              if (
+                editing &&
+                value.trim() &&
+                quantity.trim() &&
+                Number.isFinite(Number(value))
+              ) {
+                setQuantity(
+                  String(
+                    Math.round(
+                      (Number(quantity) +
+                        Number(value) -
+                        lastServings.current) *
+                        1000,
+                    ) / 1000,
+                  ),
+                );
+                lastServings.current = Number(value);
+              }
+              setServings(value);
+            }}
+            slotProps={{
+              htmlInput: { min: 0.001, step: 0.001 },
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">食分</InputAdornment>
+                ),
+              },
+            }}
           />
         </div>
-        <h2>使った食材</h2>
-        {state.products.length === 0 && (
-          <p className="hint">
-            在庫がありません。購入を記録すると食材を選べます。
-          </p>
+        {editing && (
+          <>
+            <RemainingFields
+              current={current}
+              quantity={quantity}
+              unit="食分"
+              reason={reason}
+              onQuantity={setQuantity}
+              onReason={setReason}
+              expected={expected}
+            />
+            {recalculate && (
+              <p className="hint" role="status">
+                1食分あたりの食費と、過去の食費が再計算されます。
+              </p>
+            )}
+            {Number(quantity) < expected && quantity.trim() && (
+              <p className="hint">減らした分は廃棄として記録します。</p>
+            )}
+          </>
         )}
-        <UsedItems
-          state={state}
-          rows={rows}
-          onChange={setRows}
-          available={state.products.filter(
-            (p) =>
-              !!editing ||
-              stock(state, p.id).quantity > 0 ||
-              rows.some((r) => r.productId === p.id),
-          )}
-          editing={editing}
-          itemLabel="食材"
-        />
+        <h2>使った食材</h2>
+        {available.length === 0 && (
+          <div className="empty">
+            <p>使える食材がありません。</p>
+            {onPurchase && <Button onClick={onPurchase}>購入を記録</Button>}
+          </div>
+        )}
+        {available.length > 0 && (
+          <UsedItems
+            state={state}
+            rows={rows}
+            onChange={setRows}
+            available={available}
+            editing={editing}
+            itemLabel="食材"
+          />
+        )}
         {showCost && (
           <div className="estimate">
             <span>料理の金額</span>

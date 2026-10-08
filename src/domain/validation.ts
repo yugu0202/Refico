@@ -8,6 +8,6 @@ export function parseState(raw: string): State {
     !Array.isArray(state.recordOrder) ||
     state.meals.some((m) => "batch" in m)
   )
-    throw new Error("保存データを読み込めません");
+    throw new Error("記録を読み込めませんでした。再読み込みしても解消しない場合は、データの確認が必要です。");
   return fromLedger(parseLedger(JSON.stringify(toLedger(state))));
 }

@@ -184,7 +184,7 @@ test("不正な金額・長い任意欄・在庫入力の混在を保存しな�
   for (const cost of [-1, 0.5, 100000001]) {
     const invalid = structuredClone(state);
     invalid.meals[0].direct!.cost = cost;
-    assert.throws(() => parseState(JSON.stringify(invalid)), /保存データ/);
+    assert.throws(() => parseState(JSON.stringify(invalid)), /記録を読み込めません/);
   }
   const mixed = structuredClone(state);
   (mixed.meals[0] as unknown as { batch: unknown }).batch = {
@@ -192,5 +192,5 @@ test("不正な金額・長い任意欄・在庫入力の混在を保存しな�
     servings: 2,
     eatenServings: 1,
   };
-  assert.throws(() => parseState(JSON.stringify(mixed)), /保存データ/);
+  assert.throws(() => parseState(JSON.stringify(mixed)), /記録を読み込めません/);
 });
