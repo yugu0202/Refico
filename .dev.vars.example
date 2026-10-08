@@ -2,3 +2,9 @@ BETTER_AUTH_URL=http://localhost:8787
 BETTER_AUTH_SECRET=replace-with-a-random-secret-of-at-least-32-characters
 GOOGLE_CLIENT_ID=replace-with-google-oauth-client-id
 GOOGLE_CLIENT_SECRET=replace-with-google-oauth-client-secret
+
+# Use a development DB, separate from production and staging.
+APP_ENV=development
+DB_BACKEND=turso
+TURSO_DATABASE_URL=libsql://your-dev-database.turso.io
+TURSO_AUTH_TOKEN=replace-with-development-database-token

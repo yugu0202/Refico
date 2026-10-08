@@ -12,9 +12,9 @@ import {
   recordPreparedAdjustment,
   updateProductUnits,
   type State,
-} from "./inventory.ts";
-import { updatePurchase, updateMeal } from "./history.ts";
-import { parseState } from "./validation.ts";
+} from "./ledger.ts";
+import { updatePurchase, updateMeal } from "./ledger-history.ts";
+import { parseState } from "./ledger-validation.ts";
 
 const date = "2026-10-01";
 function setup() {

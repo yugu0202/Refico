@@ -17,7 +17,10 @@ export function deploymentTarget(target, branch) {
 }
 
 export function stagingPreviewConfig(config, overrides) {
-  if (!overrides?.previews?.d1_databases?.length)
+  if (
+    overrides?.previews?.vars?.DB_BACKEND !== "turso" &&
+    !overrides?.previews?.d1_databases?.length
+  )
     throw new Error("No D1 databases configured for staging");
   return {
     ...config,
@@ -25,9 +28,56 @@ export function stagingPreviewConfig(config, overrides) {
   };
 }
 
+export function databaseSettings(config, target) {
+  if (!["production", "preview", "staging"].includes(target))
+    throw new Error("Target must be production, preview or staging");
+  // Preview vars are a separate namespace, not inherited production values.
+  const vars = (target === "production" ? config : config.previews)?.vars ?? {};
+  const backend = vars.DB_BACKEND ?? "d1";
+  if (!["d1", "turso"].includes(backend)) throw new Error("Invalid DB_BACKEND");
+  if (backend === "turso") {
+    if (!vars.TURSO_DATABASE_URL)
+      throw new Error("TURSO_DATABASE_URL is required");
+    const host = (url) => new URL(url.replace(/^libsql:/, "https:")).host;
+    if (
+      target !== "production" &&
+      config.vars?.TURSO_DATABASE_URL &&
+      host(vars.TURSO_DATABASE_URL) === host(config.vars.TURSO_DATABASE_URL)
+    )
+      throw new Error(`${target} must not migrate a production database`);
+  }
+  return { backend, url: vars.TURSO_DATABASE_URL };
+}
+
+export function runTursoMigrations(
+  target,
+  url,
+  directory,
+  environment = process.env,
+  run = spawnSync,
+) {
+  // Use the same credential name as the Worker runtime. The target config
+  // selects the database URL; credentials stay out of configs and arguments.
+  const token = environment.TURSO_AUTH_TOKEN;
+  if (!token) throw new Error("TURSO_AUTH_TOKEN is required for migrations");
+  const result = run(
+    process.execPath,
+    [join(directory, "scripts/migrate-turso.mjs")],
+    {
+      cwd: directory,
+      stdio: "inherit",
+      env: { ...environment, TURSO_DATABASE_URL: url, TURSO_AUTH_TOKEN: token },
+    },
+  );
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error("Turso migrations failed");
+}
+
 export function migrationConfig(config, target, directory = root) {
   if (!["production", "preview", "staging"].includes(target))
     throw new Error("Target must be production, preview or staging");
+  if (databaseSettings(config, target).backend === "turso")
+    return { d1_databases: [] };
   const databases = (target === "production" ? config : config.previews)
     ?.d1_databases;
   if (!Array.isArray(databases) || !databases.length)
@@ -49,13 +99,21 @@ export function migrationConfig(config, target, directory = root) {
   };
 }
 
-export function deploy(target, config, run, directory = root) {
+export function deploy(
+  target,
+  config,
+  run,
+  directory = root,
+  migrate = runTursoMigrations,
+) {
+  const settings = databaseSettings(config, target);
   const migrations = migrationConfig(config, target, directory);
   const temporaryRoot = join(directory, ".wrangler");
   mkdirSync(temporaryRoot, { recursive: true });
   const temporary = mkdtempSync(join(temporaryRoot, "migrations-"));
   const configPath = join(temporary, "wrangler.json");
   try {
+    if (settings.backend === "turso") migrate(target, settings.url, directory);
     writeFileSync(configPath, JSON.stringify(migrations));
     for (const db of migrations.d1_databases) {
       run([

@@ -1,14 +1,15 @@
+import { fromLedger, toLedger, type State } from "./inventory.ts";
 import {
   emptyState,
   cookingCost,
   portionCost,
   toBase,
-  type State,
+  type State as LedgerState,
   type BaseUnit,
   type InputAmount,
   type Usage,
   type Meal,
-} from "./inventory.ts";
+} from "./ledger.ts";
 // These are the server's persistent records. State is a calculation/UI projection;
 // array positions and synthetic purchases never cross the persistence boundary.
 type Ordered = { id: string; sequence: number };
@@ -110,7 +111,7 @@ export function emptyModel(): Model {
     modelTables.map((t) => [t, []]),
   ) as unknown as Model;
 }
-export function toModel(state: State, prior = emptyModel()): Model {
+function ledgerToModel(state: LedgerState, prior = emptyModel()): Model {
   const model = emptyModel();
   const sequences = new Map(
     [
@@ -266,7 +267,7 @@ export function toModel(state: State, prior = emptyModel()): Model {
   );
   return model;
 }
-export function toView(model: Model): State {
+function modelToLedger(model: Model): LedgerState {
   const state = emptyState();
   state.products = model.products.map((p) => ({
     ...p,
@@ -362,4 +363,17 @@ export function toView(model: Model): State {
       mealCount: viewMeals.filter((m) => m.sequence < sequence).length,
     }));
   return state;
+}
+
+// The persisted schema already separates cooking and eating. The public view
+// does too; the private ledger only preserves the proven allocation/replay engine.
+export function toView(model: Model): State {
+  return fromLedger(modelToLedger(model));
+}
+export function toModel(state: State, prior = emptyModel()): Model {
+  const model = ledgerToModel(toLedger(state), prior);
+  for (const cooking of model.cookings)
+    cooking.kind =
+      prior.cookings.find((c) => c.id === cooking.id)?.kind ?? "その他";
+  return model;
 }

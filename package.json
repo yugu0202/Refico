@@ -17,6 +17,7 @@
     "deploy": "pnpm build && pnpm deploy:worker",
     "format": "prettier --write .",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:turso": "node scripts/migrate-turso.mjs",
     "auth:schema": "node scripts/generate-auth-schema.mjs",
     "deploy:worker": "node scripts/deploy.mjs production",
     "deploy:preview": "node scripts/deploy.mjs preview",
@@ -26,7 +27,9 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/material": "^9.4.0",
+    "@tursodatabase/serverless": "^1.4.1",
     "better-auth": "^1.7.7",
+    "kysely": "^0.29.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zod": "^4.6.5"

@@ -9,8 +9,8 @@ import {
   preparedBalance,
   dailyCosts,
   updatePreparedName,
-} from "./inventory.ts";
-import { parseState } from "./validation.ts";
+} from "./ledger.ts";
+import { parseState } from "./ledger-validation.ts";
 const date = "2026-10-06";
 function setup() {
   const product = createProduct("米", "g");

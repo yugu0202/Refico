@@ -16,19 +16,21 @@ import { DirectMealDetail } from "./components/DirectMealDetail";
 import { LoginScreen } from "./components/LoginScreen";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
-import { PreparedNameForm } from "./components/PreparedNameForm";
+import { PreparedForm } from "./components/PreparedForm";
+import DialogTitle from "@mui/material/DialogTitle";
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogContent from "@mui/material/DialogContent";
 import SvgIcon from "@mui/material/SvgIcon";
 import TextField from "@mui/material/TextField";
+import { Toast } from "./components/Toast";
 import { useEffect, useState, useRef } from "react";
 import {
   dailyCosts,
   emptyState,
   mealCost,
   preparedRemaining,
-  type Meal,
+  type Cooking,
   type State,
   type Product,
 } from "./domain/inventory";
@@ -57,6 +59,12 @@ const navigation = [
     label: "購入を記録",
     shortLabel: "購入",
     icon: "M3 9h18l-2 12H5L3 9ZM8 9l4-6 4 6M9 13v4M15 13v4",
+  },
+  {
+    id: "cooking",
+    label: "料理を作る",
+    shortLabel: "料理",
+    icon: "M6 10h12v8a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3v-8ZM4 10h16M8 7h8M12 4v3M3 13h3M18 13h3",
   },
   {
     id: "meal",
@@ -136,6 +144,7 @@ export default function App() {
         setEditingPrepared(null);
         setAdjustingPrepared(null);
         setSearch("");
+        setNotice("");
       }
       if (
         identityRef.current !== data.spaceId ||
@@ -204,12 +213,17 @@ export default function App() {
     setLoginError("");
     setStorageError("");
     setState(emptyState());
+    setNotice("");
+    setEditingPrepared(null);
     navigate("home");
   }
   const [storageError, setStorageError] = useState("");
   const [notice, setNotice] = useState("");
-  const [adjustingPrepared, setAdjustingPrepared] = useState<Meal | null>(null);
-  const [editingPrepared, setEditingPrepared] = useState<Meal | null>(null);
+  const [noticeVersion, setNoticeVersion] = useState(0);
+  const [adjustingPrepared, setAdjustingPrepared] = useState<Cooking | null>(
+    null,
+  );
+  const [editingPrepared, setEditingPrepared] = useState<Cooking | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(
     null,
@@ -217,10 +231,17 @@ export default function App() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const selectedDate = selectedDay ?? today;
   const [formVersion, setFormVersion] = useState(0);
+  const [mealVersion, setMealVersion] = useState(0);
+  const [cookingVersion, setCookingVersion] = useState(0);
   const [search, setSearch] = useState("");
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
     mainRef.current?.scrollTo({ top: 0, behavior: "instant" });
+    if (page === "meal" || page === "cooking") {
+      mainRef.current
+        ?.querySelector<HTMLHeadingElement>("h1")
+        ?.focus({ preventScroll: true });
+    }
     if (helpPage) {
       document
         .querySelector<HTMLElement>(".help-page h1")
@@ -252,11 +273,16 @@ export default function App() {
       window.removeEventListener("focus", refresh);
     };
   }, []);
+  function notify(message: string) {
+    setNotice(message);
+    if (message) setNoticeVersion((v) => v + 1);
+  }
   async function persist(command: Command, message: string) {
     if (busyRef.current)
       throw new Error("保存中です。完了してから操作してください");
     busyRef.current = true;
     setBusy(true);
+    setNotice("");
     ++loadGeneration.current;
     try {
       const next = await sendCommand(
@@ -267,8 +293,9 @@ export default function App() {
       focusRefresh.markFresh();
       revisionRef.current = next.revision;
       setState(next.state);
-      setNotice(message);
+      notify(message);
       setStorageError("");
+      return next.state;
     } catch (e) {
       if (e instanceof ApiError && (e.status === 409 || e.status === 401))
         await reload(true);
@@ -369,9 +396,7 @@ export default function App() {
       `${product.name}を追加しました`,
     );
   }
-  const meals = state.meals.filter(
-    (m) => m.date === selectedDate && (!m.batch || m.batch.eatenServings > 0),
-  );
+  const meals = state.meals.filter((m) => m.date === selectedDate);
   const costs = new Map(dailyCosts(state));
   const total = costs.get(today) ?? 0;
   const monthTotal = [...costs].reduce(
@@ -380,10 +405,10 @@ export default function App() {
     0,
   );
   const filtered = state.products.filter((p) => p.name.includes(search));
-  const prepared = state.meals.filter((m) => m.batch);
-  const filteredPrepared = prepared.filter((m) =>
-    m.batch!.name.includes(search),
+  const prepared = state.cookings.filter(
+    (c) => preparedRemaining(state, c) > 0,
   );
+  const filteredPrepared = prepared.filter((m) => m.name.includes(search));
   const preparedRows = (items: typeof prepared) =>
     items.map((m) => {
       const remaining = preparedRemaining(state, m);
@@ -391,12 +416,12 @@ export default function App() {
         <div className="inventory-row" key={m.id}>
           <div>
             <Stack direction="row" sx={{ alignItems: "center" }}>
-              <strong>{m.batch!.name}</strong>
+              <strong>{m.name}</strong>
               <IconButton
                 type="button"
                 disabled={busy}
-                aria-label={`${m.batch!.name}を編集`}
-                title="作り置きを編集"
+                aria-label={`${m.name}を編集`}
+                title="料理を編集"
                 onClick={() => {
                   setEditingPrepared(m);
                   setNotice("");
@@ -409,7 +434,7 @@ export default function App() {
               </IconButton>
             </Stack>
             <p className="hint">
-              <span className="inventory-kind">作り置き</span> · 作った日{" "}
+              <span className="inventory-kind">料理</span> · 作った日{" "}
               {dateLabel(m.date)}
             </p>
           </div>
@@ -419,7 +444,7 @@ export default function App() {
               type="button"
               variant="text"
               disabled={busy}
-              aria-label={`${m.batch!.name}の在庫を調整`}
+              aria-label={`${m.name}の在庫を調整`}
               onClick={() => {
                 setAdjustingPrepared(m);
                 setNotice("");
@@ -483,6 +508,7 @@ export default function App() {
           initialDetails={spaceSettings}
           onClose={() => setSpaceSettings(null)}
           onChanged={() => reload(true, true)}
+          onNotify={notify}
         />
       )}
       {invitation && (
@@ -496,6 +522,7 @@ export default function App() {
             await reload(true, true);
             setInvitation(null);
             window.history.replaceState(null, "", "/");
+            notify("スペースに参加しました");
           }}
         />
       )}
@@ -575,7 +602,7 @@ export default function App() {
       </nav>
       <main ref={mainRef} key={spaceId}>
         <div className="page-heading">
-          <h1>{title}</h1>
+          <h1 tabIndex={-1}>{title}</h1>
         </div>
         {storageError && (
           <p className="error" role="alert">
@@ -589,11 +616,6 @@ export default function App() {
         )}
         {ready && storageError && (
           <Button onClick={() => void reload()}>再読み込み</Button>
-        )}
-        {notice && (
-          <p className="notice" role="status">
-            {notice}
-          </p>
         )}
         {ready && (
           <>
@@ -627,11 +649,13 @@ export default function App() {
               <Dialog
                 open
                 onClose={() => {
-                  if (!busyRef.current) setEditingPrepared(null);
+                  if (!busyRef.current) {
+                    setEditingPrepared(null);
+                  }
                 }}
                 fullWidth
                 maxWidth="sm"
-                aria-labelledby="prepared-title"
+                aria-labelledby="prepared-form-title"
                 slotProps={{
                   paper: {
                     sx: {
@@ -644,20 +668,17 @@ export default function App() {
                   },
                 }}
               >
-                <DialogContent sx={{ paddingTop: 3 }}>
-                  <PreparedNameForm
-                    key={editingPrepared.id}
-                    name={editingPrepared.batch!.name}
-                    onCancel={() => setEditingPrepared(null)}
-                    onSave={async (name) => {
-                      await persist(
-                        {
-                          type: "prepared.rename",
-                          id: editingPrepared.id,
-                          name,
-                        },
-                        `${name.trim()}を更新しました`,
-                      );
+                <DialogTitle id="prepared-form-title">料理を編集</DialogTitle>
+                <DialogContent sx={{ "&&": { paddingTop: 1.5 } }}>
+                  <PreparedForm
+                    state={state}
+                    today={today}
+                    editing={editingPrepared}
+                    onCancel={() => {
+                      setEditingPrepared(null);
+                    }}
+                    onSave={async (command) => {
+                      await persist(command, "料理を更新しました");
                       setEditingPrepared(null);
                     }}
                   />
@@ -754,11 +775,9 @@ export default function App() {
                           <span>
                             {meal.direct
                               ? "外食など"
-                              : meal.batch
-                                ? meal.batch.name
-                                : meal.prepared?.length
-                                  ? "作り置き"
-                                  : `${meal.usages.length}食材`}
+                              : meal.prepared?.length
+                                ? "料理"
+                                : `${meal.usages.length}食材`}
                           </span>
                           <strong className="numeric">
                             {money(mealCost(meal))}
@@ -768,51 +787,38 @@ export default function App() {
                           {meal.direct && (
                             <DirectMealDetail direct={meal.direct} />
                           )}
-                          {meal.batch && (
-                            <div>
-                              <span>
-                                {meal.batch.name}{" "}
-                                {number(meal.batch.eatenServings)}食分
-                              </span>
-                              <span>{money(mealCost(meal))}</span>
-                            </div>
-                          )}
                           {(meal.prepared ?? []).map((p) => (
                             <div key={p.batchId}>
                               <span>
                                 {
-                                  state.meals.find((m) => m.id === p.batchId)
-                                    ?.batch?.name
+                                  state.cookings.find((c) => c.id === p.batchId)
+                                    ?.name
                                 }{" "}
                                 {number(p.quantity)}食分
                               </span>
                               <span>{money(p.cost)}</span>
                             </div>
                           ))}
-                          {!meal.batch &&
-                            meal.usages.map((u) => (
-                              <div key={u.productId}>
-                                <span>
-                                  {
-                                    state.products.find(
-                                      (p) => p.id === u.productId,
-                                    )?.name
-                                  }{" "}
-                                  <small>
-                                    {number(u.quantity)}
-                                    {u.unit}
-                                  </small>
-                                </span>
-                                <span>
-                                  {money(
-                                    u.allocations.reduce(
-                                      (s, a) => s + a.cost,
-                                      0,
-                                    ),
-                                  )}
-                                </span>
-                              </div>
-                            ))}
+                          {meal.usages.map((u) => (
+                            <div key={u.productId}>
+                              <span>
+                                {
+                                  state.products.find(
+                                    (p) => p.id === u.productId,
+                                  )?.name
+                                }{" "}
+                                <small>
+                                  {number(u.quantity)}
+                                  {u.unit}
+                                </small>
+                              </span>
+                              <span>
+                                {money(
+                                  u.allocations.reduce((s, a) => s + a.cost, 0),
+                                )}
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       </details>
                     ))
@@ -878,7 +884,7 @@ export default function App() {
                 </section>
                 {(state.preparedAdjustments ?? []).length > 0 && (
                   <section>
-                    <h2>作り置きの在庫調整履歴</h2>
+                    <h2>料理の在庫調整履歴</h2>
                     {[...(state.preparedAdjustments ?? [])]
                       .reverse()
                       .map((a) => (
@@ -886,8 +892,8 @@ export default function App() {
                           <div>
                             <strong>
                               {
-                                state.meals.find((m) => m.id === a.batchId)
-                                  ?.batch?.name
+                                state.cookings.find((c) => c.id === a.batchId)
+                                  ?.name
                               }
                             </strong>
                             <p className="hint">
@@ -957,35 +963,65 @@ export default function App() {
                   type="purchase"
                   state={state}
                   today={today}
-                  onSave={persist}
-                  saving={busy}
-                />
-              </>
-            )}
-            {page === "meal" && (
-              <>
-                <MealForm
-                  key={formVersion}
-                  state={state}
-                  today={today}
-                  money={money}
-                  onSave={async (command) => {
-                    await persist(command, "食事を記録しました");
-                    setFormVersion((v) => v + 1);
+                  onSave={async (command, message) => {
+                    await persist(command, message);
                   }}
-                />
-                <History
-                  type="meal"
-                  state={state}
-                  today={today}
-                  onSave={persist}
                   saving={busy}
                 />
               </>
             )}
+            <div hidden={page !== "cooking"}>
+              <PreparedForm
+                key={cookingVersion}
+                state={state}
+                today={today}
+                autoFocus={false}
+                showCost={false}
+                onSave={async (command) => {
+                  await persist(command, "料理を保存しました");
+                  setCookingVersion((v) => v + 1);
+                }}
+              />
+              <History
+                type="cooking"
+                state={state}
+                today={today}
+                onSave={async (command, message) => {
+                  await persist(command, message);
+                }}
+                saving={busy}
+              />
+            </div>
+            <div hidden={page !== "meal"}>
+              <MealForm
+                key={mealVersion}
+                state={state}
+                today={today}
+                money={money}
+                onSave={async (command) => {
+                  await persist(command, "食事を記録しました");
+                  setMealVersion((v) => v + 1);
+                }}
+              />
+              <History
+                type="meal"
+                state={state}
+                today={today}
+                onSave={async (command, message) => {
+                  await persist(command, message);
+                }}
+                saving={busy}
+              />
+            </div>
           </>
         )}
       </main>
+      <Toast
+        open={!!notice}
+        message={notice}
+        version={noticeVersion}
+        onClose={() => setNotice("")}
+      />
     </div>
   );
 }

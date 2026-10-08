@@ -1,9 +1,6 @@
 import { emptyModel, modelTables, type Model } from "../src/domain/model.ts";
-import type { D1Database, D1DatabaseSession } from "./env.ts";
-export type Database = Pick<
-  D1Database | D1DatabaseSession,
-  "prepare" | "batch"
->;
+import type { Database } from "./database.ts";
+export type { Database } from "./database.ts";
 export interface Snapshot {
   model: Model;
   revision: number;

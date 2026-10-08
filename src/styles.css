@@ -244,13 +244,6 @@ section {
   gap: 10px;
   margin-top: 18px;
 }
-.notice {
-  font-size: 13px;
-  padding: 12px 14px;
-  background: var(--selected-background);
-  color: var(--notice-text);
-  border-left: 2px solid var(--accent);
-}
 .error {
   font-size: 13px;
   color: var(--mui-palette-error-main);
@@ -484,7 +477,7 @@ label .amount-input select {
     flex-shrink: 0;
     z-index: 10;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0;
     padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom)
       env(safe-area-inset-left);
@@ -678,6 +671,39 @@ label .amount-input select {
 }
 .meal-history-row .meal-history-edit {
   margin-top: 3px;
+}
+.cooking-history-row {
+  grid-template-rows: auto auto;
+}
+.cooking-history-row .meal-row {
+  grid-row: 1 / span 2;
+  display: grid;
+  grid-template-rows: subgrid;
+}
+.cooking-history-row .meal-history-edit {
+  grid-row: 1;
+  align-self: center;
+  margin-top: 0;
+}
+.cooking-history-row .meal-row summary {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  column-gap: 10px;
+  row-gap: 4px;
+}
+.cooking-history-row summary::before {
+  grid-area: 1 / 1 / span 2;
+}
+.cooking-history-row summary > strong:first-of-type {
+  grid-area: 1 / 2;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cooking-history-row summary > span {
+  grid-area: 2 / 2;
+}
+.cooking-history-row summary > .numeric {
+  grid-area: 1 / 3 / span 2;
 }
 
 .form-fields {
