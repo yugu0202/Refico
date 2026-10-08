@@ -13,6 +13,8 @@ export const theme = createTheme({
         text: { primary: "#1c1917", secondary: "#625d57" },
         divider: "#dedbd6",
         error: { main: "#9b2c20" },
+        info: { main: "#245c88" },
+        warning: { main: "#805600" },
       },
     },
     dark: {
@@ -22,6 +24,8 @@ export const theme = createTheme({
         text: { primary: "#eeeee8", secondary: "#b5bbae" },
         divider: "#454d41",
         error: { main: "#ffb4a5", contrastText: "#33120d" },
+        info: { main: "#9acbfa" },
+        warning: { main: "#eac477" },
         action: {
           hover: "rgba(178, 215, 131, 0.08)",
           selected: "rgba(178, 215, 131, 0.14)",
