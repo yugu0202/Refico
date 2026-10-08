@@ -35,18 +35,12 @@
   },
   "previews": {
     "vars": {
-      "DB_BACKEND": "d1",
+      "DB_BACKEND": "turso",
+      "TURSO_DATABASE_URL": "libsql://refico-preview-yugu0202.aws-ap-northeast-1.turso.io",
       "APP_ENV": "preview",
       "AUTH_MODE": "test",
     },
-    "d1_databases": [
-      {
-        "binding": "DB",
-        "database_name": "refico-preview",
-        "database_id": "2842d966-3c30-4885-9a30-62815c6d7ba8",
-        "migrations_dir": "migrations",
-      },
-    ],
+    "d1_databases": [],
     "observability": {
       "enabled": true,
       "logs": {

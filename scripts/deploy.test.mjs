@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parse } from "jsonc-parser";
 import {
+  databaseSettings,
+  runTursoMigrations,
   migrationConfig,
   deploy,
   deploymentTarget,
@@ -229,4 +232,67 @@ test("Tursoは対象環境だけをmigrateし、失敗時は配信せずD1へfal
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("リポジトリ設定は通常previewのみTursoで、dev/stagingと本番をD1に保つ", () => {
+  const production = parse(
+    readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8"),
+    [],
+    { allowTrailingComma: true },
+  );
+  const stagingOverrides = parse(
+    readFileSync(new URL("../wrangler.staging.jsonc", import.meta.url), "utf8"),
+    [],
+    { allowTrailingComma: true },
+  );
+  assert.equal(databaseSettings(production, "production").backend, "d1");
+  assert.deepEqual(databaseSettings(production, "preview"), {
+    backend: "turso",
+    url: "libsql://refico-preview-yugu0202.aws-ap-northeast-1.turso.io",
+  });
+  assert.deepEqual(migrationConfig(production, "preview").d1_databases, []);
+  assert.deepEqual(production.previews.d1_databases, []);
+  assert.equal(
+    databaseSettings(
+      stagingPreviewConfig(production, stagingOverrides),
+      "staging",
+    ).backend,
+    "d1",
+  );
+});
+
+test("マイグレーションはTURSO_AUTH_TOKENだけを使い、子プロセス引数に秘密値を入れない", () => {
+  const calls = [];
+  const run = (command, args, options) => {
+    calls.push({ command, args, options });
+    return { status: 0 };
+  };
+  runTursoMigrations(
+    "preview",
+    "libsql://preview.turso.io",
+    "/repo",
+    {
+      TURSO_AUTH_TOKEN: "test-token",
+      TURSO_PREVIEW_AUTH_TOKEN: "legacy-token",
+    },
+    run,
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.env.TURSO_AUTH_TOKEN, "test-token");
+  assert.equal(
+    calls[0].options.env.TURSO_DATABASE_URL,
+    "libsql://preview.turso.io",
+  );
+  assert.deepEqual(calls[0].args, ["/repo/scripts/migrate-turso.mjs"]);
+  assert.throws(
+    () =>
+      runTursoMigrations(
+        "preview",
+        "libsql://preview.turso.io",
+        "/repo",
+        { TURSO_PREVIEW_AUTH_TOKEN: "legacy-token" },
+        run,
+      ),
+    /TURSO_AUTH_TOKEN is required/,
+  );
 });

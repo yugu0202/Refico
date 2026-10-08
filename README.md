@@ -160,12 +160,14 @@ Better Authの署名付きセッションCookieを5分間キャッシュしま�
 
 ### Tursoを使う場合
 
+通常のブランチpreviewは`refico-preview-yugu0202`のTurso DBを使用します。dev/stagingと本番はD1です。previewのD1データは自動移行しません。
+
 `DB_BACKEND`を`d1`（既定）または`turso`にすると、在庫・スペース・招待・Better Authを同じバックエンドへ切り替えられます。Tursoを選んだ状態で接続設定が欠けたり通信に失敗した場合、D1にはフォールバックしません。Concurrent Writesは使用せず、snapshotの一括読み取り・更新は通常のトランザクションで実行します。
 
 1. 本番・staging・previewでそれぞれ別のTurso DBを作成します。既存のSQLにはtrigger、STORED生成列、JSON関数、遅延外部キー、ALTER TABLEのrenameが含まれます。利用するTurso DBでこれらに対応していることをマイグレーションで確認してください。
 2. 対象設定の`vars`へ`DB_BACKEND: "turso"`と`TURSO_DATABASE_URL`を指定します。devは`wrangler.staging.jsonc`の`previews.vars`、通常プレビューは`wrangler.jsonc`の`previews.vars`、本番は同ファイルの`vars`です。プレビュー設定は本番のvarsを継承しません。
 3. 対象Worker/PreviewのSecretへ`TURSO_AUTH_TOKEN`を設定します。Google OAuth・Better AuthのSecret設定は従来と同じです。URL・トークンの両方が必須です。
-4. 自動マイグレーション用にCloudflare BuildsのSecretへ、対象に応じた`TURSO_PRODUCTION_AUTH_TOKEN`、`TURSO_STAGING_AUTH_TOKEN`、`TURSO_PREVIEW_AUTH_TOKEN`を設定します。Workerの実行用Secretとは別の設定です。トークンはコマンド引数や設定ファイルへ書きません。
+4. Cloudflare BuildsのSecretにも`TURSO_AUTH_TOKEN`を設定します。Worker実行用と同じ名前・値を使いますが、設定先は別です。環境ごとの接続先URLにアクセスできるトークンをビルドへ渡してください。トークンはコマンド引数や設定ファイルへ書きません。
 5. 通常の`deploy:worker`/`deploy:preview`/`deploy:staging`で、対象バックエンドのマイグレーションを適用してから配信します。Turso選択時にD1マイグレーションは実行しません。失敗した場合は配信を止めます。
 
 手動では環境変数`TURSO_DATABASE_URL`と`TURSO_AUTH_TOKEN`を指定して`pnpm db:migrate:turso`を実行します。`migrations/*.sql`をファイル単位で適用し、履歴・SHA-256を`refico_migrations`に保存します。適用済みファイルの変更はエラーにし、各ファイルのSQLと履歴は同じトランザクションで保存します。

@@ -49,20 +49,24 @@ export function databaseSettings(config, target) {
   return { backend, url: vars.TURSO_DATABASE_URL };
 }
 
-function runTursoMigrations(target, url, directory) {
-  // Build credentials are target-specific. Never place tokens in configs or args.
-  const token = process.env[`TURSO_${target.toUpperCase()}_AUTH_TOKEN`];
-  if (!token)
-    throw new Error(
-      `TURSO_${target.toUpperCase()}_AUTH_TOKEN is required for migrations`,
-    );
-  const result = spawnSync(
+export function runTursoMigrations(
+  target,
+  url,
+  directory,
+  environment = process.env,
+  run = spawnSync,
+) {
+  // Use the same credential name as the Worker runtime. The target config
+  // selects the database URL; credentials stay out of configs and arguments.
+  const token = environment.TURSO_AUTH_TOKEN;
+  if (!token) throw new Error("TURSO_AUTH_TOKEN is required for migrations");
+  const result = run(
     process.execPath,
     [join(directory, "scripts/migrate-turso.mjs")],
     {
       cwd: directory,
       stdio: "inherit",
-      env: { ...process.env, TURSO_DATABASE_URL: url, TURSO_AUTH_TOKEN: token },
+      env: { ...environment, TURSO_DATABASE_URL: url, TURSO_AUTH_TOKEN: token },
     },
   );
   if (result.error) throw result.error;
