@@ -510,6 +510,7 @@ export default function App() {
           spaces={spaces}
           spaceId={spaceId}
           onSwitch={async (id) => {
+            if (id === spaceId) return;
             if (busyRef.current) throw new Error("保存中です");
             busyRef.current = true;
             setBusy(true);
