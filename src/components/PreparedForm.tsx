@@ -176,7 +176,7 @@ export function PreparedForm({
           />
           <TextField
             className="field"
-            label="作った食数"
+            label="作った量"
             type="number"
             required
             value={servings}
