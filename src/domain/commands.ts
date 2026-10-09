@@ -6,11 +6,14 @@ import {
   recordCooking,
   recordStockAdjustment,
   recordPreparedAdjustment,
-  updateProduct,
   updatePreparedName,
   type State,
 } from "./inventory.ts";
-import { updateMeal, updatePurchase, updateCooking } from "./history.ts";
+import {
+  updateProductInventory,
+  updateCookingInventory,
+} from "./inventory-edit.ts";
+import { updateMeal, updatePurchase } from "./history.ts";
 import { sampleState } from "./sample.ts";
 const id = z.string().min(1).max(100);
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -25,6 +28,13 @@ const purchase = z
     unit: z.string().min(1).max(20),
     price: z.number().int().min(0).max(100000000),
     date,
+  })
+  .strict();
+const directCost = z
+  .object({
+    cost: z.number().int().min(0).max(100000000),
+    place: z.string().trim().max(100),
+    note: z.string().trim().max(500),
   })
   .strict();
 const inventoryMeal = z
@@ -46,6 +56,7 @@ const inventoryMeal = z
     prepared: z
       .array(z.object({ batchId: id, quantity: positive }).strict())
       .max(100),
+    direct: directCost.optional(),
   })
   .strict();
 const cooking = z
@@ -56,6 +67,13 @@ const cooking = z
     inputs: inventoryMeal.shape.inputs,
   })
   .strict();
+const adjustment = z
+  .object({
+    quantity: z.number().finite().min(0).max(1e9),
+    date,
+    reason: z.string().trim().max(200),
+  })
+  .strict();
 const meal = z.union([
   inventoryMeal,
   z
@@ -63,9 +81,7 @@ const meal = z.union([
       source: z.literal("direct"),
       date,
       kind: z.enum(["朝食", "昼食", "夕食", "その他"]),
-      cost: z.number().int().min(0).max(100000000),
-      place: z.string().trim().max(100),
-      note: z.string().trim().max(500),
+      ...directCost.shape,
     })
     .strict(),
 ]);
@@ -89,6 +105,7 @@ export const commandSchema = z.discriminatedUnion("type", [
       id,
       name: z.string().trim().min(1).max(100),
       units: z.array(unit).max(100),
+      adjustment: adjustment.optional(),
     })
     .strict(),
   z.object({ type: z.literal("purchase.create"), input: purchase }).strict(),
@@ -96,7 +113,14 @@ export const commandSchema = z.discriminatedUnion("type", [
     .object({ type: z.literal("purchase.update"), id, input: purchase })
     .strict(),
   z.object({ type: z.literal("prepared.create"), input: cooking }).strict(),
-  z.object({ type: z.literal("prepared.update"), id, input: cooking }).strict(),
+  z
+    .object({
+      type: z.literal("prepared.update"),
+      id,
+      input: cooking,
+      adjustment: adjustment.optional(),
+    })
+    .strict(),
   z.object({ type: z.literal("meal.create"), input: meal }).strict(),
   z.object({ type: z.literal("meal.update"), id, input: meal }).strict(),
   z
@@ -145,14 +169,22 @@ export function applyCommand(state: State, command: Command): State {
         products: [...state.products, { ...p, id: command.product.id }],
       };
     }
-    case "product.update":
+    case "product.update": {
       if (
         state.products.some(
           (p) => p.id !== command.id && p.name === command.name,
         )
       )
         throw new Error("同じ名前の食材が登録されています");
-      return updateProduct(state, command.id, command.name, command.units);
+      // Settings and the measured remainder share one revision/receipt and save.
+      return updateProductInventory(
+        state,
+        command.id,
+        command.name,
+        command.units,
+        command.adjustment,
+      );
+    }
     case "purchase.create": {
       const p = command.input;
       return recordPurchase(
@@ -170,17 +202,13 @@ export function applyCommand(state: State, command: Command): State {
       const c = command.input;
       return recordCooking(state, c.date, c.name, c.servings, c.inputs);
     }
-    case "prepared.update": {
-      const c = command.input;
-      return updateCooking(
+    case "prepared.update":
+      return updateCookingInventory(
         state,
         command.id,
-        c.date,
-        c.name,
-        c.servings,
-        c.inputs,
+        command.input,
+        command.adjustment,
       );
-    }
     case "meal.create": {
       const m = command.input;
       return m.source === "direct"
@@ -189,7 +217,7 @@ export function applyCommand(state: State, command: Command): State {
             place: m.place,
             note: m.note,
           })
-        : recordMeal(state, m.date, m.kind, m.inputs, m.prepared);
+        : recordMeal(state, m.date, m.kind, m.inputs, m.prepared, m.direct);
     }
     case "meal.update": {
       const m = command.input;
@@ -206,6 +234,7 @@ export function applyCommand(state: State, command: Command): State {
         m.kind,
         m.inputs,
         m.prepared,
+        m.direct,
       );
     }
     case "stock.adjust":

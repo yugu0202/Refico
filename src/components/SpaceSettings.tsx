@@ -130,7 +130,7 @@ export function SpaceSettings({
         rename: "スペース名を保存しました",
         invite: "招待リンクを作成しました",
         revoke: "招待を無効にしました",
-        remove: "メンバーを削除しました",
+        remove: "メンバーを外しました",
         leave: "スペースから退出しました",
       };
       if (messages[action.type]) onNotify(messages[action.type]);
@@ -175,7 +175,7 @@ export function SpaceSettings({
                 type="submit"
                 disabled={busy || !name.trim() || name.trim() === space.name}
               >
-                名前を保存
+                変更を保存
               </Button>
             </Stack>
           ) : (
@@ -202,11 +202,11 @@ export function SpaceSettings({
                     setConfirm({
                       type: "remove",
                       userId: m.id,
-                      label: `${m.name}をメンバーから削除しますか？`,
+                      label: `「${m.name}」さんをこのスペースから外しますか？`,
                     })
                   }
                 >
-                  削除
+                  外す
                 </Button>
               )}
             </Stack>
@@ -218,7 +218,7 @@ export function SpaceSettings({
                 disabled={busy}
                 onClick={() => void act({ type: "invite" })}
               >
-                メンバーを招待
+                招待リンクを作成
               </Button>
               {invite && (
                 <>
@@ -279,7 +279,7 @@ export function SpaceSettings({
                     }}
                   />
                   <Typography variant="body2" color="text.secondary">
-                    7日間有効・1人だけ参加できます。
+                    7日間有効・リンク1つにつき1人が参加できます。
                   </Typography>
                 </>
               )}
@@ -290,8 +290,8 @@ export function SpaceSettings({
                   sx={{ alignItems: "center", justifyContent: "space-between" }}
                 >
                   <Typography variant="body2">
+                    有効期限：
                     {new Date(i.expiresAt * 1000).toLocaleDateString("ja-JP")}
-                    までの招待
                   </Typography>
                   <Button
                     disabled={busy}
@@ -329,7 +329,7 @@ export function SpaceSettings({
                   void act({ type: confirm.type, userId: confirm.userId })
                 }
               >
-                確定
+                {confirm.type === "remove" ? "外す" : "退出する"}
               </Button>
               <Button disabled={busy} onClick={() => setConfirm(null)}>
                 キャンセル
@@ -402,7 +402,11 @@ export function Invitation({
         {!loading && !info && error && (
           <Button onClick={() => setRetry((value) => value + 1)}>再試行</Button>
         )}
-        {info && <Typography>「{info.name}」に参加しますか？</Typography>}
+        {info && (
+          <Typography>
+            「{info.name}」に参加して、在庫や記録を共有しますか？
+          </Typography>
+        )}
       </DialogContent>
       <DialogActions>
         <Button disabled={busy} onClick={onCancel}>

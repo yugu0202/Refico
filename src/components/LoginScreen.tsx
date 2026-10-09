@@ -1,3 +1,4 @@
+import { EnvironmentLabel } from "./EnvironmentLabel";
 import { BrandLogo } from "./BrandLogo";
 import Button from "@mui/material/Button";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -24,7 +25,10 @@ export function LoginScreen({
       <div className="login-content">
         <h1 className="brand">
           <BrandLogo size={40} />
-          Refico
+          <span className="brand-name">
+            Refico
+            <EnvironmentLabel />
+          </span>
         </h1>
         {loading ? (
           <div className="login-status" role="status">

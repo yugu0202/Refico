@@ -1,3 +1,4 @@
+import { EnvironmentLabel } from "./EnvironmentLabel";
 import type { MouseEvent } from "react";
 import Button from "@mui/material/Button";
 import { BrandLogo } from "./BrandLogo";
@@ -35,7 +36,10 @@ export function HelpPage({
       <header className="app-header">
         <a href="/" className="brand">
           <BrandLogo size={28} />
-          Refico
+          <span className="brand-name">
+            Refico
+            <EnvironmentLabel />
+          </span>
         </a>
         <Button variant="text" onClick={onBack} sx={{ minHeight: 44 }}>
           戻る
@@ -99,7 +103,7 @@ export function HelpPage({
                   width="520"
                   height="260"
                 />
-                <figcaption>操作箇所の図：{article.image.caption}</figcaption>
+                <figcaption>{article.image.caption}</figcaption>
               </figure>
             )}
             <section aria-labelledby="help-steps">

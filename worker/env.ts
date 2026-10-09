@@ -7,6 +7,7 @@ import type {
 export type { D1Database, D1DatabaseSession, D1PreparedStatement, D1Result };
 export interface Env {
   APP_ENV?: "production" | "staging" | "preview" | "development";
+  APP_BRANCH?: string;
   AUTH_MODE?: "google" | "test";
   DB_BACKEND?: "d1" | "turso";
   TURSO_DATABASE_URL?: string;

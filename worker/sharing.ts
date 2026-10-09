@@ -120,7 +120,7 @@ export async function invitationInfo(
     .first<{ spaceId: string; name: string; acceptedBy: string | null }>();
   if (!row)
     throw new SharingError(
-      "この招待リンクは無効、期限切れ、または使用済みです",
+      "この招待リンクは利用できません。招待した人に新しいリンクを発行してもらってください",
       410,
     );
   return row;
@@ -154,7 +154,10 @@ export async function acceptInvitation(
     .bind(userId, await tokenHash(token))
     .run();
   if (!result.meta.changes)
-    throw new SharingError("この招待リンクは使用できません", 410);
+    throw new SharingError(
+      "この招待リンクは利用できません。招待した人に新しいリンクを発行してもらってください",
+      410,
+    );
 }
 export async function manageSpace(
   db: Database,

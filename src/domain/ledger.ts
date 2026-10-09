@@ -117,7 +117,7 @@ export function toBase(quantity: number, factor: number): number {
       quantity > 0 &&
       Number.isFinite(factor) &&
       factor > 0,
-    "数量と換算係数は正の数で入力してください",
+    "数量と1単位あたりの量は、0より大きい数値を入力してください",
   );
   const scaled = quantity * factor * 1000;
   requireValue(
@@ -125,7 +125,7 @@ export function toBase(quantity: number, factor: number): number {
       scaled > 0 &&
       Number.isSafeInteger(Math.round(scaled)) &&
       Math.abs(scaled - Math.round(scaled)) < 0.00001,
-    "数量は基準単位の0.001以上、0.001刻みで入力してください",
+    "在庫の単位に換算した量が0.001以上、0.001刻みになるように入力してください",
   );
   return Math.round(scaled);
 }
@@ -135,7 +135,7 @@ export function createProduct(
   units: Unit[] = [],
 ): Product {
   validateProductName(name);
-  requireValue(baseUnits.includes(baseUnit), "基準単位を選択してください");
+  requireValue(baseUnits.includes(baseUnit), "在庫の単位を選択してください");
   return {
     id: crypto.randomUUID(),
     name: name.trim(),
@@ -283,10 +283,7 @@ export function recordMeal(
   requireValue(validDate(date), "食事の日付を入力してください");
   requireValue(mealKinds.includes(kind), "食事の種類を選択してください");
   if (direct !== undefined) {
-    requireValue(
-      inputs.length === 0 && preparedInputs.length === 0 && !batch,
-      "外食などには食材・作り置きを指定できません",
-    );
+    requireValue(!batch, "料理の調理記録には外食などの金額を追加できません");
     requireValue(
       Number.isSafeInteger(direct.cost) &&
         direct.cost >= 0 &&
@@ -299,34 +296,17 @@ export function recordMeal(
     );
     requireValue(
       typeof direct.note === "string" && direct.note.trim().length <= 500,
-      "メモを500文字以内で入力してください",
+      "内容を500文字以内で入力してください",
     );
-    return {
-      ...state,
-      meals: [
-        ...state.meals,
-        {
-          id: crypto.randomUUID(),
-          date,
-          kind,
-          usages: [],
-          direct: {
-            cost: direct.cost,
-            place: direct.place.trim(),
-            note: direct.note.trim(),
-          },
-        },
-      ],
-    };
   }
   requireValue(
-    inputs.length > 0 || preparedInputs.length > 0,
-    "食材か作り置きを追加してください",
+    inputs.length > 0 || preparedInputs.length > 0 || direct !== undefined,
+    "食材・料理を選ぶか、金額を入力してください",
   );
   if (batch) {
     requireValue(
       inputs.length > 0 && preparedInputs.length === 0,
-      "作り置きには食材を追加してください",
+      "料理に使った食材を選んでください",
     );
     requireValue(
       typeof batch.name === "string" &&
@@ -346,13 +326,13 @@ export function recordMeal(
   requireValue(
     new Set(preparedInputs.map((i) => i.batchId)).size ===
       preparedInputs.length,
-    "同じ作り置きは1行にまとめてください",
+    "同じ料理は1行にまとめてください",
   );
   const prepared = preparedInputs.map((input) => {
     const source = state.meals.find((m) => m.id === input.batchId);
     requireValue(
       !!source?.batch && source.date <= date,
-      "食事の日付までの作り置きを選択してください",
+      "食事の日付以前に作った料理を選んでください",
     );
     const quantity = toBase(input.quantity, 1);
     return {
@@ -418,7 +398,7 @@ export function recordMeal(
     }
     requireValue(
       needed === 0,
-      `${state.products.find((p) => p.id === input.productId)?.name ?? "食材"}の在庫が不足しています（食事の日付までの購入分）`,
+      `指定した日付時点では「${state.products.find((p) => p.id === input.productId)?.name ?? "食材"}」の在庫が不足しています。購入日か使用量を確認してください`,
     );
     return { ...normalized, allocations };
   });
@@ -433,6 +413,15 @@ export function recordMeal(
         usages,
         ...(batch ? { batch: { ...batch, name: batch.name.trim() } } : {}),
         ...(prepared.length ? { prepared } : {}),
+        ...(direct !== undefined
+          ? {
+              direct: {
+                cost: direct.cost,
+                place: direct.place.trim(),
+                note: direct.note.trim(),
+              },
+            }
+          : {}),
       },
     ],
   };
@@ -500,7 +489,7 @@ export function preparedUsageCost(
   const s = preparedSnapshot(state, meal);
   requireValue(
     s.consumed + quantity <= s.quantity,
-    "作り置きの残量が不足しています",
+    "料理の残量が足りません。食べた量を減らすか、在庫を確認してください",
   );
   const latest = (state.preparedAdjustments ?? [])
     .filter((a) => a.batchId === meal.id)
@@ -524,7 +513,7 @@ export function recordPreparedAdjustment(
   replayDiscard = false,
 ): State {
   const meal = state.meals.find((m) => m.id === batchId);
-  requireValue(!!meal?.batch, "作り置きが見つかりません");
+  requireValue(!!meal?.batch, "料理が見つかりません");
   requireValue(
     validDate(date) && date >= meal!.date,
     "作った日以降の調整日を入力してください",
@@ -577,7 +566,7 @@ export function recordPreparedAdjustment(
       : balance.value;
   requireValue(
     Number.isSafeInteger(targetValue) && targetValue >= 0,
-    "原価が大きすぎます",
+    "金額が上限を超えています",
   );
   return {
     ...state,
@@ -598,12 +587,11 @@ export function recordPreparedAdjustment(
   };
 }
 export const mealCost = (meal: Meal) =>
-  meal.direct
-    ? meal.direct.cost
-    : (meal.batch
-        ? portionCost(meal, Math.round(meal.batch.eatenServings * 1000))
-        : cookingCost(meal)) +
-      (meal.prepared ?? []).reduce((sum, p) => sum + p.cost, 0);
+  (meal.direct?.cost ?? 0) +
+  (meal.batch
+    ? portionCost(meal, Math.round(meal.batch.eatenServings * 1000))
+    : cookingCost(meal)) +
+  (meal.prepared ?? []).reduce((sum, p) => sum + p.cost, 0);
 export function dailyCosts(state: State) {
   const days = new Map<string, number>();
   for (const meal of state.meals) {
@@ -716,7 +704,7 @@ export function updatePreparedName(
   name: string,
 ): State {
   const source = state.meals.find((meal) => meal.id === batchId);
-  requireValue(!!source?.batch, "作り置きが見つかりません");
+  requireValue(!!source?.batch, "料理が見つかりません");
   requireValue(
     typeof name === "string" &&
       name.trim().length > 0 &&

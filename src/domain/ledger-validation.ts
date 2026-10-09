@@ -17,7 +17,7 @@ export function parseState(raw: string): State {
   const check = (ok: boolean) => {
     if (!ok)
       throw new Error(
-        "保存データを読み込めません。別のブラウザや開発者ツールで保存データを確認してください",
+        "記録を読み込めませんでした。再読み込みしても解消しない場合は、データの確認が必要です。",
       );
   };
   check(
@@ -116,9 +116,7 @@ export function parseState(raw: string): State {
           d.place.length <= 100 &&
           typeof d.note === "string" &&
           d.note.length <= 500 &&
-          meal.usages.length === 0 &&
-          !meal.batch &&
-          !meal.prepared?.length,
+          !meal.batch,
       );
     }
   }

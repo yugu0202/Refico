@@ -127,8 +127,8 @@ export function deploy(
       ]);
     }
     let deploymentPath = join(directory, "wrangler.jsonc");
-    if (target === "staging") {
-      // This is a dev Preview of the existing Worker, not a Wrangler environment.
+    if (target !== "production") {
+      // Both feature branches and dev use Previews of the existing Worker.
       // Paths in the generated config must remain relative to the repository.
       deploymentPath = join(temporary, "deployment.json");
       writeFileSync(
@@ -143,6 +143,17 @@ export function deploy(
           previews: {
             ...config.previews,
             d1_databases: migrations.d1_databases,
+            vars: {
+              ...config.previews?.vars,
+              APP_ENV: target,
+              APP_BRANCH:
+                process.env.WORKERS_CI_BRANCH ??
+                (spawnSync("git", ["branch", "--show-current"], {
+                  cwd: directory,
+                  encoding: "utf8",
+                }).stdout?.trim() ||
+                  ""),
+            },
           },
         }),
       );
