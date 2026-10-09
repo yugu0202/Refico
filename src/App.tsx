@@ -730,7 +730,7 @@ export default function App() {
                             {meal.direct &&
                             !meal.usages.length &&
                             !meal.prepared?.length
-                              ? "外食など"
+                              ? "金額入力"
                               : `${meal.usages.length + (meal.prepared?.length ?? 0) + (meal.direct ? 1 : 0)}品`}
                           </span>
                           <strong className="numeric">

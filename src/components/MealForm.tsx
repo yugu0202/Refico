@@ -186,16 +186,53 @@ export function MealForm({
             batches={batches}
             editing={editing}
             minimumRows={0}
-            addLabel={rows.length ? "＋ もう1品追加" : "＋ 食材・料理を追加"}
+            showAddButton={false}
           />
         )}
-        {hasDirect ? (
-          <section className="direct-meal-fields" aria-label="外食・弁当など">
+        <div className="meal-add-actions">
+          {(available.length > 0 || batches.length > 0 || rows.length > 0) && (
+            <Button
+              type="button"
+              variant="text"
+              className="text-button"
+              disabled={rows.length >= available.length + batches.length}
+              onClick={() =>
+                setRows([
+                  ...rows,
+                  {
+                    productId: "",
+                    batchId: "",
+                    quantity: "",
+                    unit: "g",
+                    key: crypto.randomUUID(),
+                  },
+                ])
+              }
+            >
+              {rows.length ? "＋ もう1品追加" : "＋ 食材・料理を追加"}
+            </Button>
+          )}
+          {!hasDirect && (
+            <Button
+              type="button"
+              variant="text"
+              className="text-button"
+              onClick={() => {
+                setHasDirect(true);
+                setError("");
+              }}
+            >
+              ＋ 金額を入力
+            </Button>
+          )}
+        </div>
+        {hasDirect && (
+          <section className="direct-meal-fields" aria-label="金額入力">
             <div className="direct-meal-heading">
-              <h2>外食・弁当など</h2>
+              <h2>金額入力</h2>
               <IconButton
                 type="button"
-                aria-label="外食・弁当などの金額を削除"
+                aria-label="入力した金額を削除"
                 title="削除"
                 onClick={() => {
                   setHasDirect(false);
@@ -244,18 +281,6 @@ export function MealForm({
               onChange={(e) => setNote(e.target.value)}
             />
           </section>
-        ) : (
-          <Button
-            type="button"
-            variant="text"
-            className="text-button"
-            onClick={() => {
-              setHasDirect(true);
-              setError("");
-            }}
-          >
-            ＋ 外食・弁当などを追加
-          </Button>
         )}
         <div className="estimate">
           <span>合計</span>

@@ -27,7 +27,7 @@ export function UsedItems({
   editing,
   itemLabel = "使ったもの",
   minimumRows = 1,
-  addLabel = "＋ もう1品追加",
+  showAddButton = true,
 }: {
   state: State;
   rows: Draft[];
@@ -37,7 +37,7 @@ export function UsedItems({
   editing?: { usages: Usage[] };
   itemLabel?: string;
   minimumRows?: number;
-  addLabel?: string;
+  showAddButton?: boolean;
 }) {
   const update = (key: string, changes: Partial<Draft>) =>
     setRows(rows.map((r) => (r.key === key ? { ...r, ...changes } : r)));
@@ -177,15 +177,17 @@ export function UsedItems({
           </div>
         );
       })}
-      <Button
-        type="button"
-        variant="text"
-        className="text-button"
-        disabled={rows.length >= available.length + batches.length}
-        onClick={() => setRows([...rows, draft()])}
-      >
-        {addLabel}
-      </Button>
+      {showAddButton && (
+        <Button
+          type="button"
+          variant="text"
+          className="text-button"
+          disabled={rows.length >= available.length + batches.length}
+          onClick={() => setRows([...rows, draft()])}
+        >
+          ＋ もう1品追加
+        </Button>
+      )}
     </>
   );
 }

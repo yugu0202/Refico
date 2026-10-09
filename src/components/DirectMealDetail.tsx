@@ -9,7 +9,7 @@ export function DirectMealDetail({
   return (
     <>
       <div className="direct-meal-detail">
-        <span>{direct.place || "外食など"}</span>
+        <span>{direct.place || "金額入力"}</span>
         <span>{money(direct.cost)}</span>
       </div>
       {direct.note && <p className="meal-note">{direct.note}</p>}
