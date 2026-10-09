@@ -7,6 +7,18 @@ import {
   type Meal,
   type MealInput,
 } from "./inventory.ts";
+export const deletePurchase = (state: State, id: string): State =>
+  fromLedger(history.deletePurchase(toLedger(state), id));
+export function deleteMeal(state: State, id: string): State {
+  if (!state.meals.some((m) => m.id === id))
+    throw new Error("食事履歴が見つかりません");
+  return fromLedger(history.deleteRecord(toLedger(state), id));
+}
+export function deleteCooking(state: State, id: string): State {
+  if (!state.cookings.some((c) => c.id === id))
+    throw new Error("料理が見つかりません");
+  return fromLedger(history.deleteRecord(toLedger(state), id));
+}
 export const updatePurchase = (
   state: State,
   ...args: Parameters<typeof history.updatePurchase> extends [

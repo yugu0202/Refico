@@ -1,3 +1,6 @@
+import { InventorySummaryContext } from "./inventory-summary";
+import { summarizeInventory } from "./domain/inventory-summary";
+import { HistoryEditor } from "./components/HistoryEditor";
 import { EnvironmentLabel } from "./components/EnvironmentLabel";
 import {
   SpaceSettings,
@@ -8,11 +11,18 @@ import { sharingRequest, type Space } from "./api";
 import { AccountMenu } from "./components/AccountMenu";
 import { BrandLogo } from "./components/BrandLogo";
 import { HelpPage } from "./components/HelpPage";
-import { helpPageFromPath, helpBackAction, type HelpPageId } from "./help";
+import { HelpDialog } from "./components/HelpDialog";
+import {
+  helpPageFromPath,
+  helpBackAction,
+  helpCloseAction,
+  type HelpPageId,
+} from "./help";
 import type { Command } from "./domain/commands";
 import { ApiError, bootstrap, sendCommand, authClient } from "./api";
 import { createFocusRefresh } from "./refresh";
-import { History } from "./components/History";
+import { History, type HistoryType } from "./components/History";
+import { HistoryDialog } from "./components/HistoryDialog";
 import { DirectMealDetail } from "./components/DirectMealDetail";
 import { HistoryDetailRow } from "./components/HistoryDetailRow";
 import { HistoryText } from "./components/HistoryText";
@@ -27,19 +37,18 @@ import DialogContent from "@mui/material/DialogContent";
 import SvgIcon from "@mui/material/SvgIcon";
 import TextField from "@mui/material/TextField";
 import { Toast } from "./components/Toast";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import {
-  dailyCosts,
   emptyState,
   mealCost,
-  preparedRemaining,
   type Cooking,
   type State,
   type Product,
 } from "./domain/inventory";
-import { ProductForm } from "./components/ProductForm";
+import { ProductDialog } from "./components/ProductDialog";
 import { PurchaseForm } from "./components/PurchaseForm";
-import { MealForm } from "./components/MealForm";
+import { PurchaseLink } from "./components/PurchaseLink";
+import { MealForm, type MealFormHandle } from "./components/MealForm";
 import { CostCalendar } from "./components/CostCalendar";
 import { InventoryRow } from "./components/InventoryRow";
 import { money, number, localDate, dateLabel } from "./format";
@@ -75,17 +84,44 @@ const navigation = [
     icon: "M5 3v5a3 3 0 0 0 6 0V3M8 3v18M19 3c-3 2-4 5-4 9h4M19 3v18",
   },
 ] as const;
-type Page = (typeof navigation)[number]["id"] | HelpPageId;
+type TabPage = (typeof navigation)[number]["id"];
+type Page = TabPage | HelpPageId;
 function currentPage(): Page {
   const help = helpPageFromPath(window.location.pathname);
   if (help) return help;
   const saved = window.history.state?.reficoPage;
   return navigation.some((item) => item.id === saved) ? saved : "home";
 }
+function currentHistory(): HistoryType | null {
+  const saved = window.history.state?.reficoHistory;
+  return (saved === "purchase" || saved === "cooking" || saved === "meal") &&
+    saved === currentPage()
+    ? saved
+    : null;
+}
+function currentHelpOrigin(): TabPage | null {
+  const origin = window.history.state?.reficoHelpOrigin;
+  return window.history.state?.reficoHelpReturn &&
+    navigation.some((item) => item.id === origin)
+    ? origin
+    : null;
+}
 export default function App() {
   const mainRef = useRef<HTMLElement>(null);
   const [page, setPage] = useState<Page>(currentPage);
+  const [historyType, setHistoryType] = useState(currentHistory);
+  const [historyDialogType, setHistoryDialogType] = useState<HistoryType>(
+    () => currentHistory() ?? "meal",
+  );
+  const historyClosing = useRef(false);
   const helpPage = helpPageFromPath(`/${page}`);
+  const [helpBackgroundPage, setHelpBackgroundPage] =
+    useState(currentHelpOrigin);
+  const [helpDialogPage, setHelpDialogPage] = useState<HelpPageId>(
+    helpPage ?? "help",
+  );
+  const helpClosing = useRef(false);
+  const contentPage = helpPage ? (helpBackgroundPage ?? "home") : page;
   const [reopenMenu, setReopenMenu] = useState(() =>
     Boolean(window.history.state?.reficoMenuOpen),
   );
@@ -99,6 +135,11 @@ export default function App() {
   );
   const [today, setToday] = useState(localDate);
   const [state, setState] = useState<State>(emptyState);
+  const summary = useMemo(() => summarizeInventory(state), [state]);
+  const mealFormRef = useRef<MealFormHandle>(null);
+  const [editingMealId, setEditingMealId] = useState<string | null>(null);
+  const [allPreparedAdjustments, setAllPreparedAdjustments] = useState(false);
+  const [allStockAdjustments, setAllStockAdjustments] = useState(false);
   const [ready, setReady] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
   const [signingIn, setSigningIn] = useState(false);
@@ -143,6 +184,10 @@ export default function App() {
         setFormVersion((v) => v + 1);
         setEditingProduct(null);
         setEditingPrepared(null);
+        setEditingMealId(null);
+        setSelectedDay(null);
+        setAllPreparedAdjustments(false);
+        setAllStockAdjustments(false);
         setSearch("");
         setNotice("");
       }
@@ -231,20 +276,12 @@ export default function App() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
     mainRef.current?.scrollTo({ top: 0, behavior: "instant" });
-    if (page === "meal" || page === "cooking") {
+    if (contentPage === "meal" || contentPage === "cooking") {
       mainRef.current
         ?.querySelector<HTMLHeadingElement>("h1")
         ?.focus({ preventScroll: true });
     }
-    if (helpPage) {
-      document
-        .querySelector<HTMLElement>(".help-page h1")
-        ?.focus({ preventScroll: true });
-      document
-        .querySelector<HTMLElement>(".help-page")
-        ?.scrollTo({ top: 0, behavior: "instant" });
-    }
-  }, [page]);
+  }, [contentPage]);
   useEffect(() => {
     const restore = () => selectPage(currentPage());
     window.addEventListener("popstate", restore);
@@ -283,6 +320,7 @@ export default function App() {
         command,
         revisionRef.current,
         identityRef.current,
+        state,
       );
       focusRefresh.markFresh();
       revisionRef.current = next.revision;
@@ -301,6 +339,7 @@ export default function App() {
   }
   function navigate(next: Page) {
     const historyState = { ...window.history.state, reficoPage: next };
+    delete historyState.reficoHistory;
     if (helpPageFromPath(`/${next}`)) {
       if (busyRef.current || next === page) return;
       if (helpPage && next === "help") {
@@ -327,6 +366,9 @@ export default function App() {
           reficoHelpReturn: helpPage
             ? Boolean(window.history.state?.reficoHelpReturn)
             : true,
+          reficoHelpOrigin: helpPage
+            ? window.history.state?.reficoHelpOrigin
+            : page,
           reficoHelpDepth: helpPage
             ? currentDepth === undefined
               ? undefined
@@ -339,6 +381,7 @@ export default function App() {
     } else {
       delete historyState.reficoHelpReturn;
       delete historyState.reficoHelpDepth;
+      delete historyState.reficoHelpOrigin;
       historyState.reficoMenuOpen = false;
       // Tabs still share the root URL; retain the tab when returning from help.
       window.history.replaceState(
@@ -351,10 +394,34 @@ export default function App() {
   }
   function selectPage(next: Page) {
     setPage(next);
+    const nextHelp = helpPageFromPath(`/${next}`);
+    if (nextHelp) setHelpDialogPage(nextHelp);
+    const helpOrigin = currentHelpOrigin();
+    if (helpOrigin) setHelpBackgroundPage(helpOrigin);
+    helpClosing.current = false;
+    const restoredHistory = currentHistory();
+    setHistoryType(restoredHistory);
+    if (restoredHistory) setHistoryDialogType(restoredHistory);
+    historyClosing.current = false;
     setReopenMenu(Boolean(window.history.state?.reficoMenuOpen));
     setEditingPrepared(null);
     setEditingProduct(null);
     setNotice("");
+  }
+  function openHistory(type: HistoryType) {
+    window.history.pushState(
+      { ...window.history.state, reficoPage: type, reficoHistory: type },
+      "",
+    );
+    historyClosing.current = false;
+    setHistoryDialogType(type);
+    setHistoryType(type);
+  }
+  function closeHistory() {
+    if (historyClosing.current) return;
+    historyClosing.current = true;
+    if (currentHistory()) window.history.back();
+    else setHistoryType(null);
   }
   function leaveHelp() {
     if (!helpPage) return;
@@ -375,6 +442,13 @@ export default function App() {
       selectPage(action.page);
     }
   }
+  function closeHelp() {
+    if (!helpPage || helpClosing.current) return;
+    helpClosing.current = true;
+    const action = helpCloseAction(window.history.state);
+    if (action.type === "go") window.history.go(action.delta);
+    else navigate(action.page);
+  }
   function menuClosed() {
     setReopenMenu(false);
     window.history.replaceState(
@@ -389,7 +463,7 @@ export default function App() {
     );
   }
   const meals = state.meals.filter((m) => m.date === selectedDate);
-  const costs = new Map(dailyCosts(state));
+  const costs = summary.days;
   const total = costs.get(today) ?? 0;
   const monthTotal = [...costs].reduce(
     (sum, [date, cost]) =>
@@ -398,12 +472,12 @@ export default function App() {
   );
   const filtered = state.products.filter((p) => p.name.includes(search));
   const prepared = state.cookings.filter(
-    (c) => preparedRemaining(state, c) > 0,
+    (c) => summary.cookings.get(c.id)!.quantity > 0,
   );
   const filteredPrepared = prepared.filter((m) => m.name.includes(search));
   const preparedRows = (items: typeof prepared) =>
     items.map((m) => {
-      const remaining = preparedRemaining(state, m);
+      const remaining = summary.cookings.get(m.id)!.quantity / 1000;
       return (
         <div className="inventory-row" key={m.id}>
           <div>
@@ -436,7 +510,7 @@ export default function App() {
         </div>
       );
     });
-  const title = navigation.find((n) => n.id === page)?.label;
+  const title = navigation.find((n) => n.id === contentPage)?.label;
   const inventoryRows = (products: Product[]) =>
     products.map((product) => (
       <InventoryRow
@@ -445,7 +519,7 @@ export default function App() {
         state={state}
         showValue={false}
         onEdit={
-          page === "inventory"
+          contentPage === "inventory"
             ? () => {
                 setEditingProduct(product);
                 setNotice("");
@@ -455,7 +529,7 @@ export default function App() {
       />
     ));
   // The guide is readable from a direct URL, even without a signed-in session.
-  if (helpPage)
+  if (helpPage && (!helpBackgroundPage || !ready))
     return (
       <HelpPage page={helpPage} onBack={leaveHelp} onNavigate={navigate} />
     );
@@ -470,8 +544,27 @@ export default function App() {
         onRetry={storageError ? () => void reload() : undefined}
       />
     );
-  return (
+  const content = (
     <div className="app-shell">
+      <HelpDialog
+        open={!!helpPage}
+        page={helpDialogPage}
+        onBack={leaveHelp}
+        onClose={closeHelp}
+        onNavigate={navigate}
+      />
+      <HistoryDialog
+        key={`${spaceId}:${historyDialogType}`}
+        open={historyType !== null}
+        type={historyDialogType}
+        state={state}
+        today={today}
+        saving={busy}
+        onSave={async (command, message) => {
+          await persist(command, message);
+        }}
+        onClose={closeHistory}
+      />
       {spaceSettings && spaces.find((s) => s.id === spaceId) && (
         <SpaceSettings
           key={`space-settings:${spaceId}`}
@@ -560,7 +653,7 @@ export default function App() {
             type="button"
             disabled={busy}
             key={n.id}
-            aria-current={page === n.id ? "page" : undefined}
+            aria-current={contentPage === n.id ? "page" : undefined}
             onClick={() => navigate(n.id)}
           >
             <SvgIcon
@@ -637,53 +730,32 @@ export default function App() {
               </Dialog>
             )}
             {editingProduct && (
-              <Dialog
+              <ProductDialog
                 open
-                onClose={() => {
+                onCancel={() => {
                   if (!busyRef.current) setEditingProduct(null);
                 }}
-                fullWidth
-                maxWidth="sm"
-                aria-labelledby="product-title"
-                slotProps={{
-                  paper: {
-                    sx: {
-                      margin: { xs: 2, sm: 4 },
-                      width: {
-                        xs: "calc(100% - 32px)",
-                        sm: "calc(100% - 64px)",
-                      },
+                key={editingProduct.id}
+                product={editingProduct}
+                state={state}
+                today={today}
+                onSave={saveProduct}
+                onSaveChanges={async (name, units, adjustment) => {
+                  await persist(
+                    {
+                      type: "product.update",
+                      id: editingProduct.id,
+                      name,
+                      units,
+                      adjustment,
                     },
-                  },
+                    `${name.trim()}を更新しました`,
+                  );
+                  setEditingProduct(null);
                 }}
-              >
-                <DialogContent sx={{ paddingTop: 3 }}>
-                  <ProductForm
-                    embedded
-                    key={editingProduct.id}
-                    product={editingProduct}
-                    state={state}
-                    today={today}
-                    onSave={saveProduct}
-                    onSaveChanges={async (name, units, adjustment) => {
-                      await persist(
-                        {
-                          type: "product.update",
-                          id: editingProduct.id,
-                          name,
-                          units,
-                          adjustment,
-                        },
-                        `${name.trim()}を更新しました`,
-                      );
-                      setEditingProduct(null);
-                    }}
-                    onCancel={() => setEditingProduct(null)}
-                  />
-                </DialogContent>
-              </Dialog>
+              />
             )}
-            {page === "home" && (
+            {contentPage === "home" && (
               <>
                 <section className="daily" aria-labelledby="daily-title">
                   <div>
@@ -711,7 +783,10 @@ export default function App() {
                     <Button
                       variant="text"
                       className="text-button"
-                      onClick={() => navigate("meal")}
+                      onClick={() => {
+                        mealFormRef.current?.startForDate(selectedDate);
+                        navigate("meal");
+                      }}
                     >
                       ＋ 記録する
                     </Button>
@@ -722,63 +797,91 @@ export default function App() {
                     </p>
                   ) : (
                     meals.map((meal) => (
-                      <details
-                        className="meal-row"
+                      <div
+                        className="meal-history-row"
                         key={`${selectedDate}-${meal.id}`}
                       >
-                        <summary>
-                          <strong>
-                            <HistoryText>{meal.kind}</HistoryText>
-                          </strong>
-                          <span>
-                            {meal.direct &&
-                            !meal.usages.length &&
-                            !meal.prepared?.length
-                              ? "金額入力"
-                              : `${meal.usages.length + (meal.prepared?.length ?? 0) + (meal.direct ? 1 : 0)}品`}
-                          </span>
-                          <strong className="numeric">
-                            {money(mealCost(meal))}
-                          </strong>
-                        </summary>
-                        <div className="meal-detail">
-                          {meal.direct && (
-                            <DirectMealDetail direct={meal.direct} />
-                          )}
-                          {(meal.prepared ?? []).map((p) => (
-                            <HistoryDetailRow
-                              key={p.batchId}
-                              value={money(p.cost)}
-                            >
-                              {
-                                state.cookings.find((c) => c.id === p.batchId)
-                                  ?.name
-                              }{" "}
-                              {number(p.quantity)}食分
-                            </HistoryDetailRow>
-                          ))}
-                          {meal.usages.map((u) => (
-                            <HistoryDetailRow
-                              key={u.productId}
-                              value={money(
-                                u.allocations.reduce((s, a) => s + a.cost, 0),
-                              )}
-                            >
-                              {
-                                state.products.find((p) => p.id === u.productId)
-                                  ?.name
-                              }{" "}
-                              <small>
-                                {number(u.quantity)}
-                                {u.unit}
-                              </small>
-                            </HistoryDetailRow>
-                          ))}
-                        </div>
-                      </details>
+                        <details className="meal-row">
+                          <summary>
+                            <strong>
+                              <HistoryText>{meal.kind}</HistoryText>
+                            </strong>
+                            <span>
+                              {meal.direct &&
+                              !meal.usages.length &&
+                              !meal.prepared?.length
+                                ? "金額入力"
+                                : `${meal.usages.length + (meal.prepared?.length ?? 0) + (meal.direct ? 1 : 0)}品`}
+                            </span>
+                            <strong className="numeric">
+                              {money(mealCost(meal))}
+                            </strong>
+                          </summary>
+                          <div className="meal-detail">
+                            {meal.direct && (
+                              <DirectMealDetail direct={meal.direct} />
+                            )}
+                            {(meal.prepared ?? []).map((p) => (
+                              <HistoryDetailRow
+                                key={p.batchId}
+                                value={money(p.cost)}
+                              >
+                                {
+                                  state.cookings.find((c) => c.id === p.batchId)
+                                    ?.name
+                                }{" "}
+                                {number(p.quantity)}食分
+                              </HistoryDetailRow>
+                            ))}
+                            {meal.usages.map((u) => (
+                              <HistoryDetailRow
+                                key={u.productId}
+                                value={money(
+                                  u.allocations.reduce((s, a) => s + a.cost, 0),
+                                )}
+                              >
+                                {
+                                  state.products.find(
+                                    (p) => p.id === u.productId,
+                                  )?.name
+                                }{" "}
+                                <small>
+                                  {number(u.quantity)}
+                                  {u.unit}
+                                </small>
+                              </HistoryDetailRow>
+                            ))}
+                          </div>
+                        </details>
+                        <IconButton
+                          className="meal-history-edit"
+                          disabled={busy}
+                          aria-label={`${dateLabel(meal.date)} ${meal.kind}の履歴を編集`}
+                          onClick={() => setEditingMealId(meal.id)}
+                          sx={{ width: 44, height: 44, flexShrink: 0 }}
+                        >
+                          <SvgIcon fontSize="small">
+                            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                          </SvgIcon>
+                        </IconButton>
+                      </div>
                     ))
                   )}
                 </section>
+                {editingMealId && (
+                  <HistoryEditor
+                    key={editingMealId}
+                    id={editingMealId}
+                    type="meal"
+                    state={state}
+                    today={today}
+                    saving={busy}
+                    onClose={() => setEditingMealId(null)}
+                    onSave={async (command, message) => {
+                      await persist(command, message);
+                    }}
+                  />
+                )}
                 {sampleDataEnabled && state.products.length === 0 && (
                   <div className="sample">
                     <p>記録の流れを試す</p>
@@ -804,7 +907,7 @@ export default function App() {
                 )}
               </>
             )}
-            {page === "inventory" && (
+            {contentPage === "inventory" && (
               <>
                 <TextField
                   className="search"
@@ -830,18 +933,37 @@ export default function App() {
                   {preparedRows(filteredPrepared)}
                   {inventoryRows(filtered)}
                   {filtered.length === 0 && filteredPrepared.length === 0 && (
-                    <p className="empty">
-                      {search
-                        ? "一致する在庫がありません。"
-                        : "在庫が登録されていません。"}
-                    </p>
+                    <div className="empty">
+                      <p>
+                        {search
+                          ? "一致する在庫がありません。"
+                          : "在庫が登録されていません。"}
+                      </p>
+                      {!search && (
+                        <PurchaseLink onNavigate={() => navigate("purchase")} />
+                      )}
+                    </div>
                   )}
                 </section>
                 {(state.preparedAdjustments ?? []).length > 0 && (
                   <section>
-                    <h2>料理の残量修正履歴</h2>
+                    <div className="section-heading">
+                      <h2>料理の残量修正履歴</h2>
+                      {(state.preparedAdjustments ?? []).length > 5 && (
+                        <Button
+                          onClick={() =>
+                            setAllPreparedAdjustments(!allPreparedAdjustments)
+                          }
+                        >
+                          {allPreparedAdjustments
+                            ? "最新5件を表示"
+                            : "すべて見る"}
+                        </Button>
+                      )}
+                    </div>
                     {[...(state.preparedAdjustments ?? [])]
                       .reverse()
+                      .slice(0, allPreparedAdjustments ? undefined : 5)
                       .map((a) => (
                         <div className="purchase-row" key={a.id}>
                           <div>
@@ -870,70 +992,84 @@ export default function App() {
                 )}
                 {(state.adjustments ?? []).length > 0 && (
                   <section>
-                    <h2>食材の残量修正履歴</h2>
-                    {[...(state.adjustments ?? [])].reverse().map((a) => {
-                      const product = state.products.find(
-                        (p) => p.id === a.productId,
-                      )!;
-                      return (
-                        <div className="purchase-row" key={a.id}>
-                          <div>
-                            <strong>
-                              <HistoryText>{product.name}</HistoryText>
-                            </strong>
-                            <p className="hint">
-                              <HistoryText>
-                                {dateLabel(a.date)}
-                                {a.reason ? ` · ${a.reason}` : ""}
-                              </HistoryText>
-                            </p>
+                    <div className="section-heading">
+                      <h2>食材の残量修正履歴</h2>
+                      {(state.adjustments ?? []).length > 5 && (
+                        <Button
+                          onClick={() =>
+                            setAllStockAdjustments(!allStockAdjustments)
+                          }
+                        >
+                          {allStockAdjustments ? "最新5件を表示" : "すべて見る"}
+                        </Button>
+                      )}
+                    </div>
+                    {[...(state.adjustments ?? [])]
+                      .reverse()
+                      .slice(0, allStockAdjustments ? undefined : 5)
+                      .map((a) => {
+                        const product = state.products.find(
+                          (p) => p.id === a.productId,
+                        )!;
+                        return (
+                          <div className="purchase-row" key={a.id}>
+                            <div>
+                              <strong>
+                                <HistoryText>{product.name}</HistoryText>
+                              </strong>
+                              <p className="hint">
+                                <HistoryText>
+                                  {dateLabel(a.date)}
+                                  {a.reason ? ` · ${a.reason}` : ""}
+                                </HistoryText>
+                              </p>
+                            </div>
+                            <span className="numeric">
+                              {number(a.beforeQuantity / 1000)} →{" "}
+                              {number(a.targetQuantity / 1000)}{" "}
+                              {product.baseUnit}
+                            </span>
                           </div>
-                          <span className="numeric">
-                            {number(a.beforeQuantity / 1000)} →{" "}
-                            {number(a.targetQuantity / 1000)} {product.baseUnit}
-                          </span>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
                   </section>
                 )}
               </>
             )}
-            {page === "purchase" && (
-              <>
-                <PurchaseForm
-                  key={formVersion}
-                  state={state}
-                  today={today}
-                  onCreateProduct={saveProduct}
-                  onAddUnit={async (product, unit) => {
-                    await persist(
-                      {
-                        type: "product.update",
-                        id: product.id,
-                        name: product.name,
-                        units: [...product.units, unit],
-                      },
-                      `${product.name}の単位を追加しました`,
-                    );
-                  }}
-                  onSave={async (command) => {
-                    await persist(command, "購入を記録しました");
-                    setFormVersion((v) => v + 1);
-                  }}
-                />
-                <History
-                  type="purchase"
-                  state={state}
-                  today={today}
-                  onSave={async (command, message) => {
-                    await persist(command, message);
-                  }}
-                  saving={busy}
-                />
-              </>
-            )}
-            <div hidden={page !== "cooking"}>
+            <div hidden={contentPage !== "purchase"}>
+              <PurchaseForm
+                key={formVersion}
+                state={state}
+                today={today}
+                onCreateProduct={saveProduct}
+                onAddUnit={async (product, unit) => {
+                  await persist(
+                    {
+                      type: "product.update",
+                      id: product.id,
+                      name: product.name,
+                      units: [...product.units, unit],
+                    },
+                    `${product.name}の単位を追加しました`,
+                  );
+                }}
+                onSave={async (command) => {
+                  await persist(command, "購入を記録しました");
+                  setFormVersion((v) => v + 1);
+                }}
+              />
+              <History
+                type="purchase"
+                onShowAll={() => openHistory("purchase")}
+                state={state}
+                today={today}
+                onSave={async (command, message) => {
+                  await persist(command, message);
+                }}
+                saving={busy}
+              />
+            </div>
+            <div hidden={contentPage !== "cooking"}>
               <PreparedForm
                 onPurchase={() => navigate("purchase")}
                 key={cookingVersion}
@@ -948,6 +1084,7 @@ export default function App() {
               />
               <History
                 type="cooking"
+                onShowAll={() => openHistory("cooking")}
                 state={state}
                 today={today}
                 onSave={async (command, message) => {
@@ -956,8 +1093,9 @@ export default function App() {
                 saving={busy}
               />
             </div>
-            <div hidden={page !== "meal"}>
+            <div hidden={contentPage !== "meal"}>
               <MealForm
+                ref={mealFormRef}
                 onPurchase={() => navigate("purchase")}
                 key={mealVersion}
                 state={state}
@@ -970,6 +1108,7 @@ export default function App() {
               />
               <History
                 type="meal"
+                onShowAll={() => openHistory("meal")}
                 state={state}
                 today={today}
                 onSave={async (command, message) => {
@@ -988,5 +1127,10 @@ export default function App() {
         onClose={() => setNotice("")}
       />
     </div>
+  );
+  return (
+    <InventorySummaryContext.Provider value={summary}>
+      {content}
+    </InventorySummaryContext.Provider>
   );
 }

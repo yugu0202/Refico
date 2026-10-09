@@ -231,6 +231,28 @@ section {
   margin: 0;
   border-bottom: 1px solid var(--border);
 }
+.purchase-link.MuiButtonBase-root {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 0;
+  text-align: left;
+  color: var(--mui-palette-text-primary);
+}
+.purchase-link:focus-visible,
+.purchase-link.Mui-focusVisible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.purchase-link-arrow {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.purchase-link:hover > span:first-child {
+  text-decoration: underline;
+}
 .text-button {
   border: none;
   padding: 8px 0;
@@ -665,6 +687,51 @@ label .amount-input select {
 .history-section {
   margin-top: 32px;
 }
+.full-screen-dialog .full-screen-heading,
+.full-screen-dialog .full-screen-content {
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+.full-screen-dialog .full-screen-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: max(8px, env(safe-area-inset-top));
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.full-screen-heading > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.full-screen-heading > button {
+  flex-shrink: 0;
+}
+.full-screen-dialog .help-page {
+  padding-bottom: 0;
+}
+.help-screen .full-screen-heading > span {
+  display: flex;
+  align-items: center;
+}
+.full-screen-dialog .full-screen-content.MuiDialogContent-root {
+  padding-top: 16px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+.history-screen .history-section {
+  margin-top: 0;
+}
+@media (min-width: 601px) {
+  .full-screen-dialog .full-screen-heading,
+  .full-screen-dialog .full-screen-content {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
 .purchase-history-actions {
   display: flex;
   align-items: center;
@@ -896,4 +963,21 @@ label .amount-input select {
 }
 .environment-staging {
   color: var(--mui-palette-info-main);
+}
+
+.history-filters {
+  display: grid;
+  gap: 16px;
+  margin: 16px 0;
+}
+.history-delete-action {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.item-select {
+  min-width: 0;
+}
+.ingredient > .item-select {
+  margin-bottom: 0 !important;
 }

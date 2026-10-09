@@ -187,3 +187,45 @@ export function updateMeal(
     meals: state.meals.map((m) => (m.id === id ? { ...fresh, id } : m)),
   });
 }
+
+export function deletePurchase(state: State, id: string): State {
+  const index = state.purchases.findIndex(
+    (p) => p.id === id && !p.adjustmentId,
+  );
+  if (index < 0) throw new Error("購入履歴が見つかりません");
+  return rebuild({
+    ...state,
+    purchases: state.purchases.filter((p) => p.id !== id),
+    adjustments: (state.adjustments ?? []).map((a) => ({
+      ...a,
+      purchaseCount: a.purchaseCount - (index < a.purchaseCount ? 1 : 0),
+    })),
+  });
+}
+
+export function deleteRecord(state: State, id: string): State {
+  const index = state.meals.findIndex((m) => m.id === id);
+  if (index < 0) throw new Error("記録が見つかりません");
+  if (state.meals[index].batch) {
+    if (state.meals.some((m) => m.prepared?.some((p) => p.batchId === id)))
+      throw new Error(
+        "この料理を使った食事があります。先に食事の記録を修正してください",
+      );
+    if (state.preparedAdjustments?.some((a) => a.batchId === id))
+      throw new Error("残量を修正した料理は削除できません");
+  }
+  // Boundaries count records before an adjustment, independently of date.
+  // Removing a record shifts only the boundaries that followed it.
+  return rebuild({
+    ...state,
+    meals: state.meals.filter((m) => m.id !== id),
+    adjustments: (state.adjustments ?? []).map((a) => ({
+      ...a,
+      mealCount: a.mealCount - (index < a.mealCount ? 1 : 0),
+    })),
+    preparedAdjustments: (state.preparedAdjustments ?? []).map((a) => ({
+      ...a,
+      mealCount: a.mealCount - (index < a.mealCount ? 1 : 0),
+    })),
+  });
+}

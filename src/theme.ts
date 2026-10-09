@@ -53,6 +53,14 @@ export const theme = createTheme({
         outlined: { borderColor: "var(--mui-palette-divider)" },
       },
     },
+    MuiAutocomplete: {
+      styleOverrides: {
+        option: { minHeight: 44 },
+        paper: { border: "1px solid var(--mui-palette-divider)" },
+        clearIndicator: { width: 44, height: 44 },
+        popupIndicator: { width: 44, height: 44 },
+      },
+    },
     MuiTextField: {
       defaultProps: { size: "small", fullWidth: true, variant: "outlined" },
     },
