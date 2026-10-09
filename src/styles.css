@@ -325,7 +325,6 @@ label .amount-input select {
   padding: 6px 0;
 }
 .history-text[role="button"] {
-  min-height: 44px;
   cursor: pointer;
 }
 .history-text {
