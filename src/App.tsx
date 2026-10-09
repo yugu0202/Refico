@@ -15,7 +15,8 @@ import { helpPageFromPath, helpBackAction, type HelpPageId } from "./help";
 import type { Command } from "./domain/commands";
 import { ApiError, bootstrap, sendCommand, authClient } from "./api";
 import { createFocusRefresh } from "./refresh";
-import { History } from "./components/History";
+import { History, type HistoryType } from "./components/History";
+import { HistoryDialog } from "./components/HistoryDialog";
 import { DirectMealDetail } from "./components/DirectMealDetail";
 import { HistoryDetailRow } from "./components/HistoryDetailRow";
 import { HistoryText } from "./components/HistoryText";
@@ -83,9 +84,21 @@ function currentPage(): Page {
   const saved = window.history.state?.reficoPage;
   return navigation.some((item) => item.id === saved) ? saved : "home";
 }
+function currentHistory(): HistoryType | null {
+  const saved = window.history.state?.reficoHistory;
+  return (saved === "purchase" || saved === "cooking" || saved === "meal") &&
+    saved === currentPage()
+    ? saved
+    : null;
+}
 export default function App() {
   const mainRef = useRef<HTMLElement>(null);
   const [page, setPage] = useState<Page>(currentPage);
+  const [historyType, setHistoryType] = useState(currentHistory);
+  const [historyDialogType, setHistoryDialogType] = useState<HistoryType>(
+    () => currentHistory() ?? "meal",
+  );
+  const historyClosing = useRef(false);
   const helpPage = helpPageFromPath(`/${page}`);
   const [reopenMenu, setReopenMenu] = useState(() =>
     Boolean(window.history.state?.reficoMenuOpen),
@@ -312,6 +325,7 @@ export default function App() {
   }
   function navigate(next: Page) {
     const historyState = { ...window.history.state, reficoPage: next };
+    delete historyState.reficoHistory;
     if (helpPageFromPath(`/${next}`)) {
       if (busyRef.current || next === page) return;
       if (helpPage && next === "help") {
@@ -362,10 +376,29 @@ export default function App() {
   }
   function selectPage(next: Page) {
     setPage(next);
+    const restoredHistory = currentHistory();
+    setHistoryType(restoredHistory);
+    if (restoredHistory) setHistoryDialogType(restoredHistory);
+    historyClosing.current = false;
     setReopenMenu(Boolean(window.history.state?.reficoMenuOpen));
     setEditingPrepared(null);
     setEditingProduct(null);
     setNotice("");
+  }
+  function openHistory(type: HistoryType) {
+    window.history.pushState(
+      { ...window.history.state, reficoPage: type, reficoHistory: type },
+      "",
+    );
+    historyClosing.current = false;
+    setHistoryDialogType(type);
+    setHistoryType(type);
+  }
+  function closeHistory() {
+    if (historyClosing.current) return;
+    historyClosing.current = true;
+    if (currentHistory()) window.history.back();
+    else setHistoryType(null);
   }
   function leaveHelp() {
     if (!helpPage) return;
@@ -483,6 +516,18 @@ export default function App() {
     );
   const content = (
     <div className="app-shell">
+      <HistoryDialog
+        key={`${spaceId}:${historyDialogType}`}
+        open={historyType !== null}
+        type={historyDialogType}
+        state={state}
+        today={today}
+        saving={busy}
+        onSave={async (command, message) => {
+          await persist(command, message);
+        }}
+        onClose={closeHistory}
+      />
       {spaceSettings && spaces.find((s) => s.id === spaceId) && (
         <SpaceSettings
           key={`space-settings:${spaceId}`}
@@ -1001,6 +1046,7 @@ export default function App() {
               />
               <History
                 type="purchase"
+                onShowAll={() => openHistory("purchase")}
                 state={state}
                 today={today}
                 onSave={async (command, message) => {
@@ -1024,6 +1070,7 @@ export default function App() {
               />
               <History
                 type="cooking"
+                onShowAll={() => openHistory("cooking")}
                 state={state}
                 today={today}
                 onSave={async (command, message) => {
@@ -1047,6 +1094,7 @@ export default function App() {
               />
               <History
                 type="meal"
+                onShowAll={() => openHistory("meal")}
                 state={state}
                 today={today}
                 onSave={async (command, message) => {

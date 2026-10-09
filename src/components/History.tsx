@@ -13,21 +13,28 @@ import { HistoryText } from "./HistoryText";
 import { mealCost, type State } from "../domain/inventory";
 import { money, number, dateLabel } from "../format";
 
+export type HistoryType = "purchase" | "meal" | "cooking";
+export type HistoryProps = {
+  saving: boolean;
+  state: State;
+  today: string;
+  type: HistoryType;
+  onSave: (command: Command, message: string) => Promise<void>;
+};
+
 export function History({
   state,
   today,
   type,
   onSave,
   saving,
-}: {
-  saving: boolean;
-  state: State;
-  today: string;
-  type: "purchase" | "meal" | "cooking";
-  onSave: (command: Command, message: string) => Promise<void>;
+  all = false,
+  onShowAll,
+}: HistoryProps & {
+  all?: boolean;
+  onShowAll?: () => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [all, setAll] = useState(false);
   const [page, setPage] = useState(0);
   const kind = { purchase: "購入", meal: "食事", cooking: "料理" }[type];
   const title = `${kind}履歴`;
@@ -96,19 +103,14 @@ export function History({
   const end = all ? start + 20 : 5;
   return (
     <section className="history-section" aria-label={title}>
-      <div className="section-heading">
-        <h2>{title}</h2>
-        {totalCount > 0 && (
-          <Button
-            onClick={() => {
-              setAll(!all);
-              setPage(0);
-            }}
-          >
-            {all ? "最新5件を表示" : "すべて見る"}
-          </Button>
-        )}
-      </div>
+      {!all && (
+        <div className="section-heading">
+          <h2>{title}</h2>
+          {totalCount > 5 && onShowAll && (
+            <Button onClick={onShowAll}>すべて見る</Button>
+          )}
+        </div>
+      )}
       {all && (
         <div className="history-filters">
           <TextField

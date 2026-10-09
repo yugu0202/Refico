@@ -665,6 +665,37 @@ label .amount-input select {
 .history-section {
   margin-top: 32px;
 }
+.history-screen .history-screen-heading,
+.history-screen .history-screen-content {
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+.history-screen .history-screen-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: max(8px, env(safe-area-inset-top));
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.history-screen .history-screen-content {
+  padding-top: 16px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+}
+.history-screen .history-section {
+  margin-top: 0;
+}
+@media (min-width: 601px) {
+  .history-screen .history-screen-heading,
+  .history-screen .history-screen-content {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+}
 .purchase-history-actions {
   display: flex;
   align-items: center;
