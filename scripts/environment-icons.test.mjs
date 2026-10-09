@@ -17,6 +17,8 @@ test("同じビルドをstaging→preview→productionへ切り替えて全ア�
           ? join(root, "public")
           : join(root, "public/environments", target);
       for (const asset of [
+        "logo.svg",
+        "logo-dark.svg",
         "favicon.svg",
         "favicon.ico",
         "apple-touch-icon.png",

@@ -1,5 +1,6 @@
 """Regenerate environment SVG/PNG/ICO assets using CairoSVG and Pillow."""
 from pathlib import Path
+import re
 import cairosvg
 from PIL import Image
 from io import BytesIO
@@ -25,6 +26,10 @@ for env, color, background in [('staging', '#2563eb', '#eff6ff'), ('preview', '#
         svg = svg.replace('<circle cx="101" cy="38" r="10" fill="#f59e0b" />', f'<circle cx="100" cy="30" r="18" fill="{color}" />\n  <path d="{letters[env]}" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />')
         suffix = '-dark' if dark else ''
         (directory / f'favicon{suffix}.svg').write_text(svg)
+        logo = re.sub(r'  <rect[^>]* />\n', '', svg).replace('viewBox="0 0 128 128"', 'viewBox="24 10 96 96"')
+        if dark:
+            logo = logo.replace('#ffffff', '#eeeee8')
+        (directory / f'logo{suffix}.svg').write_text(logo)
         render(svg, 32, directory / f"favicon{suffix}.ico")
         square = svg.replace('rx="26"', 'rx="0"')
         for size, path in [(180, f'apple-touch-icon{suffix}.png'), (192, f'icons/icon{suffix}-192.png'), (512, f'icons/icon{suffix}-512.png')]:

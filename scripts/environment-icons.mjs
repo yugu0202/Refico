@@ -16,6 +16,8 @@ export function prepareEnvironmentIcons(target, directory, assetsDirectory) {
       ? join(directory, "public")
       : join(directory, "public/environments", target);
   for (const file of [
+    "logo.svg",
+    "logo-dark.svg",
     "favicon.svg",
     "favicon.ico",
     "favicon-dark.svg",

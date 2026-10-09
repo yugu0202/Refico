@@ -38,8 +38,8 @@
 
 ## ステージング・プレビュー
 
-本番以外のfavicon・Apple Touch Icon・PWAアイコンは、Rを維持しつつステージングは青（#2563eb）とS、プレビューは紫（#7c3aed）とPのバッジで区別する。ブランチ名はアイコン・アプリ名に含めない。画面内の環境ラベルは従来どおり。
+本番以外の画面内ロゴ・favicon・Apple Touch Icon・PWAアイコンは、Rを維持しつつステージングは青（#2563eb）とS、プレビューは紫（#7c3aed）とPのバッジで区別する。ブランチ名はアイコン・アプリ名に含めない。画面内の環境ラベルは従来どおり。画面内ロゴは透明背景とし、ダークテーマではRを明るい色に変えて環境バッジの色を維持する。
 
 `public/environments/{staging,preview}/` に明暗両方の素材を保持する。`scripts/generate-environment-icons.py`（CairoSVG・Pillowが必要）でSVGから再生成する。Maskableはバッジも含めて安全領域に収めるため70%に縮小する。
 
-デプロイ時に `scripts/environment-icons.mjs` が対象環境の素材をdistの既存パスへコピーし、Manifest・Apple用アプリ名に環境名を付ける。devブランチは既存の判定によりステージングを選択する。本番へ切り替える場合はpublicの本番素材に戻す。参照バージョンは `v=4-production` / `v=4-staging` / `v=4-preview` とし、古いアイコンのキャッシュと区別する。
+デプロイ時に `scripts/environment-icons.mjs` が対象環境のロゴ・アイコン素材をdistの既存パスへコピーし、Manifest・Apple用アプリ名に環境名を付ける。devブランチは既存の判定によりステージングを選択する。本番へ切り替える場合はpublicの本番素材に戻す。参照バージョンは `v=4-production` / `v=4-staging` / `v=4-preview` とし、古いアイコンのキャッシュと区別する。
