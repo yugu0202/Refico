@@ -13,7 +13,7 @@ import {
   standardUnits,
 } from "../domain/inventory";
 import { AmountInput } from "./AmountInput";
-import { ProductForm } from "./ProductForm";
+import { ProductDialog } from "./ProductDialog";
 import { UnitForm } from "./UnitForm";
 export function PurchaseForm({
   state,
@@ -172,30 +172,17 @@ export function PurchaseForm({
           </div>
         </fieldset>
       </form>
-      <Dialog
+      <ProductDialog
         open={addingProduct}
-        onClose={() => {
-          if (!savingRef.current) setAddingProduct(false);
+        onCancel={() => setAddingProduct(false)}
+        onSave={async (created) => {
+          await onCreateProduct(created);
+          setProductId(created.id);
+          setUnit(created.baseUnit);
+          setAddingProduct(false);
+          setError("");
         }}
-        fullWidth
-        maxWidth="sm"
-        aria-labelledby="product-title"
-      >
-        <DialogContent>
-          {addingProduct && (
-            <ProductForm
-              onCancel={() => setAddingProduct(false)}
-              onSave={async (created) => {
-                await onCreateProduct(created);
-                setProductId(created.id);
-                setUnit(created.baseUnit);
-                setAddingProduct(false);
-                setError("");
-              }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      />
       <Dialog
         open={addingUnit}
         onClose={() => {

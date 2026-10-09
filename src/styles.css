@@ -665,15 +665,15 @@ label .amount-input select {
 .history-section {
   margin-top: 32px;
 }
-.history-screen .history-screen-heading,
-.history-screen .history-screen-content {
+.full-screen-dialog .full-screen-heading,
+.full-screen-dialog .full-screen-content {
   width: 100%;
   max-width: 860px;
   margin: 0 auto;
   padding-left: max(16px, env(safe-area-inset-left));
   padding-right: max(16px, env(safe-area-inset-right));
 }
-.history-screen .history-screen-heading {
+.full-screen-dialog .full-screen-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -682,7 +682,21 @@ label .amount-input select {
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
 }
-.history-screen .history-screen-content {
+.full-screen-heading > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.full-screen-heading > button {
+  flex-shrink: 0;
+}
+.full-screen-dialog .help-page {
+  padding-bottom: 0;
+}
+.help-screen .full-screen-heading > span {
+  display: flex;
+  align-items: center;
+}
+.full-screen-dialog .full-screen-content.MuiDialogContent-root {
   padding-top: 16px;
   padding-bottom: max(24px, env(safe-area-inset-bottom));
 }
@@ -690,8 +704,8 @@ label .amount-input select {
   margin-top: 0;
 }
 @media (min-width: 601px) {
-  .history-screen .history-screen-heading,
-  .history-screen .history-screen-content {
+  .full-screen-dialog .full-screen-heading,
+  .full-screen-dialog .full-screen-content {
     padding-left: 32px;
     padding-right: 32px;
   }

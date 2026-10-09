@@ -282,3 +282,12 @@ export function helpBackAction(
     ? { type: "go", delta: -1 }
     : { type: "replace", page: "home" };
 }
+
+export function helpCloseAction(
+  state: { reficoHelpDepth?: number; reficoHelpReturn?: boolean } | null,
+): { type: "go"; delta: number } | { type: "replace"; page: "home" } {
+  const depth = state?.reficoHelpDepth;
+  if (state?.reficoHelpReturn && Number.isInteger(depth) && depth! >= 0)
+    return { type: "go", delta: -(depth! + 1) };
+  return { type: "replace", page: "home" };
+}

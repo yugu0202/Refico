@@ -1,39 +1,26 @@
-import { forwardRef } from "react";
-import Dialog from "@mui/material/Dialog";
+import { FullScreenDialog } from "./FullScreenDialog";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import IconButton from "@mui/material/IconButton";
-import Slide, { type SlideProps } from "@mui/material/Slide";
 import SvgIcon from "@mui/material/SvgIcon";
-import useMediaQuery from "@mui/material/useMediaQuery";
 import { History, type HistoryProps } from "./History";
-
-const HistoryTransition = forwardRef<unknown, SlideProps>(
-  function HistoryTransition(props, ref) {
-    return <Slide direction="up" ref={ref} {...props} />;
-  },
-);
 
 export function HistoryDialog({
   open,
   onClose,
   ...props
 }: HistoryProps & { open: boolean; onClose: () => void }) {
-  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const title = `${{ purchase: "購入", cooking: "料理", meal: "食事" }[props.type]}履歴`;
   return (
-    <Dialog
+    <FullScreenDialog
       open={open}
-      fullScreen
       onClose={() => {
         if (!props.saving) onClose();
       }}
       aria-labelledby={`all-${props.type}-history-title`}
-      slots={{ transition: HistoryTransition }}
-      transitionDuration={reducedMotion ? 0 : undefined}
-      slotProps={{ paper: { className: "history-screen" } }}
+      slotProps={{ paper: { className: "full-screen-dialog history-screen" } }}
     >
-      <DialogTitle className="history-screen-heading">
+      <DialogTitle className="full-screen-heading">
         <span id={`all-${props.type}-history-title`}>{title}</span>
         <IconButton
           aria-label="履歴を閉じる"
@@ -46,9 +33,9 @@ export function HistoryDialog({
           </SvgIcon>
         </IconButton>
       </DialogTitle>
-      <DialogContent className="history-screen-content">
+      <DialogContent className="full-screen-content">
         <History {...props} all />
       </DialogContent>
-    </Dialog>
+    </FullScreenDialog>
   );
 }

@@ -11,7 +11,13 @@ import { sharingRequest, type Space } from "./api";
 import { AccountMenu } from "./components/AccountMenu";
 import { BrandLogo } from "./components/BrandLogo";
 import { HelpPage } from "./components/HelpPage";
-import { helpPageFromPath, helpBackAction, type HelpPageId } from "./help";
+import { HelpDialog } from "./components/HelpDialog";
+import {
+  helpPageFromPath,
+  helpBackAction,
+  helpCloseAction,
+  type HelpPageId,
+} from "./help";
 import type { Command } from "./domain/commands";
 import { ApiError, bootstrap, sendCommand, authClient } from "./api";
 import { createFocusRefresh } from "./refresh";
@@ -39,7 +45,7 @@ import {
   type State,
   type Product,
 } from "./domain/inventory";
-import { ProductForm } from "./components/ProductForm";
+import { ProductDialog } from "./components/ProductDialog";
 import { PurchaseForm } from "./components/PurchaseForm";
 import { MealForm, type MealFormHandle } from "./components/MealForm";
 import { CostCalendar } from "./components/CostCalendar";
@@ -77,7 +83,8 @@ const navigation = [
     icon: "M5 3v5a3 3 0 0 0 6 0V3M8 3v18M19 3c-3 2-4 5-4 9h4M19 3v18",
   },
 ] as const;
-type Page = (typeof navigation)[number]["id"] | HelpPageId;
+type TabPage = (typeof navigation)[number]["id"];
+type Page = TabPage | HelpPageId;
 function currentPage(): Page {
   const help = helpPageFromPath(window.location.pathname);
   if (help) return help;
@@ -91,6 +98,13 @@ function currentHistory(): HistoryType | null {
     ? saved
     : null;
 }
+function currentHelpOrigin(): TabPage | null {
+  const origin = window.history.state?.reficoHelpOrigin;
+  return window.history.state?.reficoHelpReturn &&
+    navigation.some((item) => item.id === origin)
+    ? origin
+    : null;
+}
 export default function App() {
   const mainRef = useRef<HTMLElement>(null);
   const [page, setPage] = useState<Page>(currentPage);
@@ -100,6 +114,13 @@ export default function App() {
   );
   const historyClosing = useRef(false);
   const helpPage = helpPageFromPath(`/${page}`);
+  const [helpBackgroundPage, setHelpBackgroundPage] =
+    useState(currentHelpOrigin);
+  const [helpDialogPage, setHelpDialogPage] = useState<HelpPageId>(
+    helpPage ?? "help",
+  );
+  const helpClosing = useRef(false);
+  const contentPage = helpPage ? (helpBackgroundPage ?? "home") : page;
   const [reopenMenu, setReopenMenu] = useState(() =>
     Boolean(window.history.state?.reficoMenuOpen),
   );
@@ -254,20 +275,12 @@ export default function App() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
     mainRef.current?.scrollTo({ top: 0, behavior: "instant" });
-    if (page === "meal" || page === "cooking") {
+    if (contentPage === "meal" || contentPage === "cooking") {
       mainRef.current
         ?.querySelector<HTMLHeadingElement>("h1")
         ?.focus({ preventScroll: true });
     }
-    if (helpPage) {
-      document
-        .querySelector<HTMLElement>(".help-page h1")
-        ?.focus({ preventScroll: true });
-      document
-        .querySelector<HTMLElement>(".help-page")
-        ?.scrollTo({ top: 0, behavior: "instant" });
-    }
-  }, [page]);
+  }, [contentPage]);
   useEffect(() => {
     const restore = () => selectPage(currentPage());
     window.addEventListener("popstate", restore);
@@ -352,6 +365,9 @@ export default function App() {
           reficoHelpReturn: helpPage
             ? Boolean(window.history.state?.reficoHelpReturn)
             : true,
+          reficoHelpOrigin: helpPage
+            ? window.history.state?.reficoHelpOrigin
+            : page,
           reficoHelpDepth: helpPage
             ? currentDepth === undefined
               ? undefined
@@ -364,6 +380,7 @@ export default function App() {
     } else {
       delete historyState.reficoHelpReturn;
       delete historyState.reficoHelpDepth;
+      delete historyState.reficoHelpOrigin;
       historyState.reficoMenuOpen = false;
       // Tabs still share the root URL; retain the tab when returning from help.
       window.history.replaceState(
@@ -376,6 +393,11 @@ export default function App() {
   }
   function selectPage(next: Page) {
     setPage(next);
+    const nextHelp = helpPageFromPath(`/${next}`);
+    if (nextHelp) setHelpDialogPage(nextHelp);
+    const helpOrigin = currentHelpOrigin();
+    if (helpOrigin) setHelpBackgroundPage(helpOrigin);
+    helpClosing.current = false;
     const restoredHistory = currentHistory();
     setHistoryType(restoredHistory);
     if (restoredHistory) setHistoryDialogType(restoredHistory);
@@ -418,6 +440,13 @@ export default function App() {
       );
       selectPage(action.page);
     }
+  }
+  function closeHelp() {
+    if (!helpPage || helpClosing.current) return;
+    helpClosing.current = true;
+    const action = helpCloseAction(window.history.state);
+    if (action.type === "go") window.history.go(action.delta);
+    else navigate(action.page);
   }
   function menuClosed() {
     setReopenMenu(false);
@@ -480,7 +509,7 @@ export default function App() {
         </div>
       );
     });
-  const title = navigation.find((n) => n.id === page)?.label;
+  const title = navigation.find((n) => n.id === contentPage)?.label;
   const inventoryRows = (products: Product[]) =>
     products.map((product) => (
       <InventoryRow
@@ -489,7 +518,7 @@ export default function App() {
         state={state}
         showValue={false}
         onEdit={
-          page === "inventory"
+          contentPage === "inventory"
             ? () => {
                 setEditingProduct(product);
                 setNotice("");
@@ -499,7 +528,7 @@ export default function App() {
       />
     ));
   // The guide is readable from a direct URL, even without a signed-in session.
-  if (helpPage)
+  if (helpPage && (!helpBackgroundPage || !ready))
     return (
       <HelpPage page={helpPage} onBack={leaveHelp} onNavigate={navigate} />
     );
@@ -516,6 +545,13 @@ export default function App() {
     );
   const content = (
     <div className="app-shell">
+      <HelpDialog
+        open={!!helpPage}
+        page={helpDialogPage}
+        onBack={leaveHelp}
+        onClose={closeHelp}
+        onNavigate={navigate}
+      />
       <HistoryDialog
         key={`${spaceId}:${historyDialogType}`}
         open={historyType !== null}
@@ -616,7 +652,7 @@ export default function App() {
             type="button"
             disabled={busy}
             key={n.id}
-            aria-current={page === n.id ? "page" : undefined}
+            aria-current={contentPage === n.id ? "page" : undefined}
             onClick={() => navigate(n.id)}
           >
             <SvgIcon
@@ -693,53 +729,32 @@ export default function App() {
               </Dialog>
             )}
             {editingProduct && (
-              <Dialog
+              <ProductDialog
                 open
-                onClose={() => {
+                onCancel={() => {
                   if (!busyRef.current) setEditingProduct(null);
                 }}
-                fullWidth
-                maxWidth="sm"
-                aria-labelledby="product-title"
-                slotProps={{
-                  paper: {
-                    sx: {
-                      margin: { xs: 2, sm: 4 },
-                      width: {
-                        xs: "calc(100% - 32px)",
-                        sm: "calc(100% - 64px)",
-                      },
+                key={editingProduct.id}
+                product={editingProduct}
+                state={state}
+                today={today}
+                onSave={saveProduct}
+                onSaveChanges={async (name, units, adjustment) => {
+                  await persist(
+                    {
+                      type: "product.update",
+                      id: editingProduct.id,
+                      name,
+                      units,
+                      adjustment,
                     },
-                  },
+                    `${name.trim()}を更新しました`,
+                  );
+                  setEditingProduct(null);
                 }}
-              >
-                <DialogContent sx={{ paddingTop: 3 }}>
-                  <ProductForm
-                    embedded
-                    key={editingProduct.id}
-                    product={editingProduct}
-                    state={state}
-                    today={today}
-                    onSave={saveProduct}
-                    onSaveChanges={async (name, units, adjustment) => {
-                      await persist(
-                        {
-                          type: "product.update",
-                          id: editingProduct.id,
-                          name,
-                          units,
-                          adjustment,
-                        },
-                        `${name.trim()}を更新しました`,
-                      );
-                      setEditingProduct(null);
-                    }}
-                    onCancel={() => setEditingProduct(null)}
-                  />
-                </DialogContent>
-              </Dialog>
+              />
             )}
-            {page === "home" && (
+            {contentPage === "home" && (
               <>
                 <section className="daily" aria-labelledby="daily-title">
                   <div>
@@ -891,7 +906,7 @@ export default function App() {
                 )}
               </>
             )}
-            {page === "inventory" && (
+            {contentPage === "inventory" && (
               <>
                 <TextField
                   className="search"
@@ -1022,7 +1037,7 @@ export default function App() {
                 )}
               </>
             )}
-            <div hidden={page !== "purchase"}>
+            <div hidden={contentPage !== "purchase"}>
               <PurchaseForm
                 key={formVersion}
                 state={state}
@@ -1055,7 +1070,7 @@ export default function App() {
                 saving={busy}
               />
             </div>
-            <div hidden={page !== "cooking"}>
+            <div hidden={contentPage !== "cooking"}>
               <PreparedForm
                 onPurchase={() => navigate("purchase")}
                 key={cookingVersion}
@@ -1079,7 +1094,7 @@ export default function App() {
                 saving={busy}
               />
             </div>
-            <div hidden={page !== "meal"}>
+            <div hidden={contentPage !== "meal"}>
               <MealForm
                 ref={mealFormRef}
                 onPurchase={() => navigate("purchase")}
