@@ -1,5 +1,5 @@
 import { EnvironmentLabel } from "./EnvironmentLabel";
-import type { MouseEvent } from "react";
+import { useEffect, useRef, type MouseEvent } from "react";
 import Button from "@mui/material/Button";
 import { BrandLogo } from "./BrandLogo";
 import {
@@ -13,11 +13,25 @@ export function HelpPage({
   page,
   onBack,
   onNavigate,
+  embedded = false,
 }: {
   page: HelpPageId;
   onBack: () => void;
   onNavigate: (page: HelpPageId) => void;
+  embedded?: boolean;
 }) {
+  const mainRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const main = mainRef.current;
+    const scroll = embedded ? main?.parentElement : main;
+    scroll?.scrollTo({ top: 0, behavior: "instant" });
+    const heading =
+      main?.querySelector<HTMLElement>("h1") ??
+      main
+        ?.closest("[role=dialog]")
+        ?.querySelector<HTMLElement>("#help-screen-title");
+    heading?.focus({ preventScroll: true });
+  }, [page, embedded]);
   const article = findHelpArticle(page);
   const link = (event: MouseEvent<HTMLAnchorElement>, next: HelpPageId) => {
     if (
@@ -31,21 +45,23 @@ export function HelpPage({
     event.preventDefault();
     onNavigate(next);
   };
-  return (
-    <div className="app-shell">
-      <header className="app-header">
-        <a href="/" className="brand">
-          <BrandLogo size={28} />
-          <span className="brand-name">
-            Refico
-            <EnvironmentLabel />
-          </span>
-        </a>
-        <Button variant="text" onClick={onBack} sx={{ minHeight: 44 }}>
-          戻る
-        </Button>
-      </header>
-      <main className="help-page">
+  const content = (
+    <>
+      {!embedded && (
+        <header className="app-header">
+          <a href="/" className="brand">
+            <BrandLogo size={28} />
+            <span className="brand-name">
+              Refico
+              <EnvironmentLabel />
+            </span>
+          </a>
+          <Button variant="text" onClick={onBack} sx={{ minHeight: 44 }}>
+            戻る
+          </Button>
+        </header>
+      )}
+      <main className="help-page" ref={mainRef}>
         {page !== "help" && (
           <nav className="help-breadcrumb" aria-label="使い方の階層">
             <a href="/help" onClick={(event) => link(event, "help")}>
@@ -59,13 +75,15 @@ export function HelpPage({
             )}
           </nav>
         )}
-        <div className="page-heading">
-          <h1 tabIndex={-1}>
-            {page === "help"
-              ? "使い方"
-              : (article?.title ?? "説明が見つかりません")}
-          </h1>
-        </div>
+        {(!embedded || page !== "help") && (
+          <div className="page-heading">
+            <h1 tabIndex={-1}>
+              {page === "help"
+                ? "使い方"
+                : (article?.title ?? "説明が見つかりません")}
+            </h1>
+          </div>
+        )}
         {page === "help" ? (
           <nav aria-label="使い方の一覧">
             {helpCategories.map((category, index) => (
@@ -164,6 +182,7 @@ export function HelpPage({
           <p>使い方の一覧から、確認したい項目を選んでください。</p>
         )}
       </main>
-    </div>
+    </>
   );
+  return embedded ? content : <div className="app-shell">{content}</div>;
 }

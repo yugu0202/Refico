@@ -3,8 +3,10 @@ import IconButton from "@mui/material/IconButton";
 import SvgIcon from "@mui/material/SvgIcon";
 import TextField from "@mui/material/TextField";
 import { AmountInput } from "./AmountInput";
+import { ItemSelect } from "./ItemSelect";
+import { useInventorySummary } from "../inventory-summary";
+import { number, dateLabel } from "../format";
 import {
-  preparedRemaining,
   standardUnits,
   type State,
   type Product,
@@ -28,6 +30,7 @@ export function UsedItems({
   itemLabel = "使ったもの",
   minimumRows = 1,
   showAddButton = true,
+  showErrors = false,
 }: {
   state: State;
   rows: Draft[];
@@ -38,7 +41,9 @@ export function UsedItems({
   itemLabel?: string;
   minimumRows?: number;
   showAddButton?: boolean;
+  showErrors?: boolean;
 }) {
+  const summary = useInventorySummary(state);
   const update = (key: string, changes: Partial<Draft>) =>
     setRows(rows.map((r) => (r.key === key ? { ...r, ...changes } : r)));
   const draft = (): Draft => ({
@@ -71,10 +76,8 @@ export function UsedItems({
             : selectedProduct;
         return (
           <div className="ingredient" key={row.key}>
-            <TextField
+            <ItemSelect
               label={`${itemLabel} ${index + 1}`}
-              select
-              required
               value={
                 row.batchId
                   ? `batch:${row.batchId}`
@@ -82,12 +85,32 @@ export function UsedItems({
                     ? `product:${row.productId}`
                     : ""
               }
-              slotProps={{
-                select: { native: true },
-                inputLabel: { shrink: true },
-              }}
-              onChange={(e) => {
-                const value = e.target.value;
+              showErrors={showErrors}
+              options={[
+                ...available
+                  .filter(
+                    (p) =>
+                      p.id === row.productId ||
+                      !rows.some((r) => r.productId === p.id),
+                  )
+                  .map((p) => ({
+                    id: `product:${p.id}`,
+                    name: p.name,
+                    group: "食材",
+                  })),
+                ...batches
+                  .filter(
+                    (c) =>
+                      c.id === row.batchId ||
+                      !rows.some((r) => r.batchId === c.id),
+                  )
+                  .map((c) => ({
+                    id: `batch:${c.id}`,
+                    name: `${c.name}（${dateLabel(c.date)}・残り${number(summary.cookings.get(c.id)!.quantity / 1000)}食分）`,
+                    group: "料理",
+                  })),
+              ]}
+              onChange={(value) => {
                 const isBatch = value.startsWith("batch:");
                 const id = value.slice(value.indexOf(":") + 1);
                 update(row.key, {
@@ -100,52 +123,26 @@ export function UsedItems({
                       "g"),
                 });
               }}
-            >
-              <option value="" disabled>
-                {batches.length ? "食材・料理を選択" : "食材を選択"}
-              </option>
-              <optgroup label="食材">
-                {available
-                  .filter(
-                    (p) =>
-                      p.id === row.productId ||
-                      !rows.some((r) => r.productId === p.id),
-                  )
-                  .map((p) => (
-                    <option key={p.id} value={`product:${p.id}`}>
-                      {p.name}
-                    </option>
-                  ))}
-              </optgroup>
-              {batches.length > 0 && (
-                <optgroup label="料理">
-                  {batches
-                    .filter(
-                      (m) =>
-                        m.id === row.batchId ||
-                        !rows.some((r) => r.batchId === m.id),
-                    )
-                    .map((m) => (
-                      <option key={m.id} value={`batch:${m.id}`}>
-                        {m.name}（残り{preparedRemaining(state, m)}
-                        食分）
-                      </option>
-                    ))}
-                </optgroup>
-              )}
-            </TextField>
+            />
             {row.batchId && (
               <TextField
                 label="食べた量（食分）"
                 required
                 type="number"
                 value={row.quantity}
+                error={showErrors && !(Number(row.quantity) > 0)}
+                helperText={
+                  showErrors && !(Number(row.quantity) > 0)
+                    ? "0より大きい量を入力してください"
+                    : undefined
+                }
                 slotProps={{ htmlInput: { min: 0.001, step: 0.001 } }}
                 onChange={(e) => update(row.key, { quantity: e.target.value })}
               />
             )}
             {product && (
               <AmountInput
+                showErrors={showErrors}
                 id={`amount-${row.key}`}
                 product={product}
                 quantity={row.quantity}

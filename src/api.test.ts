@@ -80,3 +80,58 @@ test("同じ入力でもスペースごとに再送IDと操作対象を分離す
   assert.equal(sent[0].id, sent[1].id);
   assert.notEqual(sent[0].id, sent[2].id);
 });
+
+test("差分応答を適用し、古いサーバーの全件応答も受け付ける", async () => {
+  const { emptyState } = await import("./domain/inventory.ts");
+  const { diffState } = await import("./domain/snapshot.ts");
+  const base = emptyState();
+  const next = {
+    ...base,
+    products: [{ id: "rice", name: "米", baseUnit: "g" as const, units: [] }],
+  };
+  let delta = true;
+  const client = createCommandClient((async (_url, init) => {
+    assert.equal(
+      new Headers(init?.headers).get("X-Refico-Response"),
+      "delta-v1",
+    );
+    return Response.json(
+      delta
+        ? { revision: 1, baseRevision: 0, changes: diffState(base, next) }
+        : { revision: 1, state: next },
+    );
+  }) as typeof fetch);
+  const command = { type: "sample.create", date: "2026-10-01" } as const;
+  assert.deepEqual((await client(command, 0, "space", base)).state, next);
+  delta = false;
+  assert.deepEqual((await client(command, 0, "space", base)).state, next);
+});
+
+test("差分を復元できない場合も同じ送信IDで全件応答を回収する", async () => {
+  const { emptyState } = await import("./domain/inventory.ts");
+  const base = emptyState();
+  const bodies: string[] = [];
+  const modes: (string | null)[] = [];
+  const client = createCommandClient((async (_url, init) => {
+    bodies.push(init?.body as string);
+    modes.push(new Headers(init?.headers).get("X-Refico-Response"));
+    return Response.json(
+      bodies.length === 1
+        ? { revision: 5, baseRevision: 4, changes: {} }
+        : { revision: 5, state: base },
+    );
+  }) as typeof fetch);
+  assert.equal(
+    (
+      await client(
+        { type: "sample.create", date: "2026-10-01" },
+        0,
+        "space",
+        base,
+      )
+    ).revision,
+    5,
+  );
+  assert.equal(new Set(bodies).size, 1);
+  assert.deepEqual(modes, ["delta-v1", null]);
+});

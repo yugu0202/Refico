@@ -7,6 +7,7 @@ import {
   helpPageFromPath,
   findHelpArticle,
   helpBackAction,
+  helpCloseAction,
 } from "./help.ts";
 
 test("使い方の直接URL・末尾スラッシュ・不明な記事を解決し、他のパスとは区別する", () => {
@@ -18,6 +19,24 @@ test("使い方の直接URL・末尾スラッシュ・不明な記事を解決�
   assert.equal(findHelpArticle("help/unknown"), undefined);
   for (const path of ["/", "/helpful", "/inventory", "/api/help"])
     assert.equal(helpPageFromPath(path), null);
+});
+
+test("使い方を閉じると関連記事の深さに関係なく元の画面へ戻る", () => {
+  for (const depth of [0, 1, 3]) {
+    assert.deepEqual(
+      helpCloseAction({ reficoHelpReturn: true, reficoHelpDepth: depth }),
+      { type: "go", delta: -(depth + 1) },
+    );
+  }
+  for (const state of [
+    null,
+    {},
+    { reficoHelpReturn: false, reficoHelpDepth: 2 },
+    { reficoHelpReturn: true, reficoHelpDepth: -1 },
+    { reficoHelpReturn: true, reficoHelpDepth: 1.5 },
+  ]) {
+    assert.deepEqual(helpCloseAction(state), { type: "replace", page: "home" });
+  }
 });
 
 test("一覧と関連記事に孤立・重複・リンク切れがなく、操作図の配信ファイルが存在する", () => {

@@ -1,13 +1,9 @@
 import IconButton from "@mui/material/IconButton";
 import SvgIcon from "@mui/material/SvgIcon";
-import {
-  latestPurchase,
-  stock,
-  type Product,
-  type State,
-} from "../domain/inventory";
+import { type Product, type State } from "../domain/inventory";
 import { stockDisplayUnit } from "../domain/stock-amount";
 import { money, number } from "../format";
+import { useInventorySummary } from "../inventory-summary";
 
 export function InventoryRow({
   product,
@@ -20,8 +16,9 @@ export function InventoryRow({
   showValue?: boolean;
   onEdit?: () => void;
 }) {
-  const balance = stock(state, product.id);
-  const last = latestPurchase(state, product.id);
+  const summary = useInventorySummary(state);
+  const balance = summary.products.get(product.id)!;
+  const last = balance.latest;
   const unit = stockDisplayUnit(product.baseUnit, balance.quantity / 1000);
   const q = `${number(balance.quantity / 1000 / unit.factor, unit.factor === 1000 ? 6 : 3)} ${unit.name}`;
   return (

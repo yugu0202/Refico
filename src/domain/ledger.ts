@@ -344,6 +344,21 @@ export function recordMeal(
     new Set(inputs.map((i) => i.productId)).size === inputs.length,
     "同じ食材は1行にまとめてください",
   );
+  const usedByLot = new Map<string, number>();
+  for (const record of state.meals)
+    for (const usage of record.usages)
+      for (const a of usage.allocations)
+        usedByLot.set(
+          a.purchaseId,
+          (usedByLot.get(a.purchaseId) ?? 0) + a.quantity,
+        );
+  for (const adjustment of state.adjustments ?? [])
+    for (const a of adjustment.allocations)
+      usedByLot.set(
+        a.purchaseId,
+        (usedByLot.get(a.purchaseId) ?? 0) + a.quantity,
+      );
+  const used = (id: string) => usedByLot.get(id) ?? 0;
   const usages = inputs.map((input) => {
     const snapshot = snapshots.find(
       (u) => u.productId === input.productId && u.unit === input.unit,
@@ -369,29 +384,31 @@ export function recordMeal(
       snapshot?.baseQuantity === needed &&
       snapshot.allocations.every((a) => {
         const p = purchases.find((p) => p.id === a.purchaseId);
-        return !!p && p.baseQuantity - consumed(state, p.id) >= a.quantity;
+        return !!p && p.baseQuantity - used(p.id) >= a.quantity;
       });
     if (preserved) {
       for (const a of snapshot!.allocations) {
         const p = purchases.find((p) => p.id === a.purchaseId)!;
-        const used = consumed(state, p.id);
+        const alreadyUsed = used(p.id);
         allocations.push({
           ...a,
-          cost: cumulativeCost(p, used + a.quantity) - cumulativeCost(p, used),
+          cost:
+            cumulativeCost(p, alreadyUsed + a.quantity) -
+            cumulativeCost(p, alreadyUsed),
         });
       }
       return { ...normalized, allocations };
     }
     for (const purchase of purchases) {
-      const used = consumed(state, purchase.id);
-      const take = Math.min(needed, purchase.baseQuantity - used);
+      const alreadyUsed = used(purchase.id);
+      const take = Math.min(needed, purchase.baseQuantity - alreadyUsed);
       if (take > 0)
         allocations.push({
           purchaseId: purchase.id,
           quantity: take,
           cost:
-            cumulativeCost(purchase, used + take) -
-            cumulativeCost(purchase, used),
+            cumulativeCost(purchase, alreadyUsed + take) -
+            cumulativeCost(purchase, alreadyUsed),
         });
       needed -= take;
       if (needed === 0) break;

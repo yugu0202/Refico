@@ -30,6 +30,8 @@ export function ProductForm({
   product,
   onSaveChanges,
   embedded = false,
+  hideTitle = false,
+  onSavingChange,
   state,
   today,
 }: {
@@ -37,6 +39,8 @@ export function ProductForm({
   onCancel: () => void;
   product?: Product;
   embedded?: boolean;
+  hideTitle?: boolean;
+  onSavingChange?: (saving: boolean) => void;
   state?: State;
   today?: string;
   onSaveChanges?: (
@@ -78,6 +82,7 @@ export function ProductForm({
     if (savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
+    onSavingChange?.(true);
     setError("");
     try {
       if (product && onSaveChanges) {
@@ -109,6 +114,7 @@ export function ProductForm({
     } finally {
       savingRef.current = false;
       setSaving(false);
+      onSavingChange?.(false);
     }
   }
   return (
@@ -116,9 +122,11 @@ export function ProductForm({
       className={embedded ? undefined : "inset"}
       aria-labelledby="product-title"
     >
-      <h2 id="product-title">
-        {product ? `${product.name}を編集` : "食材を追加"}
-      </h2>
+      {!hideTitle && (
+        <h2 id="product-title">
+          {product ? `${product.name}を編集` : "食材を追加"}
+        </h2>
+      )}
       <form onSubmit={submit}>
         <fieldset className="form-fields" disabled={saving}>
           <TextField
