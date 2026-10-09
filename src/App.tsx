@@ -47,6 +47,7 @@ import {
 } from "./domain/inventory";
 import { ProductDialog } from "./components/ProductDialog";
 import { PurchaseForm } from "./components/PurchaseForm";
+import { PurchaseLink } from "./components/PurchaseLink";
 import { MealForm, type MealFormHandle } from "./components/MealForm";
 import { CostCalendar } from "./components/CostCalendar";
 import { InventoryRow } from "./components/InventoryRow";
@@ -939,9 +940,7 @@ export default function App() {
                           : "在庫が登録されていません。"}
                       </p>
                       {!search && (
-                        <Button onClick={() => navigate("purchase")}>
-                          購入を記録
-                        </Button>
+                        <PurchaseLink onNavigate={() => navigate("purchase")} />
                       )}
                     </div>
                   )}

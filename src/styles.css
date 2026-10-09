@@ -231,6 +231,28 @@ section {
   margin: 0;
   border-bottom: 1px solid var(--border);
 }
+.purchase-link.MuiButtonBase-root {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 0;
+  text-align: left;
+  color: var(--mui-palette-text-primary);
+}
+.purchase-link:focus-visible,
+.purchase-link.Mui-focusVisible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.purchase-link-arrow {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.purchase-link:hover > span:first-child {
+  text-decoration: underline;
+}
 .text-button {
   border: none;
   padding: 8px 0;

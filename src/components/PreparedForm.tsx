@@ -1,6 +1,7 @@
 import { useInventorySummary } from "../inventory-summary";
 import { useState, useRef, useMemo, type FormEvent } from "react";
 import Button from "@mui/material/Button";
+import { PurchaseLink } from "./PurchaseLink";
 import InputAdornment from "@mui/material/InputAdornment";
 import { RemainingFields } from "./RemainingFields";
 import TextField from "@mui/material/TextField";
@@ -289,7 +290,7 @@ export function PreparedForm({
         {available.length === 0 && (
           <div className="empty">
             <p>使える食材がありません。</p>
-            {onPurchase && <Button onClick={onPurchase}>購入を記録</Button>}
+            {onPurchase && <PurchaseLink onNavigate={onPurchase} />}
           </div>
         )}
         {available.length > 0 && (
