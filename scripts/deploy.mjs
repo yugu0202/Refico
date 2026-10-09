@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import { parse } from "jsonc-parser";
+import { prepareEnvironmentIcons } from "./environment-icons.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 export function deploymentTarget(target, branch) {
@@ -202,6 +203,11 @@ if (
     const wrangler = resolve(
       dirname(require.resolve("wrangler/package.json")),
       require("wrangler/package.json").bin.wrangler,
+    );
+    prepareEnvironmentIcons(
+      target,
+      root,
+      resolve(root, config.assets.directory),
     );
     deploy(target, config, (args) => {
       const result = spawnSync(process.execPath, [wrangler, ...args], {
