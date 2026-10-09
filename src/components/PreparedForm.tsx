@@ -1,4 +1,5 @@
-import { useState, useRef, type FormEvent } from "react";
+import { useInventorySummary } from "../inventory-summary";
+import { useState, useRef, useMemo, type FormEvent } from "react";
 import Button from "@mui/material/Button";
 import InputAdornment from "@mui/material/InputAdornment";
 import { RemainingFields } from "./RemainingFields";
@@ -7,14 +8,13 @@ import { UsedItems, type Draft } from "./UsedItems";
 import {
   cookingCost,
   recordCooking,
-  stock,
+  recordPreparedAdjustment,
   preparedRemaining,
   type Cooking,
   type State,
 } from "../domain/inventory";
 import { updateCooking } from "../domain/history";
 import type { Command } from "../domain/commands";
-import { updateCookingInventory } from "../domain/inventory-edit";
 import { money } from "../format";
 export function PreparedForm({
   state,
@@ -40,7 +40,10 @@ export function PreparedForm({
   const [servings, setServings] = useState(
     editing ? String(editing.servings) : "",
   );
-  const current = editing ? preparedRemaining(state, editing) : 0;
+  const summary = useInventorySummary(state);
+  const current = editing
+    ? summary.cookings.get(editing.id)!.quantity / 1000
+    : 0;
   const lastServings = useRef(editing?.servings ?? 0);
   const [quantity, setQuantity] = useState(String(current));
   const [reason, setReason] = useState("");
@@ -94,52 +97,85 @@ export function PreparedForm({
   const available = state.products.filter(
     (p) =>
       !!editing ||
-      stock(state, p.id).quantity > 0 ||
+      summary.products.get(p.id)!.quantity > 0 ||
       rows.some((r) => r.productId === p.id),
   );
-  let expected = current;
-  let recalculate = false;
-  let estimate: number | undefined;
-  let estimateError = "";
-  if (
-    name.trim() &&
-    servings &&
-    rows.some((r) => r.productId) &&
-    rows.every((r) => r.productId && r.quantity)
-  ) {
-    try {
-      const c = input();
-      const revised = editing
-        ? updateCooking(state, editing.id, c.date, c.name, c.servings, c.inputs)
-        : undefined;
-      if (revised && editing) {
-        expected = preparedRemaining(
-          revised,
-          revised.cookings.find((c) => c.id === editing.id)!,
-        );
-        recalculate =
-          c.servings !== editing.servings ||
-          Number(quantity) > expected ||
-          cookingCost(revised.cookings.find((c) => c.id === editing.id)!) !==
-            cookingCost(editing);
-      }
-      const cmd = command();
-      const next =
-        cmd.type === "prepared.update"
-          ? updateCookingInventory(state, cmd.id, cmd.input, cmd.adjustment)
+  const [attempted, setAttempted] = useState(false);
+  const previewName = editing ? name : name.trim() ? "料理" : "";
+  const { expected, recalculate, estimate, estimateError } = useMemo(() => {
+    let expected = current;
+    let recalculate = false;
+    let estimate: number | undefined;
+    let estimateError = "";
+    if (
+      previewName.trim() &&
+      servings &&
+      rows.some((r) => r.productId) &&
+      rows.every((r) => r.productId && r.quantity)
+    ) {
+      try {
+        const c = { ...input(), name: previewName };
+        const revised = editing
+          ? updateCooking(
+              state,
+              editing.id,
+              c.date,
+              c.name,
+              c.servings,
+              c.inputs,
+            )
           : recordCooking(state, c.date, c.name, c.servings, c.inputs);
-      estimate = cookingCost(
-        editing
-          ? next.cookings.find((c) => c.id === editing.id)!
-          : next.cookings.at(-1)!,
-      );
-    } catch (e) {
-      estimateError = e instanceof Error ? e.message : "入力を確認してください";
+        if (editing) {
+          expected = preparedRemaining(
+            revised,
+            revised.cookings.find((c) => c.id === editing.id)!,
+          );
+          recalculate =
+            c.servings !== editing.servings ||
+            Number(quantity) > expected ||
+            cookingCost(revised.cookings.find((c) => c.id === editing.id)!) !==
+              cookingCost(editing);
+        }
+        const next =
+          editing && Number(quantity) !== expected
+            ? recordPreparedAdjustment(
+                revised,
+                editing.id,
+                quantity.trim() ? Number(quantity) : NaN,
+                today,
+                "",
+              )
+            : revised;
+        estimate = cookingCost(
+          editing
+            ? next.cookings.find((c) => c.id === editing.id)!
+            : next.cookings.at(-1)!,
+        );
+      } catch (e) {
+        estimateError =
+          e instanceof Error ? e.message : "入力を確認してください";
+      }
     }
-  }
+    return { expected, recalculate, estimate, estimateError };
+  }, [
+    state,
+    editing,
+    date,
+    previewName,
+    servings,
+    rows,
+    quantity,
+    today,
+    current,
+  ]);
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (savingRef.current) return;
+    setAttempted(true);
+    if (estimate === undefined) {
+      setError(estimateError || "未入力の欄を確認してください");
+      return;
+    }
     savingRef.current = true;
     setSaving(true);
     setError("");
@@ -153,7 +189,12 @@ export function PreparedForm({
     }
   }
   return (
-    <form className="entry-form wide" onSubmit={submit}>
+    <form
+      className="entry-form wide"
+      onSubmit={submit}
+      onChangeCapture={() => setError("")}
+      onInvalid={() => setAttempted(true)}
+    >
       <fieldset className="form-fields" disabled={saving}>
         <TextField
           className="field"
@@ -161,6 +202,10 @@ export function PreparedForm({
           autoFocus={autoFocus}
           required
           value={name}
+          error={attempted && !name.trim()}
+          helperText={
+            attempted && !name.trim() ? "料理名を入力してください" : undefined
+          }
           onChange={(e) => setName(e.target.value)}
           slotProps={{ htmlInput: { maxLength: 100 } }}
         />
@@ -180,6 +225,12 @@ export function PreparedForm({
             type="number"
             required
             value={servings}
+            error={attempted && !(Number(servings) > 0)}
+            helperText={
+              attempted && !(Number(servings) > 0)
+                ? "0より大きい量を入力してください"
+                : undefined
+            }
             onChange={(e) => {
               const value = e.target.value;
               // Keep the eaten/discarded count when changing the original yield.
@@ -249,6 +300,7 @@ export function PreparedForm({
             available={available}
             editing={editing}
             itemLabel="食材"
+            showErrors={attempted}
           />
         )}
         {showCost && (
@@ -268,11 +320,7 @@ export function PreparedForm({
               キャンセル
             </Button>
           )}
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={saving || estimate === undefined}
-          >
+          <Button type="submit" variant="contained" disabled={saving}>
             {editing ? "変更を保存" : "料理を保存"}
           </Button>
         </div>

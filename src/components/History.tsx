@@ -1,19 +1,16 @@
+import { HistoryEditor } from "./HistoryEditor";
+import TextField from "@mui/material/TextField";
+import { useInventorySummary } from "../inventory-summary";
 import type { Command } from "../domain/commands";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import SvgIcon from "@mui/material/SvgIcon";
 import Tooltip from "@mui/material/Tooltip";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import { PurchaseForm } from "./PurchaseForm";
-import { MealForm } from "./MealForm";
-import { PreparedForm } from "./PreparedForm";
 import { DirectMealDetail } from "./DirectMealDetail";
 import { HistoryDetailRow } from "./HistoryDetailRow";
 import { HistoryText } from "./HistoryText";
-import { mealCost, preparedRemaining, type State } from "../domain/inventory";
+import { mealCost, type State } from "../domain/inventory";
 import { money, number, dateLabel } from "../format";
 
 export function History({
@@ -34,32 +31,74 @@ export function History({
   const [page, setPage] = useState(0);
   const kind = { purchase: "購入", meal: "食事", cooking: "料理" }[type];
   const title = `${kind}履歴`;
-  const purchases = state.purchases
-    .filter((p) => !p.adjustmentId)
-    .reverse()
-    .sort((a, b) => b.date.localeCompare(a.date));
-  const meals = [...state.meals]
-    .reverse()
-    .sort((a, b) => b.date.localeCompare(a.date));
-  const cookings = [...state.cookings]
-    .reverse()
-    .sort((a, b) => b.date.localeCompare(a.date));
+  const summary = useInventorySummary(state);
+  const [query, setQuery] = useState("");
+  const [from, setFrom] = useState("");
+  const [until, setUntil] = useState("");
+  const { purchases, meals, cookings } = useMemo(() => {
+    const productNames = new Map(state.products.map((p) => [p.id, p.name]));
+    const cookingNames = new Map(state.cookings.map((c) => [c.id, c.name]));
+    const matches = (date: string, text: string) =>
+      !all ||
+      ((!from || date >= from) &&
+        (!until || date <= until) &&
+        query
+          .normalize("NFKC")
+          .toLocaleLowerCase()
+          .trim()
+          .split(/\s+/)
+          .every((part) =>
+            text.normalize("NFKC").toLocaleLowerCase().includes(part),
+          ));
+    const productName = (id: string) => productNames.get(id) ?? "";
+    const cookingName = (id: string) => cookingNames.get(id) ?? "";
+    const purchases = state.purchases
+      .filter(
+        (p) => !p.adjustmentId && matches(p.date, productName(p.productId)),
+      )
+      .reverse()
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const meals = state.meals
+      .filter((m) =>
+        matches(
+          m.date,
+          [
+            m.kind,
+            m.direct?.note,
+            m.direct?.place,
+            ...m.usages.map((u) => productName(u.productId)),
+            ...(m.prepared ?? []).map((p) => cookingName(p.batchId)),
+          ].join(" "),
+        ),
+      )
+      .reverse()
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const cookings = state.cookings
+      .filter((c) =>
+        matches(
+          c.date,
+          [c.name, ...c.usages.map((u) => productName(u.productId))].join(" "),
+        ),
+      )
+      .reverse()
+      .sort((a, b) => b.date.localeCompare(a.date));
+    return { purchases, meals, cookings };
+  }, [state, all, query, from, until]);
   const count = { purchase: purchases, meal: meals, cooking: cookings }[type]
     .length;
-  const start = all ? page * 20 : 0;
+  const totalCount = {
+    purchase: state.purchases.filter((p) => !p.adjustmentId),
+    meal: state.meals,
+    cooking: state.cookings,
+  }[type].length;
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(count / 20) - 1));
+  const start = all ? currentPage * 20 : 0;
   const end = all ? start + 20 : 5;
-  const purchase = purchases.find((p) => p.id === editingId);
-  const meal = meals.find((m) => m.id === editingId);
-  const cooking = cookings.find((c) => c.id === editingId);
-  const save = async (next: Command) => {
-    await onSave(next, `${kind}の記録を更新しました`);
-    setEditingId(null);
-  };
   return (
     <section className="history-section" aria-label={title}>
       <div className="section-heading">
         <h2>{title}</h2>
-        {count > 5 && (
+        {totalCount > 0 && (
           <Button
             onClick={() => {
               setAll(!all);
@@ -70,7 +109,48 @@ export function History({
           </Button>
         )}
       </div>
-      {count === 0 && <p className="empty">まだ{kind}の記録がありません。</p>}
+      {all && (
+        <div className="history-filters">
+          <TextField
+            label="履歴を探す"
+            type="search"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(0);
+            }}
+          />
+          <div className="two-columns">
+            <TextField
+              label="開始日"
+              type="date"
+              value={from}
+              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={(e) => {
+                setFrom(e.target.value);
+                setPage(0);
+              }}
+            />
+            <TextField
+              label="終了日"
+              type="date"
+              value={until}
+              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={(e) => {
+                setUntil(e.target.value);
+                setPage(0);
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {count === 0 && (
+        <p className="empty">
+          {totalCount
+            ? "一致する記録がありません。"
+            : `まだ${kind}の記録がありません。`}
+        </p>
+      )}
       {type === "purchase"
         ? purchases.slice(start, end).map((p) => (
             <div className="purchase-row history-row" key={p.id}>
@@ -172,7 +252,7 @@ export function History({
                   </summary>
                   <div className="meal-detail">
                     <HistoryDetailRow
-                      value={`${number(preparedRemaining(state, c))}食分`}
+                      value={`${number(summary.cookings.get(c.id)!.quantity / 1000)}食分`}
                     >
                       残量
                     </HistoryDetailRow>
@@ -203,89 +283,35 @@ export function History({
             ))}
       {all && count > 20 && (
         <div className="history-pagination">
-          <Button disabled={page === 0} onClick={() => setPage(page - 1)}>
+          <Button
+            disabled={currentPage === 0}
+            onClick={() => setPage(currentPage - 1)}
+          >
             前へ
           </Button>
           <span>
-            {page + 1} / {Math.ceil(count / 20)}
+            {currentPage + 1} / {Math.ceil(count / 20)}
           </span>
-          <Button disabled={end >= count} onClick={() => setPage(page + 1)}>
+          <Button
+            disabled={end >= count}
+            onClick={() => setPage(currentPage + 1)}
+          >
             次へ
           </Button>
         </div>
       )}
-      <Dialog
-        open={!!editingId}
-        onClose={() => {
-          if (!saving) setEditingId(null);
-        }}
-        fullWidth
-        maxWidth="sm"
-        aria-labelledby="history-edit-title"
-        slotProps={{
-          paper: {
-            sx: {
-              margin: { xs: 2, sm: 4 },
-              width: { xs: "calc(100% - 32px)", sm: "calc(100% - 64px)" },
-            },
-          },
-        }}
-      >
-        <DialogTitle id="history-edit-title">{title}を編集</DialogTitle>
-        <DialogContent sx={{ "&&": { paddingTop: 1.5 } }}>
-          {purchase && type === "purchase" && (
-            <PurchaseForm
-              key={purchase.id}
-              editing={purchase}
-              state={state}
-              today={today}
-              onCancel={() => setEditingId(null)}
-              onSave={save}
-              onCreateProduct={async (product) => {
-                if (state.products.some((p) => p.name === product.name))
-                  throw new Error("同じ名前の食材が登録されています");
-                await onSave(
-                  { type: "product.create", product },
-                  "食材を追加しました",
-                );
-              }}
-              onAddUnit={(product, unit) =>
-                onSave(
-                  {
-                    type: "product.update",
-                    id: product.id,
-                    name: product.name,
-                    units: [...product.units, unit],
-                  },
-                  "単位を追加しました",
-                )
-              }
-            />
-          )}
-          {meal && type === "meal" && (
-            <MealForm
-              key={meal.id}
-              editing={meal}
-              state={state}
-              today={today}
-              money={money}
-              onCancel={() => setEditingId(null)}
-              onSave={save}
-            />
-          )}
-          {cooking && type === "cooking" && (
-            <PreparedForm
-              key={cooking.id}
-              editing={cooking}
-              state={state}
-              today={today}
-              showCost={false}
-              onCancel={() => setEditingId(null)}
-              onSave={save}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {editingId && (
+        <HistoryEditor
+          key={editingId}
+          id={editingId}
+          type={type}
+          state={state}
+          today={today}
+          saving={saving}
+          onClose={() => setEditingId(null)}
+          onSave={onSave}
+        />
+      )}
     </section>
   );
 }

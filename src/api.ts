@@ -1,6 +1,7 @@
 import { createAuthClient } from "better-auth/client";
 import type { Command } from "./domain/commands.ts";
 import type { State } from "./domain/inventory.ts";
+import { applyStateChanges, type DeltaSnapshot } from "./domain/snapshot.ts";
 export const authClient = createAuthClient();
 export class ApiError extends Error {
   status: number;
@@ -63,6 +64,7 @@ export function createCommandClient(transport: typeof fetch = fetch) {
     command: Command,
     revision: number,
     spaceId?: string,
+    baseState?: State,
   ): Promise<Snapshot> => {
     const fingerprint = JSON.stringify({ revision, command, spaceId });
     const requestId = pending.get(fingerprint) ?? crypto.randomUUID();
@@ -76,6 +78,7 @@ export function createCommandClient(transport: typeof fetch = fetch) {
           credentials: "same-origin",
           headers: {
             "Content-Type": "application/json",
+            ...(baseState ? { "X-Refico-Response": "delta-v1" } : {}),
             ...(spaceId ? { "X-Refico-Space": spaceId } : {}),
           },
           body,
@@ -86,12 +89,41 @@ export function createCommandClient(transport: typeof fetch = fetch) {
           credentials: "same-origin",
           headers: {
             "Content-Type": "application/json",
+            ...(baseState ? { "X-Refico-Response": "delta-v1" } : {}),
             ...(spaceId ? { "X-Refico-Space": spaceId } : {}),
           },
           body,
         });
       }
-      const snapshot = await result<Snapshot>(response);
+      const data = await result<Snapshot | DeltaSnapshot>(response);
+      let snapshot: Snapshot;
+      if ("changes" in data) {
+        try {
+          if (
+            !baseState ||
+            data.baseRevision !== revision ||
+            data.revision !== revision + 1
+          )
+            throw new Error("revision mismatch");
+          snapshot = {
+            revision: data.revision,
+            state: applyStateChanges(baseState, data.changes),
+          };
+        } catch {
+          // The write may already be committed. Recover with the same receipt,
+          // never report a conflict and accidentally assign a new request ID.
+          const recovery = await transport("/api/commands", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+              "Content-Type": "application/json",
+              ...(spaceId ? { "X-Refico-Space": spaceId } : {}),
+            },
+            body,
+          });
+          snapshot = await result<Snapshot>(recovery);
+        }
+      } else snapshot = data;
       pending.delete(fingerprint);
       return snapshot;
     } catch (e) {

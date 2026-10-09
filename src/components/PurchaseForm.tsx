@@ -1,8 +1,7 @@
 import type { Command } from "../domain/commands";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
-import MenuItem from "@mui/material/MenuItem";
-import Divider from "@mui/material/Divider";
+import { ItemSelect } from "./ItemSelect";
 import Dialog from "@mui/material/Dialog";
 import DialogContent from "@mui/material/DialogContent";
 import { useState, useRef, type FormEvent } from "react";
@@ -33,9 +32,9 @@ export function PurchaseForm({
   onCreateProduct: (product: Product) => Promise<void>;
   onAddUnit: (product: Product, unit: Unit) => Promise<void>;
 }) {
-  const initialProduct =
-    state.products.find((p) => p.id === editing?.productId) ??
-    state.products.at(-1);
+  const initialProduct = state.products.find(
+    (p) => p.id === editing?.productId,
+  );
   const [productId, setProductId] = useState(initialProduct?.id ?? "");
   const [quantity, setQuantity] = useState(
     editing ? String(editing.quantity) : "",
@@ -68,6 +67,10 @@ export function PurchaseForm({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (savingRef.current) return;
+    if (!product) {
+      setError("食材を選択してください");
+      return;
+    }
     savingRef.current = true;
     setSaving(true);
     setError("");
@@ -92,37 +95,28 @@ export function PurchaseForm({
   }
   return (
     <>
-      <form className="entry-form" onSubmit={submit}>
+      <form
+        className="entry-form"
+        onSubmit={submit}
+        onChangeCapture={() => setError("")}
+      >
         <fieldset className="form-fields" disabled={saving}>
-          <TextField
-            className="field"
+          <ItemSelect
             label="食材"
-            select
-            required
             value={productId}
-            onChange={(e) => {
-              if (e.target.value === "__add_product__") {
+            options={[
+              ...state.products.map((p) => ({ id: p.id, name: p.name })),
+              { id: "__add_product__", name: "＋ 食材を追加", action: true },
+            ]}
+            onChange={(id) => {
+              if (id === "__add_product__") {
                 setAddingProduct(true);
                 return;
               }
-              setProductId(e.target.value);
-              setUnit(
-                state.products.find((p) => p.id === e.target.value)?.baseUnit ??
-                  "g",
-              );
+              setProductId(id);
+              setUnit(state.products.find((p) => p.id === id)?.baseUnit ?? "g");
             }}
-          >
-            <MenuItem value="" disabled>
-              食材を選択
-            </MenuItem>
-            {state.products.map((p) => (
-              <MenuItem key={p.id} value={p.id}>
-                {p.name}
-              </MenuItem>
-            ))}
-            <Divider />
-            <MenuItem value="__add_product__">＋ 食材を追加</MenuItem>
-          </TextField>
+          />
           {product && (
             <div className="field">
               <p className="field-caption">購入量</p>
@@ -172,11 +166,7 @@ export function PurchaseForm({
           )}
           <div className={editing ? "actions" : "form-footer"}>
             {onCancel && <Button onClick={onCancel}>キャンセル</Button>}
-            <Button
-              variant="contained"
-              disabled={saving || !product}
-              type="submit"
-            >
+            <Button variant="contained" disabled={saving} type="submit">
               {editing ? "変更を保存" : "購入を記録"}
             </Button>
           </div>

@@ -3,18 +3,28 @@ import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import SvgIcon from "@mui/material/SvgIcon";
 import TextField from "@mui/material/TextField";
-import { useState, useRef, type FormEvent } from "react";
+import {
+  useState,
+  useRef,
+  useMemo,
+  useImperativeHandle,
+  type Ref,
+  type FormEvent,
+} from "react";
+import { useInventorySummary } from "../inventory-summary";
 import {
   mealKinds,
   recordMeal,
   mealCost,
-  stock,
-  preparedRemaining,
   type State,
   type Meal,
 } from "../domain/inventory";
 import { updateMeal } from "../domain/history";
 import { UsedItems, type Draft } from "./UsedItems";
+export interface MealFormHandle {
+  startForDate: (date: string) => void;
+}
+
 export function MealForm({
   state,
   today,
@@ -23,7 +33,9 @@ export function MealForm({
   editing,
   onCancel,
   onPurchase,
+  ref,
 }: {
+  ref?: Ref<MealFormHandle>;
   editing?: Meal;
   onCancel?: () => void;
   onPurchase?: () => void;
@@ -60,15 +72,35 @@ export function MealForm({
         ]
       : [],
   );
+  const initialDate = useRef(editing?.date ?? today);
+  useImperativeHandle(
+    ref,
+    () => ({
+      startForDate(nextDate) {
+        if (
+          editing ||
+          rows.length ||
+          hasDirect ||
+          date !== initialDate.current ||
+          kind !== "夕食"
+        )
+          return;
+        initialDate.current = nextDate;
+        setDate(nextDate);
+      },
+    }),
+    [editing, rows, hasDirect, date, kind],
+  );
+  const summary = useInventorySummary(state);
   const available = state.products.filter(
     (p) =>
       !!editing ||
-      stock(state, p.id).quantity > 0 ||
+      summary.products.get(p.id)!.quantity > 0 ||
       rows.some((r) => r.productId === p.id),
   );
   const batches = state.cookings.filter(
     (c) =>
-      (c.date <= date && preparedRemaining(state, c) > 0) ||
+      (c.date <= date && summary.cookings.get(c.id)!.quantity / 1000 > 0) ||
       editing?.prepared?.some((p) => p.batchId === c.id) ||
       rows.some((r) => r.batchId === c.id),
   );
@@ -93,45 +125,62 @@ export function MealForm({
     editing
       ? { type: "meal.update", id: editing.id, input: buildInput() }
       : { type: "meal.create", input: buildInput() };
-  const buildRecord = () => {
-    const m = buildInput();
-    return editing
-      ? updateMeal(
-          state,
-          editing.id,
-          m.date,
-          m.kind,
-          m.inputs,
-          m.prepared,
-          m.direct,
-        )
-      : recordMeal(state, m.date, m.kind, m.inputs, m.prepared, m.direct);
-  };
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
-  let estimate: number | undefined;
-  let estimateError = "";
-  try {
-    if (
-      (rows.length > 0 || hasDirect) &&
-      rows.every((r) => (r.productId || r.batchId) && r.quantity.trim()) &&
-      (!hasDirect || cost.trim())
-    ) {
-      const next = buildRecord();
-      estimate = mealCost(
-        editing
-          ? next.meals.find((m) => m.id === editing.id)!
-          : next.meals.at(-1)!,
-      );
+  const [attempted, setAttempted] = useState(false);
+  const { estimate, estimateError } = useMemo(() => {
+    try {
+      if (
+        (rows.length > 0 || hasDirect) &&
+        rows.every((r) => (r.productId || r.batchId) && r.quantity.trim()) &&
+        (!hasDirect || cost.trim())
+      ) {
+        const m = buildInput();
+        // Optional text does not affect cost; avoid replaying the ledger on each keystroke.
+        if (m.direct) m.direct = { cost: m.direct.cost, place: "", note: "" };
+        const next = editing
+          ? updateMeal(
+              state,
+              editing.id,
+              m.date,
+              m.kind,
+              m.inputs,
+              m.prepared,
+              m.direct,
+            )
+          : recordMeal(state, m.date, m.kind, m.inputs, m.prepared, m.direct);
+        return {
+          estimate: mealCost(
+            editing
+              ? next.meals.find((m) => m.id === editing.id)!
+              : next.meals.at(-1)!,
+          ),
+          estimateError: "",
+        };
+      }
+    } catch (e) {
+      return {
+        estimate: undefined,
+        estimateError:
+          e instanceof Error ? e.message : "入力内容を確認してください",
+      };
     }
-  } catch (e) {
-    estimateError =
-      e instanceof Error ? e.message : "入力内容を確認してください";
-  }
+    return { estimate: undefined, estimateError: "" };
+  }, [state, editing, date, kind, rows, hasDirect, cost]);
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (savingRef.current) return;
+    setAttempted(true);
+    if (estimate === undefined) {
+      setError(
+        estimateError ||
+          (rows.length || hasDirect
+            ? "未入力の欄を確認してください"
+            : "食材・料理か金額を追加してください"),
+      );
+      return;
+    }
     savingRef.current = true;
     setSaving(true);
     setError("");
@@ -145,7 +194,12 @@ export function MealForm({
     }
   }
   return (
-    <form className="entry-form wide" onSubmit={submit}>
+    <form
+      className="entry-form wide"
+      onSubmit={submit}
+      onChangeCapture={() => setError("")}
+      onInvalid={() => setAttempted(true)}
+    >
       <fieldset className="form-fields" disabled={saving}>
         <div className="two-columns">
           <TextField
@@ -185,6 +239,7 @@ export function MealForm({
             available={available}
             batches={batches}
             editing={editing}
+            showErrors={attempted}
             minimumRows={0}
             showAddButton={false}
           />
@@ -262,6 +317,15 @@ export function MealForm({
               required
               type="number"
               value={cost}
+              error={
+                attempted &&
+                (!cost.trim() ||
+                  !Number.isInteger(Number(cost)) ||
+                  Number(cost) < 0)
+              }
+              helperText={
+                attempted && !cost.trim() ? "金額を入力してください" : undefined
+              }
               slotProps={{ htmlInput: { min: 0, max: 100000000, step: 1 } }}
               onChange={(e) => setCost(e.target.value)}
             />
@@ -293,11 +357,7 @@ export function MealForm({
         )}
         <div className={editing ? "actions" : "form-footer"}>
           {onCancel && <Button onClick={onCancel}>キャンセル</Button>}
-          <Button
-            variant="contained"
-            type="submit"
-            disabled={saving || estimate === undefined}
-          >
+          <Button variant="contained" type="submit" disabled={saving}>
             {editing ? "変更を保存" : "食事を記録"}
           </Button>
         </div>

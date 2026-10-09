@@ -13,7 +13,13 @@ import {
   updateProductInventory,
   updateCookingInventory,
 } from "./inventory-edit.ts";
-import { updateMeal, updatePurchase } from "./history.ts";
+import {
+  updateMeal,
+  updatePurchase,
+  deleteMeal,
+  deletePurchase,
+  deleteCooking,
+} from "./history.ts";
 import { sampleState } from "./sample.ts";
 const id = z.string().min(1).max(100);
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -123,6 +129,9 @@ export const commandSchema = z.discriminatedUnion("type", [
     .strict(),
   z.object({ type: z.literal("meal.create"), input: meal }).strict(),
   z.object({ type: z.literal("meal.update"), id, input: meal }).strict(),
+  z.object({ type: z.literal("purchase.delete"), id }).strict(),
+  z.object({ type: z.literal("meal.delete"), id }).strict(),
+  z.object({ type: z.literal("prepared.delete"), id }).strict(),
   z
     .object({
       type: z.literal("stock.adjust"),
@@ -152,6 +161,12 @@ export const mutationSchema = z
   .strict();
 export function applyCommand(state: State, command: Command): State {
   switch (command.type) {
+    case "purchase.delete":
+      return deletePurchase(state, command.id);
+    case "meal.delete":
+      return deleteMeal(state, command.id);
+    case "prepared.delete":
+      return deleteCooking(state, command.id);
     case "product.create": {
       if (
         state.products.some(

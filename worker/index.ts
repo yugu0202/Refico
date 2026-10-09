@@ -24,6 +24,7 @@ import { loadSnapshot, receipt, saveSnapshot } from "./repository.ts";
 import { applyCommand, mutationSchema } from "../src/domain/commands.ts";
 import { toModel, toView } from "../src/domain/model.ts";
 import { parseState } from "../src/domain/validation.ts";
+import { diffState } from "../src/domain/snapshot.ts";
 export function sameOrigin(
   request: Request,
   env: Pick<Env, "BETTER_AUTH_URL" | "AUTH_MODE">,
@@ -267,10 +268,11 @@ export default {
             },
             409,
           );
+        const previousState = toView(snapshot.model);
         let next;
         try {
           next = parseState(
-            JSON.stringify(applyCommand(toView(snapshot.model), command)),
+            JSON.stringify(applyCommand(previousState, command)),
           );
         } catch (e) {
           return json(
@@ -282,7 +284,8 @@ export default {
         }
         const model = toModel(next, snapshot.model);
         // Validate the canonical projection as well as the calculation result.
-        parseState(JSON.stringify(toView(model)));
+        const nextState = toView(model);
+        parseState(JSON.stringify(nextState));
         try {
           await saveSnapshot(
             db,
@@ -315,7 +318,17 @@ export default {
             );
           throw e;
         }
-        return json({ revision: revision + 1, state: toView(model) });
+        // Opt-in keeps already-open clients compatible. Receipt recovery returns a
+        // full snapshot because another writer may have advanced the revision.
+        return json(
+          request.headers.get("X-Refico-Response") === "delta-v1"
+            ? {
+                revision: revision + 1,
+                baseRevision: revision,
+                changes: diffState(previousState, nextState),
+              }
+            : { revision: revision + 1, state: nextState },
+        );
       }
       return json({ error: "Not found" }, 404);
     } catch (e) {

@@ -897,3 +897,20 @@ label .amount-input select {
 .environment-staging {
   color: var(--mui-palette-info-main);
 }
+
+.history-filters {
+  display: grid;
+  gap: 16px;
+  margin: 16px 0;
+}
+.history-delete-action {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.item-select {
+  min-width: 0;
+}
+.ingredient > .item-select {
+  margin-bottom: 0 !important;
+}

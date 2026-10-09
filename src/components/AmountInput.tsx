@@ -9,6 +9,7 @@ export function AmountInput({
   onChange,
   id,
   onAddUnit,
+  showErrors = false,
 }: {
   product: Product;
   quantity: string;
@@ -16,6 +17,7 @@ export function AmountInput({
   onChange: (quantity: string, unit: string) => void;
   id: string;
   onAddUnit?: () => void;
+  showErrors?: boolean;
 }) {
   return (
     <div className="amount-input">
@@ -28,6 +30,12 @@ export function AmountInput({
           htmlInput: { inputMode: "decimal", min: "0.001", step: "any" },
         }}
         value={quantity}
+        error={showErrors && !(Number(quantity) > 0)}
+        helperText={
+          showErrors && !(Number(quantity) > 0)
+            ? "0より大きい数量を入力してください"
+            : undefined
+        }
         onChange={(e) => onChange(e.target.value, unit)}
       />
       <TextField

@@ -1,3 +1,6 @@
+import { InventorySummaryContext } from "./inventory-summary";
+import { summarizeInventory } from "./domain/inventory-summary";
+import { HistoryEditor } from "./components/HistoryEditor";
 import { EnvironmentLabel } from "./components/EnvironmentLabel";
 import {
   SpaceSettings,
@@ -27,19 +30,17 @@ import DialogContent from "@mui/material/DialogContent";
 import SvgIcon from "@mui/material/SvgIcon";
 import TextField from "@mui/material/TextField";
 import { Toast } from "./components/Toast";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import {
-  dailyCosts,
   emptyState,
   mealCost,
-  preparedRemaining,
   type Cooking,
   type State,
   type Product,
 } from "./domain/inventory";
 import { ProductForm } from "./components/ProductForm";
 import { PurchaseForm } from "./components/PurchaseForm";
-import { MealForm } from "./components/MealForm";
+import { MealForm, type MealFormHandle } from "./components/MealForm";
 import { CostCalendar } from "./components/CostCalendar";
 import { InventoryRow } from "./components/InventoryRow";
 import { money, number, localDate, dateLabel } from "./format";
@@ -99,6 +100,11 @@ export default function App() {
   );
   const [today, setToday] = useState(localDate);
   const [state, setState] = useState<State>(emptyState);
+  const summary = useMemo(() => summarizeInventory(state), [state]);
+  const mealFormRef = useRef<MealFormHandle>(null);
+  const [editingMealId, setEditingMealId] = useState<string | null>(null);
+  const [allPreparedAdjustments, setAllPreparedAdjustments] = useState(false);
+  const [allStockAdjustments, setAllStockAdjustments] = useState(false);
   const [ready, setReady] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
   const [signingIn, setSigningIn] = useState(false);
@@ -143,6 +149,10 @@ export default function App() {
         setFormVersion((v) => v + 1);
         setEditingProduct(null);
         setEditingPrepared(null);
+        setEditingMealId(null);
+        setSelectedDay(null);
+        setAllPreparedAdjustments(false);
+        setAllStockAdjustments(false);
         setSearch("");
         setNotice("");
       }
@@ -283,6 +293,7 @@ export default function App() {
         command,
         revisionRef.current,
         identityRef.current,
+        state,
       );
       focusRefresh.markFresh();
       revisionRef.current = next.revision;
@@ -389,7 +400,7 @@ export default function App() {
     );
   }
   const meals = state.meals.filter((m) => m.date === selectedDate);
-  const costs = new Map(dailyCosts(state));
+  const costs = summary.days;
   const total = costs.get(today) ?? 0;
   const monthTotal = [...costs].reduce(
     (sum, [date, cost]) =>
@@ -398,12 +409,12 @@ export default function App() {
   );
   const filtered = state.products.filter((p) => p.name.includes(search));
   const prepared = state.cookings.filter(
-    (c) => preparedRemaining(state, c) > 0,
+    (c) => summary.cookings.get(c.id)!.quantity > 0,
   );
   const filteredPrepared = prepared.filter((m) => m.name.includes(search));
   const preparedRows = (items: typeof prepared) =>
     items.map((m) => {
-      const remaining = preparedRemaining(state, m);
+      const remaining = summary.cookings.get(m.id)!.quantity / 1000;
       return (
         <div className="inventory-row" key={m.id}>
           <div>
@@ -470,7 +481,7 @@ export default function App() {
         onRetry={storageError ? () => void reload() : undefined}
       />
     );
-  return (
+  const content = (
     <div className="app-shell">
       {spaceSettings && spaces.find((s) => s.id === spaceId) && (
         <SpaceSettings
@@ -711,7 +722,10 @@ export default function App() {
                     <Button
                       variant="text"
                       className="text-button"
-                      onClick={() => navigate("meal")}
+                      onClick={() => {
+                        mealFormRef.current?.startForDate(selectedDate);
+                        navigate("meal");
+                      }}
                     >
                       ＋ 記録する
                     </Button>
@@ -722,63 +736,91 @@ export default function App() {
                     </p>
                   ) : (
                     meals.map((meal) => (
-                      <details
-                        className="meal-row"
+                      <div
+                        className="meal-history-row"
                         key={`${selectedDate}-${meal.id}`}
                       >
-                        <summary>
-                          <strong>
-                            <HistoryText>{meal.kind}</HistoryText>
-                          </strong>
-                          <span>
-                            {meal.direct &&
-                            !meal.usages.length &&
-                            !meal.prepared?.length
-                              ? "金額入力"
-                              : `${meal.usages.length + (meal.prepared?.length ?? 0) + (meal.direct ? 1 : 0)}品`}
-                          </span>
-                          <strong className="numeric">
-                            {money(mealCost(meal))}
-                          </strong>
-                        </summary>
-                        <div className="meal-detail">
-                          {meal.direct && (
-                            <DirectMealDetail direct={meal.direct} />
-                          )}
-                          {(meal.prepared ?? []).map((p) => (
-                            <HistoryDetailRow
-                              key={p.batchId}
-                              value={money(p.cost)}
-                            >
-                              {
-                                state.cookings.find((c) => c.id === p.batchId)
-                                  ?.name
-                              }{" "}
-                              {number(p.quantity)}食分
-                            </HistoryDetailRow>
-                          ))}
-                          {meal.usages.map((u) => (
-                            <HistoryDetailRow
-                              key={u.productId}
-                              value={money(
-                                u.allocations.reduce((s, a) => s + a.cost, 0),
-                              )}
-                            >
-                              {
-                                state.products.find((p) => p.id === u.productId)
-                                  ?.name
-                              }{" "}
-                              <small>
-                                {number(u.quantity)}
-                                {u.unit}
-                              </small>
-                            </HistoryDetailRow>
-                          ))}
-                        </div>
-                      </details>
+                        <details className="meal-row">
+                          <summary>
+                            <strong>
+                              <HistoryText>{meal.kind}</HistoryText>
+                            </strong>
+                            <span>
+                              {meal.direct &&
+                              !meal.usages.length &&
+                              !meal.prepared?.length
+                                ? "金額入力"
+                                : `${meal.usages.length + (meal.prepared?.length ?? 0) + (meal.direct ? 1 : 0)}品`}
+                            </span>
+                            <strong className="numeric">
+                              {money(mealCost(meal))}
+                            </strong>
+                          </summary>
+                          <div className="meal-detail">
+                            {meal.direct && (
+                              <DirectMealDetail direct={meal.direct} />
+                            )}
+                            {(meal.prepared ?? []).map((p) => (
+                              <HistoryDetailRow
+                                key={p.batchId}
+                                value={money(p.cost)}
+                              >
+                                {
+                                  state.cookings.find((c) => c.id === p.batchId)
+                                    ?.name
+                                }{" "}
+                                {number(p.quantity)}食分
+                              </HistoryDetailRow>
+                            ))}
+                            {meal.usages.map((u) => (
+                              <HistoryDetailRow
+                                key={u.productId}
+                                value={money(
+                                  u.allocations.reduce((s, a) => s + a.cost, 0),
+                                )}
+                              >
+                                {
+                                  state.products.find(
+                                    (p) => p.id === u.productId,
+                                  )?.name
+                                }{" "}
+                                <small>
+                                  {number(u.quantity)}
+                                  {u.unit}
+                                </small>
+                              </HistoryDetailRow>
+                            ))}
+                          </div>
+                        </details>
+                        <IconButton
+                          className="meal-history-edit"
+                          disabled={busy}
+                          aria-label={`${dateLabel(meal.date)} ${meal.kind}の履歴を編集`}
+                          onClick={() => setEditingMealId(meal.id)}
+                          sx={{ width: 44, height: 44, flexShrink: 0 }}
+                        >
+                          <SvgIcon fontSize="small">
+                            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm17.71-10.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                          </SvgIcon>
+                        </IconButton>
+                      </div>
                     ))
                   )}
                 </section>
+                {editingMealId && (
+                  <HistoryEditor
+                    key={editingMealId}
+                    id={editingMealId}
+                    type="meal"
+                    state={state}
+                    today={today}
+                    saving={busy}
+                    onClose={() => setEditingMealId(null)}
+                    onSave={async (command, message) => {
+                      await persist(command, message);
+                    }}
+                  />
+                )}
                 {sampleDataEnabled && state.products.length === 0 && (
                   <div className="sample">
                     <p>記録の流れを試す</p>
@@ -830,18 +872,39 @@ export default function App() {
                   {preparedRows(filteredPrepared)}
                   {inventoryRows(filtered)}
                   {filtered.length === 0 && filteredPrepared.length === 0 && (
-                    <p className="empty">
-                      {search
-                        ? "一致する在庫がありません。"
-                        : "在庫が登録されていません。"}
-                    </p>
+                    <div className="empty">
+                      <p>
+                        {search
+                          ? "一致する在庫がありません。"
+                          : "在庫が登録されていません。"}
+                      </p>
+                      {!search && (
+                        <Button onClick={() => navigate("purchase")}>
+                          購入を記録
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </section>
                 {(state.preparedAdjustments ?? []).length > 0 && (
                   <section>
-                    <h2>料理の残量修正履歴</h2>
+                    <div className="section-heading">
+                      <h2>料理の残量修正履歴</h2>
+                      {(state.preparedAdjustments ?? []).length > 5 && (
+                        <Button
+                          onClick={() =>
+                            setAllPreparedAdjustments(!allPreparedAdjustments)
+                          }
+                        >
+                          {allPreparedAdjustments
+                            ? "最新5件を表示"
+                            : "すべて見る"}
+                        </Button>
+                      )}
+                    </div>
                     {[...(state.preparedAdjustments ?? [])]
                       .reverse()
+                      .slice(0, allPreparedAdjustments ? undefined : 5)
                       .map((a) => (
                         <div className="purchase-row" key={a.id}>
                           <div>
@@ -870,69 +933,82 @@ export default function App() {
                 )}
                 {(state.adjustments ?? []).length > 0 && (
                   <section>
-                    <h2>食材の残量修正履歴</h2>
-                    {[...(state.adjustments ?? [])].reverse().map((a) => {
-                      const product = state.products.find(
-                        (p) => p.id === a.productId,
-                      )!;
-                      return (
-                        <div className="purchase-row" key={a.id}>
-                          <div>
-                            <strong>
-                              <HistoryText>{product.name}</HistoryText>
-                            </strong>
-                            <p className="hint">
-                              <HistoryText>
-                                {dateLabel(a.date)}
-                                {a.reason ? ` · ${a.reason}` : ""}
-                              </HistoryText>
-                            </p>
+                    <div className="section-heading">
+                      <h2>食材の残量修正履歴</h2>
+                      {(state.adjustments ?? []).length > 5 && (
+                        <Button
+                          onClick={() =>
+                            setAllStockAdjustments(!allStockAdjustments)
+                          }
+                        >
+                          {allStockAdjustments ? "最新5件を表示" : "すべて見る"}
+                        </Button>
+                      )}
+                    </div>
+                    {[...(state.adjustments ?? [])]
+                      .reverse()
+                      .slice(0, allStockAdjustments ? undefined : 5)
+                      .map((a) => {
+                        const product = state.products.find(
+                          (p) => p.id === a.productId,
+                        )!;
+                        return (
+                          <div className="purchase-row" key={a.id}>
+                            <div>
+                              <strong>
+                                <HistoryText>{product.name}</HistoryText>
+                              </strong>
+                              <p className="hint">
+                                <HistoryText>
+                                  {dateLabel(a.date)}
+                                  {a.reason ? ` · ${a.reason}` : ""}
+                                </HistoryText>
+                              </p>
+                            </div>
+                            <span className="numeric">
+                              {number(a.beforeQuantity / 1000)} →{" "}
+                              {number(a.targetQuantity / 1000)}{" "}
+                              {product.baseUnit}
+                            </span>
                           </div>
-                          <span className="numeric">
-                            {number(a.beforeQuantity / 1000)} →{" "}
-                            {number(a.targetQuantity / 1000)} {product.baseUnit}
-                          </span>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
                   </section>
                 )}
               </>
             )}
-            {page === "purchase" && (
-              <>
-                <PurchaseForm
-                  key={formVersion}
-                  state={state}
-                  today={today}
-                  onCreateProduct={saveProduct}
-                  onAddUnit={async (product, unit) => {
-                    await persist(
-                      {
-                        type: "product.update",
-                        id: product.id,
-                        name: product.name,
-                        units: [...product.units, unit],
-                      },
-                      `${product.name}の単位を追加しました`,
-                    );
-                  }}
-                  onSave={async (command) => {
-                    await persist(command, "購入を記録しました");
-                    setFormVersion((v) => v + 1);
-                  }}
-                />
-                <History
-                  type="purchase"
-                  state={state}
-                  today={today}
-                  onSave={async (command, message) => {
-                    await persist(command, message);
-                  }}
-                  saving={busy}
-                />
-              </>
-            )}
+            <div hidden={page !== "purchase"}>
+              <PurchaseForm
+                key={formVersion}
+                state={state}
+                today={today}
+                onCreateProduct={saveProduct}
+                onAddUnit={async (product, unit) => {
+                  await persist(
+                    {
+                      type: "product.update",
+                      id: product.id,
+                      name: product.name,
+                      units: [...product.units, unit],
+                    },
+                    `${product.name}の単位を追加しました`,
+                  );
+                }}
+                onSave={async (command) => {
+                  await persist(command, "購入を記録しました");
+                  setFormVersion((v) => v + 1);
+                }}
+              />
+              <History
+                type="purchase"
+                state={state}
+                today={today}
+                onSave={async (command, message) => {
+                  await persist(command, message);
+                }}
+                saving={busy}
+              />
+            </div>
             <div hidden={page !== "cooking"}>
               <PreparedForm
                 onPurchase={() => navigate("purchase")}
@@ -958,6 +1034,7 @@ export default function App() {
             </div>
             <div hidden={page !== "meal"}>
               <MealForm
+                ref={mealFormRef}
                 onPurchase={() => navigate("purchase")}
                 key={mealVersion}
                 state={state}
@@ -988,5 +1065,10 @@ export default function App() {
         onClose={() => setNotice("")}
       />
     </div>
+  );
+  return (
+    <InventorySummaryContext.Provider value={summary}>
+      {content}
+    </InventorySummaryContext.Provider>
   );
 }
