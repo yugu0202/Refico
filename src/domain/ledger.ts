@@ -296,7 +296,7 @@ export function recordMeal(
     );
     requireValue(
       typeof direct.note === "string" && direct.note.trim().length <= 500,
-      "メモを500文字以内で入力してください",
+      "内容を500文字以内で入力してください",
     );
   }
   requireValue(

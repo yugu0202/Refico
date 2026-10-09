@@ -266,19 +266,19 @@ export function MealForm({
               onChange={(e) => setCost(e.target.value)}
             />
             <TextField
-              label="店名・購入先（任意）"
-              value={place}
-              slotProps={{ htmlInput: { maxLength: 100 } }}
-              onChange={(e) => setPlace(e.target.value)}
-            />
-            <TextField
-              label="メモ（任意）"
+              label="内容（任意）"
               value={note}
               multiline
               minRows={1}
               maxRows={4}
               slotProps={{ htmlInput: { maxLength: 500 } }}
               onChange={(e) => setNote(e.target.value)}
+            />
+            <TextField
+              label="店名・購入先（任意）"
+              value={place}
+              slotProps={{ htmlInput: { maxLength: 100 } }}
+              onChange={(e) => setPlace(e.target.value)}
             />
           </section>
         )}

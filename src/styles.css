@@ -314,12 +314,21 @@ label .amount-input select {
 .direct-meal-heading h2 {
   margin: 0;
 }
-.meal-note {
+.meal-detail > .direct-meal-detail {
+  align-items: flex-start;
+}
+.direct-meal-description {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.direct-meal-content {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.direct-meal-detail > span:first-child {
-  min-width: 0;
+.direct-meal-place {
+  font-size: 12px;
+  color: var(--muted);
   overflow-wrap: anywhere;
 }
 .direct-meal-detail > span:last-child {
