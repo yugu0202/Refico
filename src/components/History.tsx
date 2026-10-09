@@ -11,7 +11,8 @@ import { PurchaseForm } from "./PurchaseForm";
 import { MealForm } from "./MealForm";
 import { PreparedForm } from "./PreparedForm";
 import { DirectMealDetail } from "./DirectMealDetail";
-import { MealDetailRow } from "./MealDetailRow";
+import { HistoryDetailRow } from "./HistoryDetailRow";
+import { HistoryText } from "./HistoryText";
 import { mealCost, preparedRemaining, type State } from "../domain/inventory";
 import { money, number, dateLabel } from "../format";
 
@@ -75,11 +76,15 @@ export function History({
             <div className="purchase-row history-row" key={p.id}>
               <div>
                 <strong>
-                  {state.products.find((v) => v.id === p.productId)?.name}
+                  <HistoryText>
+                    {state.products.find((v) => v.id === p.productId)?.name}
+                  </HistoryText>
                 </strong>
                 <p className="hint">
-                  {dateLabel(p.date)} · {number(p.quantity)}
-                  {p.unit}
+                  <HistoryText>
+                    {dateLabel(p.date)} · {number(p.quantity)}
+                    {p.unit}
+                  </HistoryText>
                 </p>
               </div>
               <div className="numeric purchase-history-actions">
@@ -105,7 +110,9 @@ export function History({
                 <details className="meal-row">
                   <summary>
                     <strong>
-                      {dateLabel(m.date)} · {m.kind}
+                      <HistoryText>
+                        {dateLabel(m.date)} · {m.kind}
+                      </HistoryText>
                     </strong>
                     <span>
                       {m.direct && !m.usages.length && !m.prepared?.length
@@ -117,23 +124,22 @@ export function History({
                   <div className="meal-detail">
                     {m.direct && <DirectMealDetail direct={m.direct} />}
                     {m.usages.map((u) => (
-                      <MealDetailRow
+                      <HistoryDetailRow
                         key={u.productId}
-                        amount={u.allocations.reduce(
-                          (sum, a) => sum + a.cost,
-                          0,
+                        value={money(
+                          u.allocations.reduce((sum, a) => sum + a.cost, 0),
                         )}
                       >
                         {state.products.find((p) => p.id === u.productId)?.name}{" "}
                         {number(u.quantity)}
                         {u.unit}
-                      </MealDetailRow>
+                      </HistoryDetailRow>
                     ))}
                     {(m.prepared ?? []).map((p) => (
-                      <MealDetailRow key={p.batchId} amount={p.cost}>
+                      <HistoryDetailRow key={p.batchId} value={money(p.cost)}>
                         {state.cookings.find((c) => c.id === p.batchId)?.name}{" "}
                         {number(p.quantity)}食分
-                      </MealDetailRow>
+                      </HistoryDetailRow>
                     ))}
                   </div>
                 </details>
@@ -156,30 +162,27 @@ export function History({
               <div className="meal-history-row cooking-history-row" key={c.id}>
                 <details className="meal-row">
                   <summary>
-                    <strong>{c.name}</strong>
+                    <strong>
+                      <HistoryText>{c.name}</HistoryText>
+                    </strong>
                     <span>{dateLabel(c.date)}</span>
                     <strong className="numeric">
                       {number(c.servings)}食分
                     </strong>
                   </summary>
                   <div className="meal-detail">
-                    <div>
-                      <span>残量</span>
-                      <span>{number(preparedRemaining(state, c))}食分</span>
-                    </div>
+                    <HistoryDetailRow
+                      value={`${number(preparedRemaining(state, c))}食分`}
+                    >
+                      残量
+                    </HistoryDetailRow>
                     {c.usages.map((u) => (
-                      <div key={u.productId}>
-                        <span>
-                          {
-                            state.products.find((p) => p.id === u.productId)
-                              ?.name
-                          }
-                        </span>
-                        <span>
-                          {number(u.quantity)}
-                          {u.unit}
-                        </span>
-                      </div>
+                      <HistoryDetailRow
+                        key={u.productId}
+                        value={`${number(u.quantity)}${u.unit}`}
+                      >
+                        {state.products.find((p) => p.id === u.productId)?.name}
+                      </HistoryDetailRow>
                     ))}
                   </div>
                 </details>

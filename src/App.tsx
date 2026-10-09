@@ -14,7 +14,8 @@ import { ApiError, bootstrap, sendCommand, authClient } from "./api";
 import { createFocusRefresh } from "./refresh";
 import { History } from "./components/History";
 import { DirectMealDetail } from "./components/DirectMealDetail";
-import { MealDetailRow } from "./components/MealDetailRow";
+import { HistoryDetailRow } from "./components/HistoryDetailRow";
+import { HistoryText } from "./components/HistoryText";
 import { LoginScreen } from "./components/LoginScreen";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
@@ -726,7 +727,9 @@ export default function App() {
                         key={`${selectedDate}-${meal.id}`}
                       >
                         <summary>
-                          <strong>{meal.kind}</strong>
+                          <strong>
+                            <HistoryText>{meal.kind}</HistoryText>
+                          </strong>
                           <span>
                             {meal.direct &&
                             !meal.usages.length &&
@@ -743,20 +746,22 @@ export default function App() {
                             <DirectMealDetail direct={meal.direct} />
                           )}
                           {(meal.prepared ?? []).map((p) => (
-                            <MealDetailRow key={p.batchId} amount={p.cost}>
+                            <HistoryDetailRow
+                              key={p.batchId}
+                              value={money(p.cost)}
+                            >
                               {
                                 state.cookings.find((c) => c.id === p.batchId)
                                   ?.name
                               }{" "}
                               {number(p.quantity)}食分
-                            </MealDetailRow>
+                            </HistoryDetailRow>
                           ))}
                           {meal.usages.map((u) => (
-                            <MealDetailRow
+                            <HistoryDetailRow
                               key={u.productId}
-                              amount={u.allocations.reduce(
-                                (s, a) => s + a.cost,
-                                0,
+                              value={money(
+                                u.allocations.reduce((s, a) => s + a.cost, 0),
                               )}
                             >
                               {
@@ -767,7 +772,7 @@ export default function App() {
                                 {number(u.quantity)}
                                 {u.unit}
                               </small>
-                            </MealDetailRow>
+                            </HistoryDetailRow>
                           ))}
                         </div>
                       </details>
@@ -841,14 +846,18 @@ export default function App() {
                         <div className="purchase-row" key={a.id}>
                           <div>
                             <strong>
-                              {
-                                state.cookings.find((c) => c.id === a.batchId)
-                                  ?.name
-                              }
+                              <HistoryText>
+                                {
+                                  state.cookings.find((c) => c.id === a.batchId)
+                                    ?.name
+                                }
+                              </HistoryText>
                             </strong>
                             <p className="hint">
-                              {dateLabel(a.date)}
-                              {a.reason ? ` · ${a.reason}` : ""}
+                              <HistoryText>
+                                {dateLabel(a.date)}
+                                {a.reason ? ` · ${a.reason}` : ""}
+                              </HistoryText>
                             </p>
                           </div>
                           <span className="numeric">
@@ -869,10 +878,14 @@ export default function App() {
                       return (
                         <div className="purchase-row" key={a.id}>
                           <div>
-                            <strong>{product.name}</strong>
+                            <strong>
+                              <HistoryText>{product.name}</HistoryText>
+                            </strong>
                             <p className="hint">
-                              {dateLabel(a.date)}
-                              {a.reason ? ` · ${a.reason}` : ""}
+                              <HistoryText>
+                                {dateLabel(a.date)}
+                                {a.reason ? ` · ${a.reason}` : ""}
+                              </HistoryText>
                             </p>
                           </div>
                           <span className="numeric">

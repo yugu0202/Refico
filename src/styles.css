@@ -214,6 +214,9 @@ section {
   text-align: right;
   flex-shrink: 0;
 }
+.purchase-row > div:first-child {
+  flex: 1;
+}
 .hint {
   font-size: 12px;
   color: var(--muted);
@@ -314,32 +317,25 @@ label .amount-input select {
 .direct-meal-heading h2 {
   margin: 0;
 }
-.meal-detail > .meal-detail-row {
+.history-detail-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  width: 100%;
   padding: 6px 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: inherit;
-  text-align: left;
 }
-.meal-detail-row:not(:disabled) {
+.history-text[role="button"] {
   min-height: 44px;
   cursor: pointer;
 }
-.meal-detail-description {
-  flex: 1;
+.history-text {
   display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.meal-detail-row.is-expanded .meal-detail-description {
+.history-text.is-expanded {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   text-overflow: clip;
@@ -348,8 +344,17 @@ label .amount-input select {
   font-size: 12px;
   color: var(--muted);
 }
-.meal-detail-row > span:last-child {
+.history-text:focus-visible {
+  outline: 2px solid var(--mui-palette-primary-main);
+  outline-offset: 2px;
+}
+.history-detail-row > .history-text {
+  flex: 1;
+}
+.history-detail-row > span:last-child {
   flex-shrink: 0;
+  max-width: 45%;
+  text-align: right;
 }
 .batch-amounts {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -453,14 +458,12 @@ label .amount-input select {
 .meal-row summary .numeric {
   margin-left: auto;
 }
+.meal-row summary > strong:first-of-type {
+  min-width: 0;
+  flex: 1;
+}
 .meal-detail {
   padding: 0 0 16px 27px;
-}
-.meal-detail > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
 }
 .meal-detail small {
   color: var(--muted);
@@ -667,6 +670,7 @@ label .amount-input select {
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-shrink: 0;
 }
 .history-pagination {
   display: flex;
@@ -681,13 +685,6 @@ label .amount-input select {
 .history-section .meal-row summary > span {
   min-width: 0;
   overflow-wrap: anywhere;
-}
-.history-section .meal-detail > div > span:first-child {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.history-section .meal-detail > div > span:last-child {
-  flex-shrink: 0;
 }
 .meal-history-row {
   display: grid;

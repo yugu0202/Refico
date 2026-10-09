@@ -1,5 +1,6 @@
+import { money } from "../format";
 import type { Meal } from "../domain/inventory";
-import { MealDetailRow } from "./MealDetailRow";
+import { HistoryDetailRow } from "./HistoryDetailRow";
 
 export function DirectMealDetail({
   direct,
@@ -7,11 +8,11 @@ export function DirectMealDetail({
   direct: NonNullable<Meal["direct"]>;
 }) {
   return (
-    <MealDetailRow amount={direct.cost}>
+    <HistoryDetailRow value={money(direct.cost)}>
       <span>{direct.note || "金額入力"}</span>
       {direct.place && (
         <span className="direct-meal-place"> - {direct.place}</span>
       )}
-    </MealDetailRow>
+    </HistoryDetailRow>
   );
 }
