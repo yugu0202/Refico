@@ -14,6 +14,7 @@ import { ApiError, bootstrap, sendCommand, authClient } from "./api";
 import { createFocusRefresh } from "./refresh";
 import { History } from "./components/History";
 import { DirectMealDetail } from "./components/DirectMealDetail";
+import { MealDetailRow } from "./components/MealDetailRow";
 import { LoginScreen } from "./components/LoginScreen";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
@@ -742,36 +743,31 @@ export default function App() {
                             <DirectMealDetail direct={meal.direct} />
                           )}
                           {(meal.prepared ?? []).map((p) => (
-                            <div key={p.batchId}>
-                              <span>
-                                {
-                                  state.cookings.find((c) => c.id === p.batchId)
-                                    ?.name
-                                }{" "}
-                                {number(p.quantity)}食分
-                              </span>
-                              <span>{money(p.cost)}</span>
-                            </div>
+                            <MealDetailRow key={p.batchId} amount={p.cost}>
+                              {
+                                state.cookings.find((c) => c.id === p.batchId)
+                                  ?.name
+                              }{" "}
+                              {number(p.quantity)}食分
+                            </MealDetailRow>
                           ))}
                           {meal.usages.map((u) => (
-                            <div key={u.productId}>
-                              <span>
-                                {
-                                  state.products.find(
-                                    (p) => p.id === u.productId,
-                                  )?.name
-                                }{" "}
-                                <small>
-                                  {number(u.quantity)}
-                                  {u.unit}
-                                </small>
-                              </span>
-                              <span>
-                                {money(
-                                  u.allocations.reduce((s, a) => s + a.cost, 0),
-                                )}
-                              </span>
-                            </div>
+                            <MealDetailRow
+                              key={u.productId}
+                              amount={u.allocations.reduce(
+                                (s, a) => s + a.cost,
+                                0,
+                              )}
+                            >
+                              {
+                                state.products.find((p) => p.id === u.productId)
+                                  ?.name
+                              }{" "}
+                              <small>
+                                {number(u.quantity)}
+                                {u.unit}
+                              </small>
+                            </MealDetailRow>
                           ))}
                         </div>
                       </details>

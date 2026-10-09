@@ -11,6 +11,7 @@ import { PurchaseForm } from "./PurchaseForm";
 import { MealForm } from "./MealForm";
 import { PreparedForm } from "./PreparedForm";
 import { DirectMealDetail } from "./DirectMealDetail";
+import { MealDetailRow } from "./MealDetailRow";
 import { mealCost, preparedRemaining, type State } from "../domain/inventory";
 import { money, number, dateLabel } from "../format";
 
@@ -116,30 +117,23 @@ export function History({
                   <div className="meal-detail">
                     {m.direct && <DirectMealDetail direct={m.direct} />}
                     {m.usages.map((u) => (
-                      <div key={u.productId}>
-                        <span>
-                          {
-                            state.products.find((p) => p.id === u.productId)
-                              ?.name
-                          }{" "}
-                          {number(u.quantity)}
-                          {u.unit}
-                        </span>
-                        <span>
-                          {money(
-                            u.allocations.reduce((sum, a) => sum + a.cost, 0),
-                          )}
-                        </span>
-                      </div>
+                      <MealDetailRow
+                        key={u.productId}
+                        amount={u.allocations.reduce(
+                          (sum, a) => sum + a.cost,
+                          0,
+                        )}
+                      >
+                        {state.products.find((p) => p.id === u.productId)?.name}{" "}
+                        {number(u.quantity)}
+                        {u.unit}
+                      </MealDetailRow>
                     ))}
                     {(m.prepared ?? []).map((p) => (
-                      <div key={p.batchId}>
-                        <span>
-                          {state.cookings.find((c) => c.id === p.batchId)?.name}{" "}
-                          {number(p.quantity)}食分
-                        </span>
-                        <span>{money(p.cost)}</span>
-                      </div>
+                      <MealDetailRow key={p.batchId} amount={p.cost}>
+                        {state.cookings.find((c) => c.id === p.batchId)?.name}{" "}
+                        {number(p.quantity)}食分
+                      </MealDetailRow>
                     ))}
                   </div>
                 </details>

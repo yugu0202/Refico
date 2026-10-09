@@ -314,24 +314,24 @@ label .amount-input select {
 .direct-meal-heading h2 {
   margin: 0;
 }
-.meal-detail > .direct-meal-detail {
+.meal-detail > .meal-detail-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   width: 100%;
-  min-height: 44px;
-  padding: 11px 0;
+  padding: 6px 0;
   border: 0;
   background: none;
   font: inherit;
   color: inherit;
   text-align: left;
 }
-.direct-meal-detail:not(:disabled) {
+.meal-detail-row:not(:disabled) {
+  min-height: 44px;
   cursor: pointer;
 }
-.direct-meal-description {
+.meal-detail-description {
   flex: 1;
   display: block;
   min-width: 0;
@@ -339,7 +339,7 @@ label .amount-input select {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.direct-meal-detail.is-expanded .direct-meal-description {
+.meal-detail-row.is-expanded .meal-detail-description {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   text-overflow: clip;
@@ -348,7 +348,7 @@ label .amount-input select {
   font-size: 12px;
   color: var(--muted);
 }
-.direct-meal-detail > span:last-child {
+.meal-detail-row > span:last-child {
   flex-shrink: 0;
 }
 .batch-amounts {
