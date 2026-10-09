@@ -14,6 +14,8 @@ import { ApiError, bootstrap, sendCommand, authClient } from "./api";
 import { createFocusRefresh } from "./refresh";
 import { History } from "./components/History";
 import { DirectMealDetail } from "./components/DirectMealDetail";
+import { HistoryDetailRow } from "./components/HistoryDetailRow";
+import { HistoryText } from "./components/HistoryText";
 import { LoginScreen } from "./components/LoginScreen";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
@@ -725,13 +727,15 @@ export default function App() {
                         key={`${selectedDate}-${meal.id}`}
                       >
                         <summary>
-                          <strong>{meal.kind}</strong>
+                          <strong>
+                            <HistoryText>{meal.kind}</HistoryText>
+                          </strong>
                           <span>
-                            {meal.direct
-                              ? "外食など"
-                              : meal.prepared?.length
-                                ? "料理"
-                                : `${meal.usages.length}食材`}
+                            {meal.direct &&
+                            !meal.usages.length &&
+                            !meal.prepared?.length
+                              ? "金額入力"
+                              : `${meal.usages.length + (meal.prepared?.length ?? 0) + (meal.direct ? 1 : 0)}品`}
                           </span>
                           <strong className="numeric">
                             {money(mealCost(meal))}
@@ -742,36 +746,33 @@ export default function App() {
                             <DirectMealDetail direct={meal.direct} />
                           )}
                           {(meal.prepared ?? []).map((p) => (
-                            <div key={p.batchId}>
-                              <span>
-                                {
-                                  state.cookings.find((c) => c.id === p.batchId)
-                                    ?.name
-                                }{" "}
-                                {number(p.quantity)}食分
-                              </span>
-                              <span>{money(p.cost)}</span>
-                            </div>
+                            <HistoryDetailRow
+                              key={p.batchId}
+                              value={money(p.cost)}
+                            >
+                              {
+                                state.cookings.find((c) => c.id === p.batchId)
+                                  ?.name
+                              }{" "}
+                              {number(p.quantity)}食分
+                            </HistoryDetailRow>
                           ))}
                           {meal.usages.map((u) => (
-                            <div key={u.productId}>
-                              <span>
-                                {
-                                  state.products.find(
-                                    (p) => p.id === u.productId,
-                                  )?.name
-                                }{" "}
-                                <small>
-                                  {number(u.quantity)}
-                                  {u.unit}
-                                </small>
-                              </span>
-                              <span>
-                                {money(
-                                  u.allocations.reduce((s, a) => s + a.cost, 0),
-                                )}
-                              </span>
-                            </div>
+                            <HistoryDetailRow
+                              key={u.productId}
+                              value={money(
+                                u.allocations.reduce((s, a) => s + a.cost, 0),
+                              )}
+                            >
+                              {
+                                state.products.find((p) => p.id === u.productId)
+                                  ?.name
+                              }{" "}
+                              <small>
+                                {number(u.quantity)}
+                                {u.unit}
+                              </small>
+                            </HistoryDetailRow>
                           ))}
                         </div>
                       </details>
@@ -845,14 +846,18 @@ export default function App() {
                         <div className="purchase-row" key={a.id}>
                           <div>
                             <strong>
-                              {
-                                state.cookings.find((c) => c.id === a.batchId)
-                                  ?.name
-                              }
+                              <HistoryText>
+                                {
+                                  state.cookings.find((c) => c.id === a.batchId)
+                                    ?.name
+                                }
+                              </HistoryText>
                             </strong>
                             <p className="hint">
-                              {dateLabel(a.date)}
-                              {a.reason ? ` · ${a.reason}` : ""}
+                              <HistoryText>
+                                {dateLabel(a.date)}
+                                {a.reason ? ` · ${a.reason}` : ""}
+                              </HistoryText>
                             </p>
                           </div>
                           <span className="numeric">
@@ -873,10 +878,14 @@ export default function App() {
                       return (
                         <div className="purchase-row" key={a.id}>
                           <div>
-                            <strong>{product.name}</strong>
+                            <strong>
+                              <HistoryText>{product.name}</HistoryText>
+                            </strong>
                             <p className="hint">
-                              {dateLabel(a.date)}
-                              {a.reason ? ` · ${a.reason}` : ""}
+                              <HistoryText>
+                                {dateLabel(a.date)}
+                                {a.reason ? ` · ${a.reason}` : ""}
+                              </HistoryText>
                             </p>
                           </div>
                           <span className="numeric">

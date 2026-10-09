@@ -116,9 +116,7 @@ export function parseState(raw: string): State {
           d.place.length <= 100 &&
           typeof d.note === "string" &&
           d.note.length <= 500 &&
-          meal.usages.length === 0 &&
-          !meal.batch &&
-          !meal.prepared?.length,
+          !meal.batch,
       );
     }
   }
