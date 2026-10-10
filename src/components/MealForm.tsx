@@ -226,7 +226,7 @@ export function MealForm({
           </TextField>
         </div>
         <h2>使ったもの</h2>
-        {available.length === 0 && batches.length === 0 && (
+        {available.length === 0 && batches.length === 0 && !hasDirect && (
           <div className="empty">
             <p>使える在庫がありません。</p>
             {onPurchase && <PurchaseLink onNavigate={onPurchase} />}
