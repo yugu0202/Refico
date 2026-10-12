@@ -83,6 +83,7 @@ export function MealCookingDialog({
           onChangeCapture={() => setError("")}
         >
           <TextField
+            className="field"
             label="料理名"
             required
             autoFocus
@@ -93,6 +94,7 @@ export function MealCookingDialog({
           />
           <div className="two-columns">
             <TextField
+              className="field"
               label="作った量"
               required
               type="number"
@@ -109,6 +111,7 @@ export function MealCookingDialog({
               onChange={(e) => setValue({ ...value, servings: e.target.value })}
             />
             <TextField
+              className="field"
               label="今回食べた量"
               required
               type="number"
