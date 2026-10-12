@@ -981,3 +981,49 @@ label .amount-input select {
 .ingredient > .item-select {
   margin-bottom: 0 !important;
 }
+
+.ingredient-selectable {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ingredient-selectable > .ingredient {
+  flex: 1;
+  min-width: 0;
+}
+.meal-cooking-draft {
+  border-bottom: 1px solid var(--border);
+  padding: 8px 0 12px;
+  margin-bottom: 14px;
+}
+.meal-cooking-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.meal-cooking-heading > .history-text {
+  flex: 1;
+}
+.meal-cooking-heading > span:not(.history-text) {
+  flex-shrink: 0;
+}
+.meal-cooking-draft .hint {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+
+.meal-items-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  margin: 0 0 14px;
+}
+.meal-items-heading h2 {
+  margin: 0;
+}
+.meal-items-heading > .text-button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

@@ -1,4 +1,4 @@
-import type { Command } from "../domain/commands";
+import { applyCommand, type Command } from "../domain/commands";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import SvgIcon from "@mui/material/SvgIcon";
@@ -14,13 +14,19 @@ import {
 import { useInventorySummary } from "../inventory-summary";
 import {
   mealKinds,
-  recordMeal,
   mealCost,
   type State,
   type Meal,
 } from "../domain/inventory";
-import { updateMeal } from "../domain/history";
 import { UsedItems, type Draft } from "./UsedItems";
+import { MealCookingDialog } from "./MealCookingDialog";
+import {
+  cookingInput,
+  restoreCookingRows,
+  type CookingDraft,
+} from "../meal-draft";
+import { number } from "../format";
+import { HistoryText } from "./HistoryText";
 export interface MealFormHandle {
   startForDate: (date: string) => void;
 }
@@ -70,6 +76,10 @@ export function MealForm({
         ]
       : [],
   );
+  const [cookings, setCookings] = useState<CookingDraft[]>([]);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [cookingDraft, setCookingDraft] = useState<CookingDraft>();
   const initialDate = useRef(editing?.date ?? today);
   useImperativeHandle(
     ref,
@@ -78,6 +88,7 @@ export function MealForm({
         if (
           editing ||
           rows.length ||
+          cookings.length ||
           hasDirect ||
           date !== initialDate.current ||
           kind !== "夕食"
@@ -87,7 +98,7 @@ export function MealForm({
         setDate(nextDate);
       },
     }),
-    [editing, rows, hasDirect, date, kind],
+    [editing, rows, cookings, hasDirect, date, kind],
   );
   const summary = useInventorySummary(state);
   const available = state.products.filter(
@@ -119,10 +130,19 @@ export function MealForm({
       ? { direct: { cost: cost.trim() ? Number(cost) : NaN, place, note } }
       : {}),
   });
-  const buildCommand = (): Command =>
+  const buildCommand = (): Extract<
+    Command,
+    { type: "meal.create" | "meal.update" | "meal.create-with-cookings" }
+  > =>
     editing
       ? { type: "meal.update", id: editing.id, input: buildInput() }
-      : { type: "meal.create", input: buildInput() };
+      : cookings.length
+        ? {
+            type: "meal.create-with-cookings",
+            input: buildInput(),
+            cookings: cookings.map(cookingInput),
+          }
+        : { type: "meal.create", input: buildInput() };
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
@@ -130,24 +150,22 @@ export function MealForm({
   const { estimate, estimateError } = useMemo(() => {
     try {
       if (
-        (rows.length > 0 || hasDirect) &&
+        (rows.length > 0 || cookings.length > 0 || hasDirect) &&
         rows.every((r) => (r.productId || r.batchId) && r.quantity.trim()) &&
         (!hasDirect || cost.trim())
       ) {
         const m = buildInput();
         // Optional text does not affect cost; avoid replaying the ledger on each keystroke.
         if (m.direct) m.direct = { cost: m.direct.cost, place: "", note: "" };
-        const next = editing
-          ? updateMeal(
-              state,
-              editing.id,
-              m.date,
-              m.kind,
-              m.inputs,
-              m.prepared,
-              m.direct,
-            )
-          : recordMeal(state, m.date, m.kind, m.inputs, m.prepared, m.direct);
+        const command = buildCommand();
+        // Names and optional text don't affect cost; use valid placeholders in preview.
+        command.input = m;
+        if (command.type === "meal.create-with-cookings")
+          command.cookings = command.cookings.map((c) => ({
+            ...c,
+            name: "料理",
+          }));
+        const next = applyCommand(state, command);
         return {
           estimate: mealCost(
             editing
@@ -165,15 +183,15 @@ export function MealForm({
       };
     }
     return { estimate: undefined, estimateError: "" };
-  }, [state, editing, date, kind, rows, hasDirect, cost]);
+  }, [state, editing, date, kind, rows, cookings, hasDirect, cost]);
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (savingRef.current) return;
+    if (savingRef.current || selecting || cookingDraft) return;
     setAttempted(true);
     if (estimate === undefined) {
       setError(
         estimateError ||
-          (rows.length || hasDirect
+          (rows.length || cookings.length || hasDirect
             ? "未入力の欄を確認してください"
             : "食材・料理か金額を追加してください"),
       );
@@ -192,168 +210,324 @@ export function MealForm({
     }
   }
   return (
-    <form
-      className="entry-form wide"
-      onSubmit={submit}
-      onChangeCapture={() => setError("")}
-      onInvalid={() => setAttempted(true)}
-    >
-      <fieldset className="form-fields" disabled={saving}>
-        <div className="two-columns">
-          <TextField
-            className="field"
-            label="食事の日付"
-            required
-            type="date"
-            slotProps={{ inputLabel: { shrink: true } }}
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-          <TextField
-            className="field"
-            label="食事の種類"
-            select
-            value={kind}
-            slotProps={{ select: { native: true } }}
-            onChange={(e) => setKind(e.target.value)}
-          >
-            {mealKinds.map((k) => (
-              <option key={k}>{k}</option>
-            ))}
-          </TextField>
-        </div>
-        <h2>使ったもの</h2>
-        {(available.length > 0 || batches.length > 0 || rows.length > 0) && (
-          <UsedItems
-            state={state}
-            rows={rows}
-            onChange={setRows}
-            available={available}
-            batches={batches}
-            editing={editing}
-            showErrors={attempted}
-            minimumRows={0}
-            showAddButton={false}
-          />
-        )}
-        <div className="meal-add-actions">
-          {(available.length > 0 || batches.length > 0 || rows.length > 0) && (
-            <Button
-              type="button"
-              variant="text"
-              className="text-button"
-              disabled={rows.length >= available.length + batches.length}
-              onClick={() =>
-                setRows([
-                  ...rows,
-                  {
-                    productId: "",
-                    batchId: "",
-                    quantity: "",
-                    unit: "g",
-                    key: crypto.randomUUID(),
-                  },
-                ])
-              }
+    <>
+      <form
+        className="entry-form wide"
+        onSubmit={submit}
+        onChangeCapture={() => setError("")}
+        onInvalid={() => setAttempted(true)}
+      >
+        <fieldset className="form-fields" disabled={saving}>
+          <div className="two-columns">
+            <TextField
+              className="field"
+              label="食事の日付"
+              required
+              type="date"
+              slotProps={{ inputLabel: { shrink: true } }}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+            <TextField
+              className="field"
+              label="食事の種類"
+              select
+              value={kind}
+              slotProps={{ select: { native: true } }}
+              onChange={(e) => setKind(e.target.value)}
             >
-              {rows.length ? "＋ もう1品追加" : "＋ 食材・料理を追加"}
-            </Button>
-          )}
-          {!hasDirect && (
-            <Button
-              type="button"
-              variant="text"
-              className="text-button"
-              onClick={() => {
-                setHasDirect(true);
-                setError("");
-              }}
-            >
-              ＋ 金額を入力
-            </Button>
-          )}
-        </div>
-        {hasDirect && (
-          <section className="direct-meal-fields" aria-label="金額入力">
-            <div className="direct-meal-heading">
-              <h2>金額入力</h2>
-              <IconButton
+              {mealKinds.map((k) => (
+                <option key={k}>{k}</option>
+              ))}
+            </TextField>
+          </div>
+          <div className="meal-items-heading">
+            <h2>使ったもの</h2>
+            {selecting ? (
+              <Button
                 type="button"
-                aria-label="入力した金額を削除"
-                title="削除"
+                variant="text"
+                className="text-button"
                 onClick={() => {
-                  setHasDirect(false);
-                  setCost("");
-                  setPlace("");
-                  setNote("");
-                  setError("");
+                  setSelecting(false);
+                  setSelected([]);
                 }}
-                sx={{ width: 44, height: 44 }}
               >
-                <SvgIcon
-                  fontSize="small"
-                  sx={{
-                    fill: "none",
-                    stroke: "currentColor",
-                    strokeWidth: 1.8,
-                    strokeLinecap: "round",
-                    strokeLinejoin: "round",
+                キャンセル
+              </Button>
+            ) : (
+              !editing &&
+              rows.some((r) => r.productId && !r.batchId) && (
+                <Button
+                  type="button"
+                  variant="text"
+                  className="text-button"
+                  onClick={() => {
+                    setSelecting(true);
+                    setSelected([]);
+                    setError("");
                   }}
                 >
-                  <path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7M14 10v7" />
-                </SvgIcon>
-              </IconButton>
+                  料理にまとめる
+                </Button>
+              )
+            )}
+          </div>
+          {(available.length > 0 || batches.length > 0 || rows.length > 0) && (
+            <UsedItems
+              state={state}
+              rows={rows}
+              onChange={setRows}
+              available={available}
+              batches={batches}
+              editing={editing}
+              showErrors={attempted}
+              minimumRows={0}
+              showAddButton={false}
+              selection={
+                selecting
+                  ? {
+                      keys: selected,
+                      onToggle: (key) =>
+                        setSelected((keys) =>
+                          keys.includes(key)
+                            ? keys.filter((k) => k !== key)
+                            : [...keys, key],
+                        ),
+                    }
+                  : undefined
+              }
+            />
+          )}
+          {cookings.map((cooking) => (
+            <section
+              className="meal-cooking-draft"
+              key={cooking.key}
+              aria-label={cooking.name}
+            >
+              <div className="meal-cooking-heading">
+                <HistoryText>
+                  <strong>{cooking.name}</strong>
+                </HistoryText>
+                <span>{number(Number(cooking.eatenServings))}食分</span>
+                <IconButton
+                  type="button"
+                  aria-label={`${cooking.name}を編集`}
+                  onClick={() => setCookingDraft(cooking)}
+                  disabled={selecting}
+                  sx={{ width: 44, height: 44 }}
+                >
+                  <SvgIcon>
+                    <path
+                      d="m16.8 3.2 4 4-11.5 11.5L4 20l1.3-5.3L16.8 3.2ZM5.9 15.4l2.7 2.7M14.8 5.2l4 4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                    />
+                  </SvgIcon>
+                </IconButton>
+              </div>
+              <p className="hint">
+                {cooking.rows
+                  .map(
+                    (r) =>
+                      `${state.products.find((p) => p.id === r.productId)?.name ?? "食材"} ${r.quantity}${r.unit}`,
+                  )
+                  .join("、")}{" "}
+                ／ 作った量 {number(Number(cooking.servings))}食分
+              </p>
+              <Button
+                type="button"
+                className="text-button"
+                disabled={selecting}
+                onClick={() => {
+                  try {
+                    setRows(restoreCookingRows(state, rows, cooking));
+                    setCookings(cookings.filter((c) => c.key !== cooking.key));
+                    setError("");
+                  } catch (e) {
+                    setError(
+                      e instanceof Error
+                        ? e.message
+                        : "食材の入力を確認してください",
+                    );
+                  }
+                }}
+              >
+                食材に戻す
+              </Button>
+            </section>
+          ))}
+          {selecting ? (
+            <div className="meal-add-actions">
+              <Button
+                type="button"
+                disabled={!selected.length}
+                onClick={() =>
+                  setCookingDraft({
+                    key: crypto.randomUUID(),
+                    name: "",
+                    servings: "",
+                    eatenServings: "1",
+                    rows: rows.filter((r) => selected.includes(r.key)),
+                  })
+                }
+              >
+                選んだ食材をまとめる（{selected.length}品）
+              </Button>
             </div>
-            <TextField
-              label="金額（円）"
-              required
-              type="number"
-              value={cost}
-              error={
-                attempted &&
-                (!cost.trim() ||
-                  !Number.isInteger(Number(cost)) ||
-                  Number(cost) < 0)
-              }
-              helperText={
-                attempted && !cost.trim() ? "金額を入力してください" : undefined
-              }
-              slotProps={{ htmlInput: { min: 0, max: 100000000, step: 1 } }}
-              onChange={(e) => setCost(e.target.value)}
-            />
-            <TextField
-              label="内容（任意）"
-              value={note}
-              multiline
-              minRows={1}
-              maxRows={4}
-              slotProps={{ htmlInput: { maxLength: 500 } }}
-              onChange={(e) => setNote(e.target.value)}
-            />
-            <TextField
-              label="店名・購入先（任意）"
-              value={place}
-              slotProps={{ htmlInput: { maxLength: 100 } }}
-              onChange={(e) => setPlace(e.target.value)}
-            />
-          </section>
-        )}
-        <div className="estimate">
-          <span>合計</span>
-          <strong>{estimate === undefined ? "—" : money(estimate)}</strong>
-        </div>
-        {(error || estimateError) && (
-          <p className="error" role="alert">
-            {error || estimateError}
-          </p>
-        )}
-        <div className={editing ? "actions" : "form-footer"}>
-          {onCancel && <Button onClick={onCancel}>キャンセル</Button>}
-          <Button variant="contained" type="submit" disabled={saving}>
-            {editing ? "変更を保存" : "食事を記録"}
-          </Button>
-        </div>
-      </fieldset>
-    </form>
+          ) : (
+            <div className="meal-add-actions">
+              {(available.length > 0 ||
+                batches.length > 0 ||
+                rows.length > 0) && (
+                <Button
+                  type="button"
+                  variant="text"
+                  className="text-button"
+                  disabled={rows.length >= available.length + batches.length}
+                  onClick={() =>
+                    setRows([
+                      ...rows,
+                      {
+                        productId: "",
+                        batchId: "",
+                        quantity: "",
+                        unit: "g",
+                        key: crypto.randomUUID(),
+                      },
+                    ])
+                  }
+                >
+                  {rows.length ? "＋ もう1品追加" : "＋ 食材・料理を追加"}
+                </Button>
+              )}
+              {!hasDirect && (
+                <Button
+                  type="button"
+                  variant="text"
+                  className="text-button"
+                  onClick={() => {
+                    setHasDirect(true);
+                    setError("");
+                  }}
+                >
+                  ＋ 金額を入力
+                </Button>
+              )}
+            </div>
+          )}
+          {hasDirect && (
+            <section className="direct-meal-fields" aria-label="金額入力">
+              <div className="direct-meal-heading">
+                <h2>金額入力</h2>
+                <IconButton
+                  type="button"
+                  aria-label="入力した金額を削除"
+                  title="削除"
+                  onClick={() => {
+                    setHasDirect(false);
+                    setCost("");
+                    setPlace("");
+                    setNote("");
+                    setError("");
+                  }}
+                  sx={{ width: 44, height: 44 }}
+                >
+                  <SvgIcon
+                    fontSize="small"
+                    sx={{
+                      fill: "none",
+                      stroke: "currentColor",
+                      strokeWidth: 1.8,
+                      strokeLinecap: "round",
+                      strokeLinejoin: "round",
+                    }}
+                  >
+                    <path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 10v7M14 10v7" />
+                  </SvgIcon>
+                </IconButton>
+              </div>
+              <TextField
+                label="金額（円）"
+                required
+                type="number"
+                value={cost}
+                error={
+                  attempted &&
+                  (!cost.trim() ||
+                    !Number.isInteger(Number(cost)) ||
+                    Number(cost) < 0)
+                }
+                helperText={
+                  attempted && !cost.trim()
+                    ? "金額を入力してください"
+                    : undefined
+                }
+                slotProps={{ htmlInput: { min: 0, max: 100000000, step: 1 } }}
+                onChange={(e) => setCost(e.target.value)}
+              />
+              <TextField
+                label="内容（任意）"
+                value={note}
+                multiline
+                minRows={1}
+                maxRows={4}
+                slotProps={{ htmlInput: { maxLength: 500 } }}
+                onChange={(e) => setNote(e.target.value)}
+              />
+              <TextField
+                label="店名・購入先（任意）"
+                value={place}
+                slotProps={{ htmlInput: { maxLength: 100 } }}
+                onChange={(e) => setPlace(e.target.value)}
+              />
+            </section>
+          )}
+          <div className="estimate">
+            <span>合計</span>
+            <strong>{estimate === undefined ? "—" : money(estimate)}</strong>
+          </div>
+          {(error || estimateError) && (
+            <p className="error" role="alert">
+              {error || estimateError}
+            </p>
+          )}
+          <div className={editing ? "actions" : "form-footer"}>
+            {onCancel && <Button onClick={onCancel}>キャンセル</Button>}
+            <Button
+              variant="contained"
+              type="submit"
+              disabled={saving || selecting}
+            >
+              {editing ? "変更を保存" : "食事を記録"}
+            </Button>
+          </div>
+        </fieldset>
+      </form>
+      {cookingDraft && (
+        <MealCookingDialog
+          key={cookingDraft.key}
+          state={state}
+          date={date}
+          draft={cookingDraft}
+          onClose={() => setCookingDraft(undefined)}
+          onConfirm={(value) => {
+            const existing = cookings.some((c) => c.key === value.key);
+            setCookings(
+              existing
+                ? cookings.map((c) => (c.key === value.key ? value : c))
+                : [...cookings, value],
+            );
+            if (!existing)
+              setRows(rows.filter((r) => !selected.includes(r.key)));
+            setCookingDraft(undefined);
+            setSelecting(false);
+            setSelected([]);
+            setError("");
+          }}
+        />
+      )}
+    </>
   );
 }

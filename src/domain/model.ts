@@ -142,7 +142,7 @@ function ledgerToModel(state: LedgerState, prior = emptyModel()): Model {
       productId: p.id,
     })),
   );
-  // New input contains at most one record, except the explicitly requested sample.
+  // One command may add cookings followed by a meal, or the requested sample.
   // Existing recording order is preserved by stable sequences across edits.
   for (const p of state.purchases) {
     const seq = p.adjustmentId ? sequence(p.adjustmentId) : sequence(p.id);
