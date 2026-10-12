@@ -12,6 +12,7 @@ import Popover from "@mui/material/Popover";
 import Stack from "@mui/material/Stack";
 import SvgIcon from "@mui/material/SvgIcon";
 import Tooltip from "@mui/material/Tooltip";
+import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { ThemeControl } from "./ThemeControl";
@@ -23,6 +24,7 @@ interface Props {
   onPrepareSettings: () => Promise<SpaceDetails>;
   onSettings: (details: SpaceDetails) => void;
   user: { name: string; email: string } | null;
+  onRename: (name: string) => Promise<void>;
   canLogout: boolean;
   busy: boolean;
   onLogout: () => Promise<void>;
@@ -39,6 +41,7 @@ export function AccountMenu({
   onPrepareSettings,
   user,
   canLogout,
+  onRename,
   busy,
   onLogout,
   onHelp,
@@ -57,6 +60,35 @@ export function AccountMenu({
   const [loggingOut, setLoggingOut] = useState(false);
   const loggingOutRef = useRef(false);
   const [error, setError] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [name, setName] = useState("");
+  const [nameError, setNameError] = useState("");
+  const [savingName, setSavingName] = useState(false);
+  const savingNameRef = useRef(false);
+  async function saveName() {
+    if (busy || savingNameRef.current) return;
+    const value = name.trim();
+    if (!value) {
+      setNameError("登録名を入力してください");
+      return;
+    }
+    if (value.length > 80) {
+      setNameError("登録名は80文字以内で入力してください");
+      return;
+    }
+    savingNameRef.current = true;
+    setSavingName(true);
+    setNameError("");
+    try {
+      await onRename(value);
+      setEditingName(false);
+    } catch {
+      setNameError("登録名を変更できませんでした。もう一度お試しください。");
+    } finally {
+      savingNameRef.current = false;
+      setSavingName(false);
+    }
+  }
   const [settingsLoading, setSettingsLoading] = useState(false);
   const settingsPending = useRef(false);
   const settingsGeneration = useRef(0);
@@ -77,6 +109,9 @@ export function AccountMenu({
     if (reopen) setAnchor(triggerRef.current);
   }, [reopen]);
   function close() {
+    if (savingNameRef.current) return;
+    setEditingName(false);
+    setNameError("");
     ++settingsGeneration.current;
     settingsPending.current = false;
     setSettingsLoading(false);
@@ -160,7 +195,88 @@ export function AccountMenu({
         </Typography>
         {user && (
           <>
-            <Typography sx={{ fontWeight: 600 }}>{user.name}</Typography>
+            {editingName ? (
+              <Stack
+                component="form"
+                spacing={1}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void saveName();
+                }}
+              >
+                <TextField
+                  autoFocus
+                  fullWidth
+                  label="登録名"
+                  value={name}
+                  disabled={savingName}
+                  error={Boolean(nameError)}
+                  helperText={nameError}
+                  onChange={(event) => {
+                    setName(event.target.value);
+                    setNameError("");
+                  }}
+                />
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{ justifyContent: "flex-end" }}
+                >
+                  <Button
+                    disabled={savingName}
+                    onClick={() => {
+                      setEditingName(false);
+                      setNameError("");
+                    }}
+                  >
+                    キャンセル
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    disabled={busy || savingName}
+                  >
+                    {savingName ? "保存中…" : "保存"}
+                  </Button>
+                </Stack>
+              </Stack>
+            ) : (
+              <Stack direction="row" sx={{ alignItems: "center", gap: 1 }}>
+                <Typography sx={{ fontWeight: 600, flex: 1, minWidth: 0 }}>
+                  {user.name}
+                </Typography>
+                {canLogout && (
+                  <Tooltip title="登録名を変更">
+                    <IconButton
+                      aria-label="登録名を変更"
+                      disabled={
+                        busy || loggingOut || settingsLoading || savingName
+                      }
+                      onClick={() => {
+                        setName(user.name);
+                        setNameError("");
+                        setEditingName(true);
+                      }}
+                      sx={{ width: 44, height: 44, flexShrink: 0 }}
+                    >
+                      <SvgIcon
+                        sx={{
+                          fill: "none",
+                          stroke: "currentColor",
+                          strokeWidth: 1.8,
+                        }}
+                      >
+                        <path
+                          d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15l-1 5Z"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </SvgIcon>
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Stack>
+            )}
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {user.email}
             </Typography>
@@ -181,7 +297,7 @@ export function AccountMenu({
           ref={spaceChoiceRef}
           fullWidth
           variant="text"
-          disabled={busy || loggingOut || settingsLoading}
+          disabled={busy || loggingOut || settingsLoading || savingName}
           aria-expanded={spaceChoicesOpen}
           aria-controls={spaceChoicesId}
           onClick={() => setSpaceChoicesOpen((value) => !value)}
@@ -234,7 +350,7 @@ export function AccountMenu({
                 key={space.id}
                 fullWidth
                 variant="text"
-                disabled={busy || loggingOut || settingsLoading}
+                disabled={busy || loggingOut || settingsLoading || savingName}
                 aria-pressed={space.id === spaceId}
                 sx={{
                   justifyContent: "space-between",
@@ -268,7 +384,7 @@ export function AccountMenu({
         <Button
           fullWidth
           variant="text"
-          disabled={busy || loggingOut || settingsLoading}
+          disabled={busy || loggingOut || settingsLoading || savingName}
           sx={{
             justifyContent: "space-between",
             minHeight: 44,
@@ -309,7 +425,7 @@ export function AccountMenu({
           href="/help"
           variant="text"
           fullWidth
-          disabled={busy || loggingOut || settingsLoading}
+          disabled={busy || loggingOut || settingsLoading || savingName}
           onClick={(event) => {
             if (
               event.button !== 0 ||
@@ -356,7 +472,7 @@ export function AccountMenu({
             fullWidth
             color="error"
             variant="text"
-            disabled={busy || loggingOut || settingsLoading}
+            disabled={busy || loggingOut || settingsLoading || savingName}
             onClick={() => void logout()}
           >
             {loggingOut ? "ログアウト中…" : "ログアウト"}
