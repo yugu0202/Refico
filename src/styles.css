@@ -1011,3 +1011,19 @@ label .amount-input select {
   margin: 4px 0;
   overflow-wrap: anywhere;
 }
+
+.meal-items-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  margin: 0 0 14px;
+}
+.meal-items-heading h2 {
+  margin: 0;
+}
+.meal-items-heading > .text-button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

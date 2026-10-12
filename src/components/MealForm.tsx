@@ -241,7 +241,38 @@ export function MealForm({
               ))}
             </TextField>
           </div>
-          <h2>使ったもの</h2>
+          <div className="meal-items-heading">
+            <h2>使ったもの</h2>
+            {selecting ? (
+              <Button
+                type="button"
+                variant="text"
+                className="text-button"
+                onClick={() => {
+                  setSelecting(false);
+                  setSelected([]);
+                }}
+              >
+                キャンセル
+              </Button>
+            ) : (
+              !editing &&
+              rows.some((r) => r.productId && !r.batchId) && (
+                <Button
+                  type="button"
+                  variant="text"
+                  className="text-button"
+                  onClick={() => {
+                    setSelecting(true);
+                    setSelected([]);
+                    setError("");
+                  }}
+                >
+                  料理にまとめる
+                </Button>
+              )
+            )}
+          </div>
           {(available.length > 0 || batches.length > 0 || rows.length > 0) && (
             <UsedItems
               state={state}
@@ -331,15 +362,6 @@ export function MealForm({
             <div className="meal-add-actions">
               <Button
                 type="button"
-                onClick={() => {
-                  setSelecting(false);
-                  setSelected([]);
-                }}
-              >
-                キャンセル
-              </Button>
-              <Button
-                type="button"
                 disabled={!selected.length}
                 onClick={() =>
                   setCookingDraft({
@@ -378,20 +400,6 @@ export function MealForm({
                   }
                 >
                   {rows.length ? "＋ もう1品追加" : "＋ 食材・料理を追加"}
-                </Button>
-              )}
-              {!editing && rows.some((r) => r.productId && !r.batchId) && (
-                <Button
-                  type="button"
-                  variant="text"
-                  className="text-button"
-                  onClick={() => {
-                    setSelecting(true);
-                    setSelected([]);
-                    setError("");
-                  }}
-                >
-                  料理にまとめる
                 </Button>
               )}
               {!hasDirect && (
