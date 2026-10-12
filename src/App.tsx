@@ -1096,7 +1096,6 @@ export default function App() {
             <div hidden={contentPage !== "meal"}>
               <MealForm
                 ref={mealFormRef}
-                onPurchase={() => navigate("purchase")}
                 key={mealVersion}
                 state={state}
                 today={today}

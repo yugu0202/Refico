@@ -1,6 +1,5 @@
 import type { Command } from "../domain/commands";
 import Button from "@mui/material/Button";
-import { PurchaseLink } from "./PurchaseLink";
 import IconButton from "@mui/material/IconButton";
 import SvgIcon from "@mui/material/SvgIcon";
 import TextField from "@mui/material/TextField";
@@ -33,13 +32,11 @@ export function MealForm({
   money,
   editing,
   onCancel,
-  onPurchase,
   ref,
 }: {
   ref?: Ref<MealFormHandle>;
   editing?: Meal;
   onCancel?: () => void;
-  onPurchase?: () => void;
   state: State;
   today: string;
   onSave: (command: Command) => Promise<void>;
@@ -226,12 +223,6 @@ export function MealForm({
           </TextField>
         </div>
         <h2>使ったもの</h2>
-        {available.length === 0 && batches.length === 0 && (
-          <div className="empty">
-            <p>使える在庫がありません。</p>
-            {onPurchase && <PurchaseLink onNavigate={onPurchase} />}
-          </div>
-        )}
         {(available.length > 0 || batches.length > 0 || rows.length > 0) && (
           <UsedItems
             state={state}
