@@ -100,6 +100,28 @@ for (const width of [320, 375, 600, 601, 1280])
       await noOverflow(page);
       await page
         .locator(".navigation")
+        .getByRole("button", { name: "在庫", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "白米を編集", exact: true })
+        .click();
+      const stockEditor = page.getByRole("dialog");
+      const content = stockEditor.locator(".MuiDialogContent-root");
+      await expect(content).toHaveCSS("padding-top", "20px");
+      const heading = (await stockEditor
+        .locator(".full-screen-heading")
+        .boundingBox())!;
+      const firstField = (await content
+        .locator(".MuiTextField-root")
+        .first()
+        .boundingBox())!;
+      expect(
+        firstField.y - (heading.y + heading.height),
+      ).toBeGreaterThanOrEqual(19);
+      await page.keyboard.press("Escape");
+      await expect(stockEditor).toHaveCount(0);
+      await page
+        .locator(".navigation")
         .getByRole("button", { name: /^食事/ })
         .click();
       await page.getByLabel("食事の日付").fill(date);
@@ -222,15 +244,40 @@ for (const mode of ["light", "dark"]) {
     const saveButton = purchase.getByRole("button", { name: "変更を保存" });
     const saveBounds = (await saveButton.boundingBox())!;
     await page.mouse.move(saveBounds.x + 10, saveBounds.y + 10);
-    const hoveredColor = await saveButton.evaluate(
-      (node) => getComputedStyle(node).backgroundColor,
-    );
     await page.mouse.down();
-    expect(
-      await saveButton.evaluate(
-        (node) => getComputedStyle(node).backgroundColor,
-      ),
-    ).toBe(hoveredColor);
+    await expect
+      .poll(() => saveButton.evaluate((node) => node.matches(":active")))
+      .toBe(true);
+    const contrast = await saveButton.evaluate((node) => {
+      const style = getComputedStyle(node);
+      const rgb = (value: string) => value.match(/[\d.]+/g)!.map(Number);
+      const foreground = rgb(style.color);
+      const background = rgb(style.backgroundColor);
+      const surface = rgb(
+        getComputedStyle(node.closest(".MuiDialog-paper")!).backgroundColor,
+      );
+      const alpha = background[3] ?? 1;
+      const brightness = Number(
+        style.filter.match(/brightness\(([\d.]+)\)/)?.[1] ?? 1,
+      );
+      const luminance = (channels: number[]) =>
+        channels.slice(0, 3).reduce((sum, value, i) => {
+          const channel = Math.min(255, value * brightness) / 255;
+          const linear =
+            channel <= 0.04045
+              ? channel / 12.92
+              : ((channel + 0.055) / 1.055) ** 2.4;
+          return sum + linear * [0.2126, 0.7152, 0.0722][i];
+        }, 0);
+      const ink = luminance(foreground);
+      const fill = luminance(
+        background
+          .slice(0, 3)
+          .map((value, i) => value * alpha + surface[i] * (1 - alpha)),
+      );
+      return (Math.max(ink, fill) + 0.05) / (Math.min(ink, fill) + 0.05);
+    });
+    expect(contrast).toBeGreaterThanOrEqual(4.5);
     await page.mouse.move(1, 1);
     await page.mouse.up();
     await purchase.getByRole("button", { name: "変更を保存" }).click();

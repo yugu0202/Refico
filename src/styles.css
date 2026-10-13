@@ -1038,7 +1038,8 @@ label .amount-input select {
   border-bottom: 1px solid var(--border);
   padding: 8px 24px;
 }
-.edit-dialog .MuiDialogContent-root {
+/* MUI removes top padding after DialogTitle; keep the floating label clear. */
+.edit-dialog .MuiDialogTitle-root + .MuiDialogContent-root {
   padding-top: 20px;
   scroll-padding-block: 20px;
   overscroll-behavior-y: contain;
