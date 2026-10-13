@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Button from "@mui/material/Button";
 import { dateLabel, money } from "../format";
 
@@ -62,7 +63,19 @@ export function CostCalendar({
             >
               <span className="calendar-date">{day}</span>
               <span className="calendar-cost">
-                {cost === undefined ? "—" : money(cost)}
+                {cost === undefined
+                  ? "—"
+                  : money(cost)
+                      .split(",")
+                      .map((group, index, groups) => (
+                        <Fragment key={index}>
+                          {index > 0 && <wbr />}
+                          <span className="calendar-cost-group">
+                            {group}
+                            {index < groups.length - 1 ? "," : ""}
+                          </span>
+                        </Fragment>
+                      ))}
               </span>
             </Button>
           );

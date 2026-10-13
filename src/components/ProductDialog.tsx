@@ -3,7 +3,7 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import IconButton from "@mui/material/IconButton";
 import SvgIcon from "@mui/material/SvgIcon";
-import { FullScreenDialog } from "./FullScreenDialog";
+import { EditDialog } from "./EditDialog";
 import { ProductForm } from "./ProductForm";
 
 export function ProductDialog({
@@ -21,7 +21,7 @@ export function ProductDialog({
     if (!savingRef.current) props.onCancel();
   };
   return (
-    <FullScreenDialog
+    <EditDialog
       open={open}
       onClose={close}
       aria-labelledby="product-title"
@@ -56,6 +56,6 @@ export function ProductDialog({
           />
         )}
       </DialogContent>
-    </FullScreenDialog>
+    </EditDialog>
   );
 }

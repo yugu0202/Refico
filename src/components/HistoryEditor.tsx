@@ -3,6 +3,7 @@ import { useState, useRef } from "react";
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
+import { EditDialog, EditDialogHeading } from "./EditDialog";
 import DialogContent from "@mui/material/DialogContent";
 import { PurchaseForm } from "./PurchaseForm";
 import { MealForm } from "./MealForm";
@@ -64,7 +65,7 @@ export function HistoryEditor({
   }
   return (
     <>
-      <Dialog
+      <EditDialog
         open={!!id}
         onClose={() => {
           if (!saving) onClose();
@@ -72,16 +73,14 @@ export function HistoryEditor({
         fullWidth
         maxWidth="sm"
         aria-labelledby="history-edit-title"
-        slotProps={{
-          paper: {
-            sx: {
-              margin: { xs: 2, sm: 4 },
-              width: { xs: "calc(100% - 32px)", sm: "calc(100% - 64px)" },
-            },
-          },
-        }}
       >
-        <DialogTitle id="history-edit-title">{title}を編集</DialogTitle>
+        <EditDialogHeading
+          id="history-edit-title"
+          onClose={onClose}
+          disabled={saving}
+        >
+          {title}を編集
+        </EditDialogHeading>
         <DialogContent sx={{ "&&": { paddingTop: 1.5 } }}>
           {purchase && type === "purchase" && (
             <PurchaseForm
@@ -147,7 +146,7 @@ export function HistoryEditor({
             </Button>
           </div>
         </DialogContent>
-      </Dialog>
+      </EditDialog>
       <Dialog
         open={confirming}
         onClose={() => {
