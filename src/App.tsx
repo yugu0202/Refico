@@ -639,6 +639,21 @@ export default function App() {
           }}
           onSettings={setSpaceSettings}
           user={user}
+          onRename={async (name) => {
+            if (busyRef.current) throw new Error("保存中です");
+            busyRef.current = true;
+            setBusy(true);
+            ++loadGeneration.current;
+            try {
+              const response = await authClient.updateUser({ name });
+              if (response.error) throw new Error(response.error.message);
+              setUser((current) => (current ? { ...current, name } : current));
+              notify("登録名を変更しました");
+            } finally {
+              busyRef.current = false;
+              setBusy(false);
+            }
+          }}
           canLogout={authMode === "google"}
           busy={busy}
           onLogout={logout}

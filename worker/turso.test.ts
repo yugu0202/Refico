@@ -241,6 +241,36 @@ test("Better AuthがTursoのsessionを検証し、Cookieを更新してログア
         .getSetCookie()
         .some((c) => c.startsWith("better-auth.session_data=")),
     );
+    const rename = await worker.fetch(
+      new Request("http://localhost:8787/api/auth/update-user", {
+        method: "POST",
+        headers: {
+          cookie,
+          origin: env.BETTER_AUTH_URL,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: "変更後の登録名" }),
+      }),
+      env,
+    );
+    assert.equal(rename.status, 200, await rename.clone().text());
+    assert.equal(
+      f.sqlite.prepare("SELECT name FROM user WHERE id='auth'").get()?.name,
+      "変更後の登録名",
+    );
+    const updatedCache = rename.headers
+      .getSetCookie()
+      .filter((value) => value.startsWith("better-auth.session_data="))
+      .at(-1);
+    assert.ok(updatedCache);
+    const renamedBootstrap = await worker.fetch(
+      new Request("http://localhost:8787/api/bootstrap", {
+        headers: { cookie: `${cookie}; ${updatedCache.split(";")[0]}` },
+      }),
+      env,
+    );
+    assert.equal(renamedBootstrap.status, 200);
+    assert.equal((await renamedBootstrap.json()).user.name, "変更後の登録名");
     const logout = await worker.fetch(
       new Request("http://localhost:8787/api/auth/sign-out", {
         method: "POST",
