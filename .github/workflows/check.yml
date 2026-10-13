@@ -36,6 +36,12 @@ jobs:
       - name: Test inventory and cost calculations
         run: pnpm test
 
+      - name: Install UI test browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Test responsive UI and accessibility
+        run: pnpm test:ui
+
       - name: Build frontend
         run: pnpm build
 

@@ -1,3 +1,4 @@
+import { EditDialog, EditDialogHeading } from "./EditDialog";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -142,7 +143,7 @@ export function SpaceSettings({
     }
   }
   return (
-    <Dialog
+    <EditDialog
       open
       fullWidth
       maxWidth="sm"
@@ -151,7 +152,13 @@ export function SpaceSettings({
       }}
       aria-labelledby="space-settings-title"
     >
-      <DialogTitle id="space-settings-title">スペースの設定</DialogTitle>
+      <EditDialogHeading
+        id="space-settings-title"
+        onClose={onClose}
+        disabled={busy}
+      >
+        スペースの設定
+      </EditDialogHeading>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           {error && <Alert severity="error">{error}</Alert>}
@@ -343,7 +350,7 @@ export function SpaceSettings({
           閉じる
         </Button>
       </DialogActions>
-    </Dialog>
+    </EditDialog>
   );
 }
 export function Invitation({

@@ -3,14 +3,14 @@ export function BrandLogo({ size }: { size: number }) {
     <span className="brand-logo" aria-hidden="true">
       <img
         className="brand-logo-light"
-        src="/logo.svg"
+        src="/logo.svg?v=4"
         width={size}
         height={size}
         alt=""
       />
       <img
         className="brand-logo-dark"
-        src="/logo-dark.svg"
+        src="/logo-dark.svg?v=4"
         width={size}
         height={size}
         alt=""

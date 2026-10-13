@@ -128,6 +128,23 @@ export const commandSchema = z.discriminatedUnion("type", [
     })
     .strict(),
   z.object({ type: z.literal("meal.create"), input: meal }).strict(),
+  z
+    .object({
+      type: z.literal("meal.create-with-cookings"),
+      input: inventoryMeal,
+      cookings: z
+        .array(
+          cooking
+            .omit({ date: true })
+            .extend({
+              eatenServings: positive,
+            })
+            .strict(),
+        )
+        .min(1)
+        .max(100),
+    })
+    .strict(),
   z.object({ type: z.literal("meal.update"), id, input: meal }).strict(),
   z.object({ type: z.literal("purchase.delete"), id }).strict(),
   z.object({ type: z.literal("meal.delete"), id }).strict(),
@@ -233,6 +250,21 @@ export function applyCommand(state: State, command: Command): State {
             note: m.note,
           })
         : recordMeal(state, m.date, m.kind, m.inputs, m.prepared, m.direct);
+    }
+    case "meal.create-with-cookings": {
+      const m = command.input;
+      let next = state;
+      const prepared = [...m.prepared];
+      // Only the final state reaches saveSnapshot: all cookings, the meal and
+      // the receipt share one transaction/revision. IDs come from the server.
+      for (const c of command.cookings) {
+        next = recordCooking(next, m.date, c.name, c.servings, c.inputs);
+        prepared.push({
+          batchId: next.cookings.at(-1)!.id,
+          quantity: c.eatenServings,
+        });
+      }
+      return recordMeal(next, m.date, m.kind, m.inputs, prepared, m.direct);
     }
     case "meal.update": {
       const m = command.input;

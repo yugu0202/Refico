@@ -21,7 +21,8 @@
     "auth:schema": "node scripts/generate-auth-schema.mjs",
     "deploy:worker": "node scripts/deploy.mjs production",
     "deploy:preview": "node scripts/deploy.mjs preview",
-    "deploy:staging": "node scripts/deploy.mjs staging"
+    "deploy:staging": "node scripts/deploy.mjs staging",
+    "test:ui": "tsc -p tsconfig.ui.json && playwright test"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -35,7 +36,9 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@cloudflare/workers-types": "^5.20261005.1",
+    "@playwright/test": "^1.64.0",
     "@types/node": "^26.6.4",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

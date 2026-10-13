@@ -30,9 +30,12 @@ import { LoginScreen } from "./components/LoginScreen";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
 import { PreparedForm } from "./components/PreparedForm";
-import DialogTitle from "@mui/material/DialogTitle";
 import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
+import {
+  EditDialog,
+  EditDialogHeading,
+  consumeEditNavigation,
+} from "./components/EditDialog";
 import DialogContent from "@mui/material/DialogContent";
 import SvgIcon from "@mui/material/SvgIcon";
 import TextField from "@mui/material/TextField";
@@ -283,7 +286,9 @@ export default function App() {
     }
   }, [contentPage]);
   useEffect(() => {
-    const restore = () => selectPage(currentPage());
+    const restore = () => {
+      if (!consumeEditNavigation()) selectPage(currentPage());
+    };
     window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
   }, []);
@@ -639,6 +644,21 @@ export default function App() {
           }}
           onSettings={setSpaceSettings}
           user={user}
+          onRename={async (name) => {
+            if (busyRef.current) throw new Error("保存中です");
+            busyRef.current = true;
+            setBusy(true);
+            ++loadGeneration.current;
+            try {
+              const response = await authClient.updateUser({ name });
+              if (response.error) throw new Error(response.error.message);
+              setUser((current) => (current ? { ...current, name } : current));
+              notify("登録名を変更しました");
+            } finally {
+              busyRef.current = false;
+              setBusy(false);
+            }
+          }}
           canLogout={authMode === "google"}
           busy={busy}
           onLogout={logout}
@@ -688,7 +708,7 @@ export default function App() {
         {ready && (
           <>
             {editingPrepared && (
-              <Dialog
+              <EditDialog
                 open
                 onClose={() => {
                   if (!busyRef.current) {
@@ -698,19 +718,14 @@ export default function App() {
                 fullWidth
                 maxWidth="sm"
                 aria-labelledby="prepared-form-title"
-                slotProps={{
-                  paper: {
-                    sx: {
-                      margin: { xs: 2, sm: 4 },
-                      width: {
-                        xs: "calc(100% - 32px)",
-                        sm: "calc(100% - 64px)",
-                      },
-                    },
-                  },
-                }}
               >
-                <DialogTitle id="prepared-form-title">料理を編集</DialogTitle>
+                <EditDialogHeading
+                  id="prepared-form-title"
+                  disabled={busy}
+                  onClose={() => setEditingPrepared(null)}
+                >
+                  料理を編集
+                </EditDialogHeading>
                 <DialogContent sx={{ "&&": { paddingTop: 1.5 } }}>
                   <PreparedForm
                     onPurchase={() => navigate("purchase")}
@@ -727,7 +742,7 @@ export default function App() {
                     }}
                   />
                 </DialogContent>
-              </Dialog>
+              </EditDialog>
             )}
             {editingProduct && (
               <ProductDialog
@@ -1096,7 +1111,6 @@ export default function App() {
             <div hidden={contentPage !== "meal"}>
               <MealForm
                 ref={mealFormRef}
-                onPurchase={() => navigate("purchase")}
                 key={mealVersion}
                 state={state}
                 today={today}

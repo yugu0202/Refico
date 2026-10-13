@@ -49,8 +49,30 @@ export const theme = createTheme({
         variant: "outlined",
       },
       styleOverrides: {
-        root: { minHeight: 44 },
+        root: {
+          minHeight: 48,
+          "&.Mui-focusVisible": {
+            outline: "2px solid var(--mui-palette-primary-main)",
+            outlineOffset: 2,
+          },
+          "&:active": { filter: "brightness(0.9)" },
+        },
         outlined: { borderColor: "var(--mui-palette-divider)" },
+      },
+    },
+    MuiIconButton: {
+      defaultProps: { disableRipple: true },
+      styleOverrides: {
+        root: {
+          minWidth: 48,
+          minHeight: 48,
+          flexShrink: 0,
+          "&.Mui-focusVisible": {
+            outline: "2px solid var(--mui-palette-primary-main)",
+            outlineOffset: 2,
+          },
+          "&:active": { backgroundColor: "var(--mui-palette-action-selected)" },
+        },
       },
     },
     MuiAutocomplete: {
