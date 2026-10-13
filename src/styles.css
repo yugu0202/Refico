@@ -1027,3 +1027,111 @@ label .amount-input select {
   flex-shrink: 0;
   white-space: nowrap;
 }
+
+/* Edit surfaces share the existing fixed-heading / scrolling-content pattern. */
+.edit-dialog .full-screen-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 24px;
+}
+.edit-dialog .MuiDialogContent-root {
+  padding-top: 20px;
+  scroll-padding-block: 20px;
+  overscroll-behavior-y: contain;
+}
+.edit-dialog .MuiDialogActions-root {
+  flex-wrap: wrap;
+}
+.two-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+  row-gap: 0;
+}
+.two-columns > * {
+  min-width: 0;
+}
+.entry-form {
+  container-type: inline-size;
+}
+@container (max-width: 360px) {
+  .two-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.cost-calendar {
+  gap: 2px;
+}
+.cost-calendar .calendar-day {
+  padding: 8px 0;
+  gap: 6px;
+  justify-content: flex-start;
+}
+.calendar-cost {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  font-weight: 500;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+.calendar-heading {
+  flex-wrap: wrap;
+}
+.calendar-controls button {
+  min-width: 48px;
+  min-height: 48px;
+}
+.meal-history-row {
+  grid-template-columns: minmax(0, 1fr) 48px;
+  column-gap: 12px;
+}
+.unit-row {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) 48px;
+}
+.unit-row-single {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+@media (max-width: 600px) {
+  .edit-dialog.MuiDialog-paperFullScreen {
+    position: absolute;
+    top: var(--edit-top, 0px);
+    height: var(--edit-height, 100dvh);
+    max-height: var(--edit-height, 100dvh);
+    border: 0;
+  }
+  .edit-dialog .full-screen-heading {
+    padding: max(8px, env(safe-area-inset-top))
+      max(16px, env(safe-area-inset-right)) 8px
+      max(16px, env(safe-area-inset-left));
+  }
+  .edit-dialog .MuiDialogContent-root {
+    padding: 20px max(16px, env(safe-area-inset-right))
+      max(24px, env(safe-area-inset-bottom))
+      max(16px, env(safe-area-inset-left));
+  }
+  .two-columns {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  }
+  .daily {
+    flex-wrap: wrap;
+  }
+  .meal-items-heading {
+    flex-wrap: wrap;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.calendar-cost-group {
+  overflow-wrap: anywhere;
+}

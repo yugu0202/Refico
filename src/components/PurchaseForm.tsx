@@ -2,7 +2,7 @@ import type { Command } from "../domain/commands";
 import Button from "@mui/material/Button";
 import TextField from "@mui/material/TextField";
 import { ItemSelect } from "./ItemSelect";
-import Dialog from "@mui/material/Dialog";
+import { EditDialog, EditDialogHeading } from "./EditDialog";
 import DialogContent from "@mui/material/DialogContent";
 import { useState, useRef, type FormEvent } from "react";
 import {
@@ -183,22 +183,36 @@ export function PurchaseForm({
           setError("");
         }}
       />
-      <Dialog
+      <EditDialog
         open={addingUnit}
         onClose={() => {
           if (!savingRef.current) setAddingUnit(false);
         }}
         fullWidth
         maxWidth="sm"
-        aria-labelledby="unit-title"
+        aria-labelledby="unit-dialog-title"
       >
+        <EditDialogHeading
+          id="unit-dialog-title"
+          onClose={() => setAddingUnit(false)}
+          disabled={saving}
+        >
+          単位を追加
+        </EditDialogHeading>
         <DialogContent>
           {addingUnit && product && (
             <UnitForm
               product={product}
               onCancel={() => setAddingUnit(false)}
               onSave={async (created) => {
-                await onAddUnit(selectedProduct!, created);
+                savingRef.current = true;
+                setSaving(true);
+                try {
+                  await onAddUnit(selectedProduct!, created);
+                } finally {
+                  savingRef.current = false;
+                  setSaving(false);
+                }
                 setUnit(created.name.trim());
                 setAddingUnit(false);
                 setError("");
@@ -206,7 +220,7 @@ export function PurchaseForm({
             />
           )}
         </DialogContent>
-      </Dialog>
+      </EditDialog>
     </>
   );
 }

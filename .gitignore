@@ -10,3 +10,6 @@ dist/
 .DS_Store
 
 !.dev.vars.example
+
+playwright-report/
+test-results/

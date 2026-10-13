@@ -10,7 +10,7 @@ import { commandSchema } from "../domain/commands";
 import { type State } from "../domain/inventory";
 import { cookingInput, type CookingDraft } from "../meal-draft";
 import { useInventorySummary } from "../inventory-summary";
-import { FullScreenDialog } from "./FullScreenDialog";
+import { EditDialog } from "./EditDialog";
 import { UsedItems } from "./UsedItems";
 
 export function MealCookingDialog({
@@ -57,7 +57,7 @@ export function MealCookingDialog({
     onConfirm({ ...value, name: value.name.trim() });
   }
   return (
-    <FullScreenDialog
+    <EditDialog
       open
       onClose={onClose}
       aria-labelledby="meal-cooking-title"
@@ -156,6 +156,6 @@ export function MealCookingDialog({
           </div>
         </form>
       </DialogContent>
-    </FullScreenDialog>
+    </EditDialog>
   );
 }
