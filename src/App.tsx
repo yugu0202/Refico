@@ -162,6 +162,7 @@ export default function App() {
   const revisionRef = useRef(0);
   const identityRef = useRef("");
   const loadGeneration = useRef(0);
+  const userGeneration = useRef(0);
   const loadsInFlight = useRef(0);
   const [focusRefresh] = useState(() =>
     createFocusRefresh(
@@ -174,6 +175,7 @@ export default function App() {
     focusRefresh.markFresh();
     ++loadsInFlight.current;
     const generation = ++loadGeneration.current;
+    const userVersion = userGeneration.current;
     setAuthChecking(true);
     try {
       const data = await bootstrap(force);
@@ -201,7 +203,7 @@ export default function App() {
         identityRef.current = data.spaceId;
         revisionRef.current = data.revision;
         setState(data.state);
-        setUser(data.user);
+        if (userVersion === userGeneration.current) setUser(data.user);
         setReady(true);
         setLoginError("");
         setStorageError("");
@@ -646,17 +648,15 @@ export default function App() {
           user={user}
           onRename={async (name) => {
             if (busyRef.current) throw new Error("保存中です");
-            busyRef.current = true;
-            setBusy(true);
-            ++loadGeneration.current;
+            // Keep older bootstrap responses from restoring the previous name.
+            ++userGeneration.current;
             try {
               const response = await authClient.updateUser({ name });
               if (response.error) throw new Error(response.error.message);
               setUser((current) => (current ? { ...current, name } : current));
               notify("登録名を変更しました");
             } finally {
-              busyRef.current = false;
-              setBusy(false);
+              ++userGeneration.current;
             }
           }}
           canLogout={authMode === "google"}
