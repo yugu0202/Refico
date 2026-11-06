@@ -9,7 +9,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
-    "types": ["node"]
+    "types": ["node", "vite/client"]
   },
   "include": ["src", "worker"]
 }
